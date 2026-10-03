@@ -1152,3 +1152,203 @@ export function previewAssetIdFromJob(job: Job): string | null {
   if (typeof nested?.id === "string") return nested.id;
   return null;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Platform Packs (Phase 9) — SDD §5.8 / FR-PLT-*                             */
+/* TODO_SHARED: replace with `@creatorai/shared` pack DTOs when Anto lands them */
+/* -------------------------------------------------------------------------- */
+
+export type PackAspectRatio = "R_16_9" | "R_9_16" | "R_1_1";
+export type PackStatus = "DRAFT" | "READY" | "PUBLISHED";
+export type PackPlatform = ScriptPlatform;
+
+export type PlatformPackDto = {
+  id: string;
+  projectId: string;
+  platform: PackPlatform;
+  aspectRatio: PackAspectRatio;
+  title: string;
+  caption: string;
+  hashtags: string[];
+  status: PackStatus;
+  /** Output video/image asset ids from ADAPT_PLATFORM. */
+  outputAssetIds: string[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type PlatformPackListResponse = {
+  items: PlatformPackDto[];
+};
+
+/** Body for `POST /projects/:id/packs/generate`. */
+export type GeneratePacksRequest = {
+  platforms: PackPlatform[];
+  /** Optional explicit aspects; API may default per platform. */
+  aspectRatios?: PackAspectRatio[];
+};
+
+export type UpdatePackCopyPayload = {
+  title?: string;
+  caption?: string;
+  hashtags?: string[];
+};
+
+export type UpdatePackStatusPayload = {
+  status: PackStatus;
+};
+
+/** Shape for `GET /packs/:id/download` (URLs OK for MVP). */
+export type PackDownloadResponse = {
+  zipUrl?: string | null;
+  urls?: string[];
+  files?: Array<{
+    name?: string;
+    label?: string;
+    url: string;
+    assetId?: string;
+  }>;
+};
+
+const PACK_ASPECTS: PackAspectRatio[] = ["R_16_9", "R_9_16", "R_1_1"];
+const PACK_STATUSES: PackStatus[] = ["DRAFT", "READY", "PUBLISHED"];
+const PACK_PLATFORMS: PackPlatform[] = [
+  "YOUTUBE",
+  "YOUTUBE_SHORTS",
+  "INSTAGRAM_REELS",
+  "TIKTOK",
+  "LINKEDIN",
+];
+
+function normalizePackAspect(raw: unknown): PackAspectRatio {
+  if (typeof raw === "string") {
+    if (PACK_ASPECTS.includes(raw as PackAspectRatio)) {
+      return raw as PackAspectRatio;
+    }
+    const upper = raw.toUpperCase().replace(/[:-]/g, "_");
+    if (upper === "16_9" || upper === "R_16_9" || upper === "16X9") return "R_16_9";
+    if (upper === "9_16" || upper === "R_9_16" || upper === "9X16") return "R_9_16";
+    if (upper === "1_1" || upper === "R_1_1" || upper === "1X1") return "R_1_1";
+  }
+  return "R_16_9";
+}
+
+function normalizePackStatus(raw: unknown): PackStatus {
+  if (typeof raw === "string") {
+    const upper = raw.toUpperCase() as PackStatus;
+    if (PACK_STATUSES.includes(upper)) return upper;
+    if (raw.toLowerCase() === "draft") return "DRAFT";
+    if (raw.toLowerCase() === "ready") return "READY";
+    if (raw.toLowerCase() === "published") return "PUBLISHED";
+  }
+  return "DRAFT";
+}
+
+function normalizePackPlatform(raw: unknown): PackPlatform {
+  if (typeof raw === "string" && PACK_PLATFORMS.includes(raw as PackPlatform)) {
+    return raw as PackPlatform;
+  }
+  return "YOUTUBE";
+}
+
+function normalizeHashtags(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw
+      .map((t) => (typeof t === "string" ? t.trim() : String(t ?? "").trim()))
+      .filter(Boolean);
+  }
+  if (typeof raw === "string") {
+    return raw
+      .split(/[\s,]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function normalizeOutputAssetIds(r: Record<string, unknown>): string[] {
+  if (Array.isArray(r.outputAssetIds)) {
+    return r.outputAssetIds.filter((id): id is string => typeof id === "string");
+  }
+  if (Array.isArray(r.assetIds)) {
+    return r.assetIds.filter((id): id is string => typeof id === "string");
+  }
+  if (typeof r.outputAssetId === "string") return [r.outputAssetId];
+  if (typeof r.renderedAssetId === "string") return [r.renderedAssetId];
+  if (typeof r.assetId === "string") return [r.assetId];
+  return [];
+}
+
+function normalizePlatformPack(raw: unknown): PlatformPackDto {
+  const r = asRecord(raw) ?? {};
+  return {
+    id: String(r.id ?? ""),
+    projectId: String(r.projectId ?? ""),
+    platform: normalizePackPlatform(r.platform),
+    aspectRatio: normalizePackAspect(r.aspectRatio ?? r.aspect),
+    title: typeof r.title === "string" ? r.title : "",
+    caption:
+      typeof r.caption === "string"
+        ? r.caption
+        : typeof r.description === "string"
+          ? r.description
+          : "",
+    hashtags: normalizeHashtags(r.hashtags ?? r.tags),
+    status: normalizePackStatus(r.status),
+    outputAssetIds: normalizeOutputAssetIds(r),
+    createdAt: typeof r.createdAt === "string" ? r.createdAt : undefined,
+    updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : undefined,
+  };
+}
+
+export function generateProjectPacks(
+  projectId: string,
+  payload: GeneratePacksRequest,
+) {
+  return apiFetch<EnqueueJobResponse>(`/projects/${projectId}/packs/generate`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listProjectPacks(projectId: string) {
+  const raw = await apiFetch<{ items?: unknown[] } | unknown[]>(
+    `/projects/${projectId}/packs`,
+  );
+  const items = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw.items)
+      ? raw.items
+      : [];
+  return {
+    items: items.map(normalizePlatformPack),
+  } satisfies PlatformPackListResponse;
+}
+
+/** PATCH `/packs/:id` — copy fields (title / caption / hashtags). */
+export async function updatePackCopy(
+  packId: string,
+  payload: UpdatePackCopyPayload,
+) {
+  const raw = await apiFetch<unknown>(`/packs/${packId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+  return normalizePlatformPack(raw);
+}
+
+/** PATCH `/packs/:id/status` — Draft / Ready / Published (SDD §5.8). */
+export async function updatePackStatus(
+  packId: string,
+  payload: UpdatePackStatusPayload,
+) {
+  const raw = await apiFetch<unknown>(`/packs/${packId}/status`, {
+    method: "PATCH",
+    body: payload,
+  });
+  return normalizePlatformPack(raw);
+}
+
+export function getPackDownload(packId: string) {
+  return apiFetch<PackDownloadResponse>(`/packs/${packId}/download`);
+}

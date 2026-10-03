@@ -2104,6 +2104,60 @@ _(Template above kept for other developers.)_
   - Propose without accepted clips uses 5s Intro (safe for `dummy.mp4`)
 - **Ready for Phase 9:** yes (Anto Integration Lead)
 
+### [2026-10-03 22:59] ROLE=A NAME=Brendan Rodrigues PHASE=9 TYPE=START
+- **Summary:** Synced `origin/main` (`7eaaa88` Phase 8 Integration). Created `phase-09-brendan`. Starting Platform Packs UI against SDD §5.8 / FR-PLT-* (Phase 9 B packs API not on main yet).
+- **Files touched:** (branch created; work in progress)
+- **APIs / types added:** None yet
+- **How to run / test what I did:** `git checkout phase-09-brendan`
+- **Depends on:** Phase 8 complete on main
+- **Needs from others:** Anto Phase 9 B packs API; Arvin platform copy; Cyrus aspect adaptation
+- **Risks:** UI will 404 until Phase 9 B lands
+
+### [2026-10-03 23:02] ROLE=A NAME=Brendan Rodrigues PHASE=9 TYPE=DONE
+- **Summary:** Phase 9 Dev A complete — Platform Packs tab on project hub: select platforms → Generate (job poll) → pack cards (aspect, editable title/caption/hashtags, status select, Mark Ready/Published, Download).
+- **Files touched:**
+  - `apps/web/src/lib/api.ts` (generate/list/patch copy/status/download pack client + normalizers)
+  - `apps/web/src/components/packs/**` (PacksTab, PackGenerateForm, PackCard, constants)
+  - `apps/web/src/components/projects/ProjectDetail.tsx` (Overview | Script | Mapping | Clips | Editor | Platform Packs)
+  - `context.md`
+- **APIs / types added (client assumptions — TODO_SHARED until Anto Zod lands):**
+  - `POST /projects/:id/packs/generate` body `{ platforms, aspectRatios? }` → `{ jobId }` (`ADAPT_PLATFORM`)
+  - `GET /projects/:id/packs` → `{ items: PlatformPackDto[] }`
+  - `PATCH /packs/:id` body `{ title?, caption?, hashtags? }` → PlatformPackDto (copy edit; **Anto please add if not in SDD**)
+  - `PATCH /packs/:id/status` body `{ status }` → PlatformPackDto (`DRAFT` | `READY` | `PUBLISHED`)
+  - `GET /packs/:id/download` → `{ zipUrl?, urls?, files?: { name?, url, assetId? }[] }`
+  - Fields: `platform`, `aspectRatio` (`R_16_9`|`R_9_16`|`R_1_1`), `title`, `caption`, `hashtags[]`, `outputAssetIds[]`
+  - Default aspects in UI: YOUTUBE→16:9, Shorts/Reels/TikTok→9:16, LinkedIn→1:1
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web exec eslint src/components/packs src/lib/api.ts src/components/projects/ProjectDetail.tsx
+  pnpm --filter web dev
+  # After Anto API: /projects/:id → Platform Packs → select ≥2 platforms → Generate → edit copy → Ready → Download
+  ```
+- **Depends on:** Phase 9 B packs API + ADAPT_PLATFORM job (mock OK)
+- **Needs from others:**
+  - Anto: list envelope `{ items }`; status enum; `outputAssetIds` after adapt; **PATCH `/packs/:id` for copy** (or fold into status endpoint); download URLs
+  - Arvin: mock copy distinct per platform (title/caption/hashtags)
+  - Cyrus: aspect outputs 16:9 / 9:16 / 1:1 → assets
+- **Risks:** Until API exists, Generate/list/Download show API errors (expected)
+
+## Phase 9 Completion — Brendan Rodrigues (Dev A)
+- **Date:** 2026-10-03
+- **Branch:** phase-09-brendan
+- **All allowed tasks done:** yes
+- **Incomplete items:** e2e blocked on Anto/Arvin/Cyrus (expected mid-phase)
+- **Blockers handed to Integration:** Align client contracts above; import `@creatorai/shared` pack DTOs when Anto lands them
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web dev
+  # Manual UI smoke without API: Platform Packs tab renders; Generate fails with network/API error
+  ```
+- **Files I expect others to connect to:**
+  - `apps/web/src/lib/api.ts` pack helpers
+  - `components/packs/PacksTab.tsx`
+- **Notes for next phase me:** Phase 10 Insights UI — dashboard polish; Integration Lead for Phase 10 = Brendan
 ### [2026-10-03 22:52] ROLE=C NAME=Arvin Almeida PHASE=9 TYPE=START
 - **Summary:** Starting Phase 9 Dev C — platform copy generation (title/caption/hashtags tuned per platform length limits; distinct mock strings; `docs/ai/platform-copy-guidelines.md` + worker consumer).
 - **Files touched:** (in progress on `Arvin`)
