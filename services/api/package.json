@@ -12,6 +12,7 @@
     "prisma:deploy": "dotenv run -f ../../.env -- prisma migrate deploy"
   },
   "dependencies": {
+    "@creatorai/ai-provider": "workspace:*",
     "@creatorai/shared": "workspace:*",
     "@fastify/cors": "^11.0.1",
     "@fastify/multipart": "^10.1.2",

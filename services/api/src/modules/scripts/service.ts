@@ -5,6 +5,8 @@ import type {
   GenerateHooksRequest,
   GenerateScriptRequest,
   GenerateSupportingRequest,
+  Platform,
+  RefineScriptRequest,
   ScriptContent,
   ScriptDocumentDetailDto,
   ScriptDocumentDto,
@@ -298,6 +300,76 @@ export async function enqueueGenerateSupporting(
       scriptId,
       platforms: input.platforms,
       scriptText: [content.hook, content.body, content.cta].join('\n\n'),
+    },
+  });
+
+  return { jobId: job.id };
+}
+
+/**
+ * Refine = GENERATE_SCRIPT job with scriptId + refineInstruction.
+ * Reuses prior generate params from the last successful job when available.
+ */
+export async function enqueueRefineScript(
+  workspaceId: string,
+  scriptId: string,
+  input: RefineScriptRequest,
+): Promise<EnqueueJobResponse> {
+  const script = await findOwnedScript(workspaceId, scriptId);
+  const latest = script.versions[0];
+  if (!latest) {
+    throw new ScriptHttpError(
+      400,
+      'validation_error',
+      'Script has no versions to refine',
+    );
+  }
+
+  const content = parseContent(latest.content);
+  const project = await prisma.project.findFirst({
+    where: { id: script.projectId, workspaceId, deletedAt: null },
+    select: { targetPlatforms: true },
+  });
+  const platform =
+    (project?.targetPlatforms?.[0] as Platform | undefined) ?? 'YOUTUBE_SHORTS';
+
+  // Best-effort: recover topic/audience/tone from last script job for this document
+  const prior = await prisma.job.findFirst({
+    where: {
+      workspaceId,
+      projectId: script.projectId,
+      type: 'GENERATE_SCRIPT',
+      status: 'SUCCEEDED',
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  const priorInput = prior ? (prior.input as Record<string, unknown>) : {};
+  const topic =
+    (typeof priorInput.topic === 'string' && priorInput.topic) ||
+    script.title ||
+    content.title ||
+    content.hook.slice(0, 120) ||
+    'script';
+  const audience =
+    (typeof priorInput.audience === 'string' && priorInput.audience) ||
+    'creators';
+  const tone =
+    (typeof priorInput.tone === 'string' && priorInput.tone) || 'practical';
+  const priorPlatform =
+    typeof priorInput.platform === 'string' ? priorInput.platform : platform;
+
+  const job = await enqueueJob({
+    workspaceId,
+    projectId: script.projectId,
+    type: 'GENERATE_SCRIPT',
+    input: {
+      topic,
+      audience,
+      tone,
+      platform: priorPlatform,
+      scriptId,
+      refineInstruction: input.instruction,
+      title: script.title,
     },
   });
 

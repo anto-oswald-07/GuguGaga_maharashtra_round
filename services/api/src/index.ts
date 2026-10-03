@@ -12,6 +12,7 @@ import { registerAssetRoutes } from './modules/assets/routes';
 import { registerProjectRoutes } from './modules/projects/routes';
 import { registerScriptRoutes } from './modules/scripts/routes';
 import { registerJobRoutes } from './modules/jobs/routes';
+import { startJobPoller } from './modules/jobs/processor';
 
 loadEnv({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -47,6 +48,7 @@ async function main() {
 
   await app.listen({ port, host });
   app.log.info(`API listening on http://${host}:${port}${API_PREFIX}`);
+  startJobPoller();
 }
 
 main().catch((err) => {

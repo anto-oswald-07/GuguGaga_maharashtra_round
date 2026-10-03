@@ -103,6 +103,7 @@ export {
   generateScriptRequestSchema,
   generateHooksRequestSchema,
   generateSupportingRequestSchema,
+  refineScriptRequestSchema,
   enqueueJobResponseSchema,
   type ScriptSource,
   type ScriptContent,
@@ -115,6 +116,7 @@ export {
   type GenerateScriptRequest,
   type GenerateHooksRequest,
   type GenerateSupportingRequest,
+  type RefineScriptRequest,
   type EnqueueJobResponse,
 } from './scripts';
 export {

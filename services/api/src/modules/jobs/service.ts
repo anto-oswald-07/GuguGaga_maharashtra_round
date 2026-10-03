@@ -3,9 +3,11 @@ import type {
   JobListQuery,
   JobListResponse,
   MockCompleteJobRequest,
+  Platform,
   ScriptContent,
   ScriptSource,
 } from '@creatorai/shared';
+import { createAiProvider } from '@creatorai/ai-provider';
 import type { Job, Prisma } from '@prisma/client';
 import { prisma } from '../../db/prisma';
 import { appendAiScriptVersion } from '../scripts/service';
@@ -107,89 +109,56 @@ export async function retryJob(
   return toJobDto(created);
 }
 
-function mockScriptContent(input: Record<string, unknown>): ScriptContent {
-  const topic =
-    typeof input.topic === 'string' && input.topic.trim()
-      ? input.topic.trim()
-      : 'your topic';
-  const audience =
-    typeof input.audience === 'string' && input.audience.trim()
-      ? input.audience.trim()
-      : 'creators';
-  const tone =
-    typeof input.tone === 'string' && input.tone.trim()
-      ? input.tone.trim()
-      : 'clear';
-  const refine =
-    typeof input.refineInstruction === 'string' && input.refineInstruction
-      ? input.refineInstruction
-      : null;
-
-  const hook = refine
-    ? `Refined hook for ${topic}: ${refine.slice(0, 120)}`
-    : `Stop scrolling — here's the fastest way to nail ${topic}.`;
-
-  const body = [
-    `This is a mock AI script about ${topic}.`,
-    `Written for ${audience} in a ${tone} tone.`,
-    refine ? `Refine note applied: ${refine}` : 'Beat 1: set the problem.',
-    'Beat 2: show the simple system.',
-    'Beat 3: prove it with one concrete example.',
-  ].join('\n\n');
-
-  const cta = `If this helped, save it and comment your #1 blocker on ${topic}.`;
-
-  return {
-    hook,
-    body,
-    cta,
-    title: typeof input.title === 'string' ? input.title : `Script: ${topic}`,
-    rawText: `## Hook\n\n${hook}\n\n## Body\n\n${body}\n\n## CTA\n\n${cta}`,
-  };
+function strField(input: Record<string, unknown>, key: string, fallback: string): string {
+  const v = input[key];
+  return typeof v === 'string' && v.trim() ? v.trim() : fallback;
 }
 
-function mockHooks(input: Record<string, unknown>): string[] {
-  const count =
-    typeof input.count === 'number' && input.count > 0
-      ? Math.min(Math.floor(input.count), 10)
-      : 5;
-  const base =
-    typeof input.scriptText === 'string' && input.scriptText
-      ? input.scriptText.slice(0, 40)
-      : 'your content';
-  return Array.from({ length: count }, (_, i) => {
-    const n = i + 1;
-    return `Hook ${n}: What if ${base.trim()}… actually took half the time? (${n})`;
-  });
-}
-
-function mockSupporting(input: Record<string, unknown>): Record<string, unknown> {
-  const platforms = Array.isArray(input.platforms)
-    ? input.platforms.filter((p): p is string => typeof p === 'string')
-    : ['TIKTOK'];
+function flattenSupporting(
+  byPlatform: Partial<
+    Record<string, { titles: string[]; captions: string[]; hashtags: string[] }>
+  >,
+  platforms: string[],
+): Record<string, unknown> {
+  const titles: string[] = [];
+  const captions: string[] = [];
+  const hashtags = new Set<string>();
+  for (const p of platforms) {
+    const item = byPlatform[p];
+    if (!item) continue;
+    titles.push(...item.titles);
+    captions.push(...item.captions);
+    for (const h of item.hashtags) hashtags.add(h);
+  }
+  // Fallback: flatten all platforms if none matched
+  if (titles.length === 0) {
+    for (const item of Object.values(byPlatform)) {
+      if (!item) continue;
+      titles.push(...item.titles);
+      captions.push(...item.captions);
+      for (const h of item.hashtags) hashtags.add(h);
+    }
+  }
   return {
-    titles: platforms.map((p) => `[${p}] Mock title for your script`),
-    captions: platforms.map(
-      (p) => `Mock caption for ${p} — punchy, on-brand, under 150 chars.`,
-    ),
-    hashtags: ['#CreatorAi', '#ContentOps', '#ShortForm'],
-    description: 'Mock long-form description generated for supporting content.',
+    titles,
+    captions,
+    hashtags: [...hashtags],
+    description: null,
   };
 }
 
 /**
- * Dev/UI testing helper until Arvin's worker consumer lands.
- * Simulates worker: QUEUED|RUNNING → SUCCEEDED (or FAILED), writes ScriptVersion for GENERATE_SCRIPT.
- *
- * **Decision:** Worker will write DB directly (same path as this function).
- * No separate internal webhook required for MVP — see `docs/jobs/queue.md`.
+ * Complete a job with the real AiProvider (mock|openai|gemini).
+ * Worker path = write DB directly (docs/jobs/queue.md). Used by poller + mock-complete.
  */
-export async function mockCompleteJob(
-  workspaceId: string,
+export async function completeJobWithAi(
   jobId: string,
   body: MockCompleteJobRequest = {},
 ): Promise<JobDto> {
-  const job = await findOwnedJob(workspaceId, jobId);
+  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  if (!job) {
+    throw new JobHttpError(404, 'not_found', 'Job not found');
+  }
 
   if (job.status === 'SUCCEEDED' || job.status === 'FAILED') {
     throw new JobHttpError(
@@ -214,14 +183,22 @@ export async function mockCompleteJob(
     return toJobDto(updated);
   }
 
-  // Claim → running
-  await prisma.job.update({
-    where: { id: jobId },
-    data: { status: 'RUNNING', progress: 50 },
-  });
+  // Ensure RUNNING (poller may have claimed already)
+  if (job.status === 'QUEUED') {
+    await prisma.job.update({
+      where: { id: jobId },
+      data: { status: 'RUNNING', progress: 50 },
+    });
+  } else {
+    await prisma.job.update({
+      where: { id: jobId },
+      data: { progress: 50 },
+    });
+  }
 
   const input = asRecord(job.input);
   let output: Record<string, unknown> = body.output ? { ...body.output } : {};
+  const provider = createAiProvider();
 
   try {
     if (job.type === 'GENERATE_SCRIPT') {
@@ -232,16 +209,33 @@ export async function mockCompleteJob(
           'GENERATE_SCRIPT job missing projectId',
         );
       }
-      const content = mockScriptContent(input);
+      const generated = await provider.generateScript({
+        topic: strField(input, 'topic', 'your topic'),
+        audience: strField(input, 'audience', 'creators'),
+        tone: strField(input, 'tone', 'practical'),
+        platform: strField(input, 'platform', 'YOUTUBE_SHORTS'),
+        refineInstruction:
+          typeof input.refineInstruction === 'string'
+            ? input.refineInstruction
+            : undefined,
+      });
+
+      const content: ScriptContent = {
+        hook: generated.hook,
+        body: generated.body,
+        cta: generated.cta,
+        title: generated.title,
+        rawText: generated.fullText,
+      };
       const source: ScriptSource = input.refineInstruction
         ? 'REFINE'
         : 'AI';
       const scriptId =
         typeof input.scriptId === 'string' ? input.scriptId : null;
-      const title = typeof input.title === 'string' ? input.title : null;
+      const title = typeof input.title === 'string' ? input.title : generated.title;
 
       const result = await appendAiScriptVersion({
-        workspaceId,
+        workspaceId: job.workspaceId,
         projectId: job.projectId,
         scriptId,
         title,
@@ -255,15 +249,43 @@ export async function mockCompleteJob(
         versionId: result.versionId,
         version: result.version,
         content,
+        provider: generated.provider,
+        model: generated.model,
       };
     } else if (job.type === 'GENERATE_HOOKS') {
-      output = { ...output, hooks: mockHooks(input) };
+      const count =
+        typeof input.count === 'number' && input.count > 0
+          ? Math.min(Math.floor(input.count), 10)
+          : 5;
+      const scriptText = strField(input, 'scriptText', 'your content');
+      const hooks = await provider.generateHooks(scriptText, count);
+      output = { ...output, hooks, provider: provider.name };
     } else if (job.type === 'GENERATE_SUPPORTING') {
-      output = { ...output, supporting: mockSupporting(input) };
+      const platforms = (
+        Array.isArray(input.platforms)
+          ? input.platforms.filter((p): p is string => typeof p === 'string')
+          : ['YOUTUBE_SHORTS']
+      ) as Platform[];
+      const scriptText = strField(input, 'scriptText', 'your content');
+      const supportingRaw = await provider.generateSupporting(
+        scriptText,
+        platforms,
+      );
+      const supporting = flattenSupporting(
+        supportingRaw.byPlatform,
+        platforms,
+      );
+      output = {
+        ...output,
+        supporting,
+        byPlatform: supportingRaw.byPlatform,
+        provider: supportingRaw.provider,
+        model: supportingRaw.model,
+      };
     } else {
       output = {
         ...output,
-        message: `Mock complete for ${job.type} (no artifact writer yet)`,
+        message: `No Phase 5 handler for ${job.type}`,
       };
     }
 
@@ -283,7 +305,7 @@ export async function mockCompleteJob(
         ? err.message
         : err instanceof Error
           ? err.message
-          : 'Mock complete failed';
+          : 'Job complete failed';
     const updated = await prisma.job.update({
       where: { id: jobId },
       data: {
@@ -297,4 +319,17 @@ export async function mockCompleteJob(
     }
     return toJobDto(updated);
   }
+}
+
+/**
+ * Dev/UI endpoint — same path as the poller (AiProvider + DB writes).
+ * Kept for manual forcing / fail injection during demos.
+ */
+export async function mockCompleteJob(
+  workspaceId: string,
+  jobId: string,
+  body: MockCompleteJobRequest = {},
+): Promise<JobDto> {
+  await findOwnedJob(workspaceId, jobId);
+  return completeJobWithAi(jobId, body);
 }

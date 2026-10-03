@@ -28,15 +28,15 @@
 
 | Field | Value |
 |-------|-------|
-| **Current phase** | Phase 4 Integration complete — Phase 5 next |
-| **Last completed tag** | `phase-1-done` (local only); Phase 2–4 Integration recorded in context — **no git tags this session** |
-| **main status** | Auth + Assets + Projects/workflow end-to-end: create/attach/stage/history + Kanban UI |
+| **Current phase** | Phase 5 Integration complete — Phase 6 next |
+| **Last completed tag** | `phase-1-done` (local only); Phase 2–5 Integration recorded in context — **no git tags this session** |
+| **main status** | Auth + Assets + Projects + Scripts/Jobs/AI end-to-end (mock provider, versions, hooks, supporting) |
 | **Package manager** | **pnpm** workspaces (final) |
-| **Queue decision** | **DB-polling queue for MVP**; Redis remains optional in compose (`--profile redis`) for later BullMQ. Phase 3 video enrichment is **sync inline** until Job table exists. |
-| **Default AI provider** | `mock` until keys available |
+| **Queue decision** | **DB-polling queue for MVP**; API in-process poller (`startJobPoller`) claims `QUEUED` jobs; Redis optional (`--profile redis`) for later BullMQ |
+| **Default AI provider** | `mock` until keys available (`AI_PROVIDER=mock\|openai\|gemini`) |
 | **API base URL (local)** | `http://localhost:4000/api/v1` |
 | **Web app (local)** | `http://localhost:3002` (or `:3000` if free) |
-| **Who is Integration Lead next** | Anto (Phase 5) |
+| **Who is Integration Lead next** | Brendan (Phase 6) |
 
 ### 2.1 What Already Works
 - `pnpm install` at root (workspace: web, api, worker, shared)
@@ -1329,3 +1329,38 @@ _(Template above kept for other developers.)_
 - **Files touched:** `packages/ai-provider/**`, `services/worker/src/ai/**`, `services/worker/src/consumers/generateScript.ts`, `services/worker/package.json`, `docs/ai-contracts.md`, `.env.example`, `context.md`
 - **Needs from others:** Anto Job/Script modules; Integration e2e from UI without key
 - **Risks:** Without Job table, consumer persists only via optional `WORKER_CALLBACK_URL` or returns JSON for local/Integration use
+
+## INTEGRATION COMPLETE — Phase 5
+- **Date:** 2026-10-03
+- **Lead:** Arvin (acting; plan Lead=Anto; work on `Arvin` branch)
+- **Verified:**
+  - [x] Mock provider generates script end-to-end without API key (API poller + `AI_PROVIDER=mock`)
+  - [x] Versions saved (AI → REFINE → USER)
+  - [x] Hooks + supporting content endpoints work (job output)
+  - [ ] Real provider with key — optional; not exercised this session
+- **What was wired:**
+  - Applied migration `20261003144745_phase5_scripts_jobs` (Job / ScriptDocument / ScriptVersion)
+  - API in-process DB poller (`services/api/src/modules/jobs/processor.ts`) + `completeJobWithAi` via `@creatorai/ai-provider`
+  - `POST /scripts/:id/refine` enqueue path
+  - Web client contract fixes (`count` vs `n`, platforms required, MANUAL→USER, ScriptDocument normalizer)
+- **Commands to re-verify:**
+  ```bash
+  # API + poller
+  pnpm --filter api dev
+  # Then: register → create project → POST .../scripts/generate → poll GET /jobs/:id → SUCCEEDED + ScriptVersion
+  # Hooks: POST /scripts/:id/hooks {"count":3}
+  # Supporting: POST /scripts/:id/supporting {"platforms":["TIKTOK"]}
+  # Refine: POST /scripts/:id/refine {"instruction":"..."}
+  AI_PROVIDER=mock pnpm --filter worker generate-script -- --topic "Batch Reels" --audience "creators" --tone "practical" --platform INSTAGRAM_REELS
+  ```
+- **Known gaps / follow-ups:**
+  - Web Next on :3002 can hang under load — restart `next dev -p 3002` if curls time out
+  - OpenAI/Gemini not smoke-tested (keys optional)
+  - Worker separate DB poller not required while API poller runs; CLI consumer still for local smoke
+- **Ready for Phase 6:** yes (Brendan Integration Lead)
+
+### Chronological — 2026-10-03 (Arvin / Phase 5 Integration)
+- **Summary:** Phase 5 A–D code existed but Integration incomplete (migration unapplied, no job claim path, UI/API field mismatches). Applied Phase 5 migration; wired AI-backed job completion + in-API poller; added refine route; fixed web script client contracts; E2E smoke PASS (generate/refine/hooks/supporting/versions).
+- **Files touched:** `services/api/src/modules/jobs/{service,processor}.ts`, `services/api/src/modules/scripts/{routes,service}.ts`, `services/api/src/index.ts`, `services/api/package.json`, `packages/shared/src/{scripts,index}.ts`, `apps/web/src/lib/api.ts`, `docs/jobs/queue.md`, `.env.example`, `context.md`
+- **Needs from others:** None for Phase 5; Phase 6 Lead = Brendan
+- **Risks:** Next.dev hang on :3002; real LLM keys untested
