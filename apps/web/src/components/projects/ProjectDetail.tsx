@@ -19,10 +19,14 @@ import {
   type Project,
   type StageEvent,
 } from "@/components/projects/project-api";
+import { ScriptTab } from "@/components/scripts/ScriptTab";
+import type { ScriptPlatform } from "@/lib/api";
 
 type ProjectDetailProps = {
   projectId: string;
 };
+
+type HubTab = "overview" | "script";
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -38,6 +42,7 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [stagePending, setStagePending] = useState(false);
+  const [tab, setTab] = useState<HubTab>("overview");
 
   useEffect(() => {
     if (!hasToken()) {
@@ -161,9 +166,28 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
 
           <div className="border-b border-[var(--border)]">
             <nav className="-mb-px flex gap-4 text-sm">
-              <span className="border-b-2 border-[var(--brand)] px-1 py-2 font-medium text-[var(--brand)]">
+              <button
+                type="button"
+                onClick={() => setTab("overview")}
+                className={
+                  tab === "overview"
+                    ? "border-b-2 border-[var(--brand)] px-1 py-2 font-medium text-[var(--brand)]"
+                    : "px-1 py-2 text-[var(--muted)] hover:text-[var(--foreground)]"
+                }
+              >
                 Overview
-              </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("script")}
+                className={
+                  tab === "script"
+                    ? "border-b-2 border-[var(--brand)] px-1 py-2 font-medium text-[var(--brand)]"
+                    : "px-1 py-2 text-[var(--muted)] hover:text-[var(--foreground)]"
+                }
+              >
+                Script
+              </button>
               <Link
                 href={`/projects/${project.id}/editor`}
                 className="px-1 py-2 text-[var(--muted)] hover:text-[var(--foreground)]"
@@ -173,47 +197,59 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
             </nav>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
-              <h2 className="text-sm font-semibold">Stage</h2>
-              <StageControls
-                stage={project.stage}
-                pending={stagePending}
-                onMove={(s) => void onMoveStage(s)}
-              />
-            </div>
+          {tab === "overview" ? (
+            <>
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <h2 className="text-sm font-semibold">Stage</h2>
+                  <StageControls
+                    stage={project.stage}
+                    pending={stagePending}
+                    onMove={(s) => void onMoveStage(s)}
+                  />
+                </div>
 
-            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
-              <AttachAssetsPanel
-                project={project}
-                onChanged={(next) => setProject(next)}
-              />
-            </div>
-          </div>
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+                  <AttachAssetsPanel
+                    project={project}
+                    onChanged={(next) => setProject(next)}
+                  />
+                </div>
+              </div>
 
-          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
-            <h2 className="text-sm font-semibold">Stage history</h2>
-            {history.length === 0 ? (
-              <p className="mt-2 text-sm text-[var(--muted)]">No events yet.</p>
-            ) : (
-              <ul className="mt-3 space-y-2 text-sm">
-                {history.map((event) => (
-                  <li
-                    key={event.id}
-                    className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--border)] pb-2 last:border-0"
-                  >
-                    <span>
-                      {event.fromStage ?? "—"} →{" "}
-                      <span className="font-medium">{event.toStage}</span>
-                    </span>
-                    <span className="text-xs text-[var(--muted)]">
-                      {formatDate(event.createdAt)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+                <h2 className="text-sm font-semibold">Stage history</h2>
+                {history.length === 0 ? (
+                  <p className="mt-2 text-sm text-[var(--muted)]">No events yet.</p>
+                ) : (
+                  <ul className="mt-3 space-y-2 text-sm">
+                    {history.map((event) => (
+                      <li
+                        key={event.id}
+                        className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[var(--border)] pb-2 last:border-0"
+                      >
+                        <span>
+                          {event.fromStage ?? "—"} →{" "}
+                          <span className="font-medium">{event.toStage}</span>
+                        </span>
+                        <span className="text-xs text-[var(--muted)]">
+                          {formatDate(event.createdAt)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
+          ) : (
+            <ScriptTab
+              projectId={project.id}
+              defaultPlatform={
+                (project.targetPlatforms[0] as ScriptPlatform | undefined) ??
+                null
+              }
+            />
+          )}
         </>
       ) : null}
     </section>

@@ -1215,7 +1215,6 @@ _(Template above kept for other developers.)_
 - **Needs from others:** None for Phase 4; Phase 5 Lead = Anto
 - **Risks:** Next sometimes hangs on :3002 (listening, no response) — restart `next dev` if UI spins
 
-<<<<<<< HEAD
 ### [2026-10-03 14:42] ROLE=D NAME=Cyrus Selvaraj PHASE=5 TYPE=START
 - **Summary:** Prior Dev D phases verified on `main` (P1–P4 deliverables present; Phase 4 Integration complete). Starting Phase 5 Dev D — prompt templates + GeneratedScript Zod schema (docs path; no Arvin NEED for ai-provider prompts).
 - **Files touched:** branch `phase-05-cyrus` from `origin/main` @ `7eb0e26`
@@ -1238,7 +1237,63 @@ _(Template above kept for other developers.)_
 - **Depends on:** Anto Scripts API / Arvin MockAiProvider will consume these at Integration
 - **Needs from others:** Arvin — load `docs/ai/prompts/*.md` (or copy) into provider; validate model JSON with shared schemas
 - **Risks:** None for Phase 5 D scope
-=======
+
+### [2026-10-03 20:12] ROLE=A NAME=Brendan Rodrigues PHASE=5 TYPE=START
+- **Summary:** Synced `main` (`7eb0e26` Phase 4 Integration complete). Created `phase-05-brendan`. Starting Script Tab UI against SDD §5.4 / §5.9 (Phase 5 B API not on main yet).
+- **Files touched:** branch + this entry
+- **APIs / types added:** none yet
+- **How to run / test what I did:** `git checkout phase-05-brendan`
+- **Depends on:** Anto Scripts API + Jobs; Arvin mock provider for e2e
+- **Needs from others:** Anto to implement endpoints matching SDD + client assumptions below
+- **Risks:** UI will 404 until Phase 5 B lands; refine path not in SDD table
+
+### [2026-10-03 20:15] ROLE=A NAME=Brendan Rodrigues PHASE=5 TYPE=DONE
+- **Summary:** Phase 5 Dev A complete — Script tab on project hub: generate form, job poll banner, hook/body/CTA editor, Refine / Hooks / Supporting actions, save version, version list.
+- **Files touched:**
+  - `apps/web/src/lib/api.ts` (script + job client methods)
+  - `apps/web/src/components/scripts/**` (ScriptTab, form, display, versions, job poll, banner)
+  - `apps/web/src/components/projects/ProjectDetail.tsx` (Overview | Script | Editor tabs — hub wiring; Phase 4 file, needed for Script tab)
+  - `context.md`
+- **APIs / types added (client assumptions — TODO_SHARED until Anto Zod lands):**
+  - `POST /projects/:id/scripts/generate` body `{ topic, audience, tone, platform }` → `{ jobId, scriptId? }`
+  - `GET /projects/:id/scripts` → `{ items: ScriptDocument[] }` (`content`, `hooks`, `supporting`, `versions[]`)
+  - `GET /scripts/:id` → ScriptDocument (**extra vs SDD table** — needed after job; Anto please add or return full doc in job.output)
+  - `POST /scripts/:id/refine` body `{ instruction }` → `{ jobId }` (**extra vs SDD** — FR-SCR-003; confirm path)
+  - `POST /scripts/:id/hooks` body `{ n? }` → `{ jobId }` **or** `{ hooks: string[] }`
+  - `POST /scripts/:id/supporting` body `{ platforms? }` → `{ jobId }` **or** `{ supporting }`
+  - `POST /scripts/:id/versions` body `{ content: { hook, body, cta }, source? }` → ScriptVersion | ScriptDocument
+  - `GET /jobs/:id` → Job `{ status, progress, error, output, ... }`
+  - Job `output` may nest content as `{ hook, body, cta }` or `{ content }` / `{ script }` — UI accepts all
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web exec eslint src/components/scripts src/lib/api.ts src/components/projects/ProjectDetail.tsx
+  pnpm --filter web dev
+  # After Anto API: open /projects/:id → Script tab → Generate → watch job poll → edit → Save version
+  ```
+- **Depends on:** Phase 5 B scripts/jobs API (+ mock complete endpoint OK for UI testing)
+- **Needs from others:**
+  - Anto: confirm refine + GET script; list envelope `{ items }`; job poll shape
+  - Arvin: mock generate writes ScriptVersion so poll SUCCEEDED shows content
+- **Risks:** Until API exists, Generate shows API errors (expected)
+
+## Phase 5 Completion — Brendan Rodrigues (Dev A)
+- **Date:** 2026-10-03
+- **Branch:** phase-05-brendan
+- **All allowed tasks done:** yes
+- **Incomplete items:** e2e blocked on Anto/Arvin (expected mid-phase)
+- **Blockers handed to Integration:** Align client contracts above; optional move Script tab wiring solely under `app/projects/[id]` if path pedantry matters
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web dev
+  # Manual UI smoke without API: Script tab renders form/actions; Generate fails with network/API error
+  ```
+- **Files I expect others to connect to:**
+  - `apps/web/src/lib/api.ts` script/job helpers
+  - `components/scripts/ScriptTab.tsx`
+- **Notes for next phase me:** Phase 6 Mapping UI — same project-tab pattern
+
 ### [2026-10-03 20:14] ROLE=B NAME=Anto Oswald PHASE=5 TYPE=START
 - **Summary:** Started Phase 5 Dev B on `phase-05-anto` — Scripts API + Jobs table wiring (DB-polling queue).
 - **Files touched:** (branch `phase-05-anto` created from `main` after Phase 4 Integration @ `7eb0e26`)
@@ -1274,4 +1329,3 @@ _(Template above kept for other developers.)_
 - **Files touched:** `packages/ai-provider/**`, `services/worker/src/ai/**`, `services/worker/src/consumers/generateScript.ts`, `services/worker/package.json`, `docs/ai-contracts.md`, `.env.example`, `context.md`
 - **Needs from others:** Anto Job/Script modules; Integration e2e from UI without key
 - **Risks:** Without Job table, consumer persists only via optional `WORKER_CALLBACK_URL` or returns JSON for local/Integration use
->>>>>>> 2f0c2897b56ca0cc197610560655c0634e0c464c
