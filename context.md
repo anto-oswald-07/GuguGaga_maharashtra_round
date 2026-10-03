@@ -399,6 +399,31 @@ Copy-paste this template every time:
 - **Needs from others:** Integration — reconcile proposed types vs Anto Zod; note Phase 1 flat `ApiError` vs SDD nested `{ error: { code, message, details } }`
 - **Risks:** Live curl cannot fully pass until Phase 2 B lands
 
+### [2026-10-03 18:30] ROLE=C NAME=Arvin Almeida PHASE=3 TYPE=START
+- **Summary:** Audited Phase 1+2 completeness — all Dev A/B/C/D deliverables present. Starting Phase 3 Dev C (asset metadata types + worker extract stub + docs). No Phase 1/2 gaps to fill.
+- **Files touched:** (starting)
+- **APIs / types added:** None yet
+- **How to run / test what I did:** N/A
+- **Depends on:** `@creatorai/shared` workspace; optional ffprobe on PATH
+- **Needs from others:** Anto — enqueue `EXTRACT_METADATA` after upload (documented; not implemented here)
+- **Risks:** This machine may lack ffprobe — function must mock-fallback (by design)
+
+### [2026-10-03 18:32] ROLE=C NAME=Arvin Almeida PHASE=3 TYPE=DONE
+- **Summary:** Phase 3 Dev C complete — `VideoAssetMetadata` type, `extractMetadata(filePath)` with ffprobe + mock fallback, enqueue docs for Integration.
+- **Files touched:** `packages/shared/src/types/assetMetadata.ts`, `packages/shared/src/index.ts`, `services/worker/src/jobs/extractMetadata.ts`, `services/worker/package.json`, `docs/assets/metadata.md`, `context.md`, `pnpm-lock.yaml`
+- **APIs / types added:**
+  - Shared: `VideoAssetMetadata`, `ExtractedAssetMetadata`
+  - Worker: `extractMetadata(filePath)` → `{ durationMs, width, height, codec, source }`
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter worker extract-meta -- "$(pwd)/storage/samples/dummy.mp4"
+  # with ffprobe: source=ffprobe; without: source=mock (verified on this laptop)
+  ```
+- **Depends on:** Dummy mp4 optional; ffprobe optional
+- **Needs from others:** Anto/Integration wire job enqueue after asset upload; Cyrus thumbnails can share path
+- **Risks:** None for Phase 3 C scope (API routes intentionally untouched)
+
 ---
 
 ## 6. Phase Completion Blocks (paste at end of your phase)
@@ -525,6 +550,37 @@ _(Template above kept for other developers.)_
   - `packages/shared/src/validation/password.ts` → Anto register validation
   - `docs/security/auth-checklist.md` → Integration verify (JWT secret, no token logging, min-8)
 - **Notes for next phase me:** Phase 3 = thumbnail FFmpeg helper (`services/worker/src/media/thumbnail.ts` + shell script)
+
+## Phase 2 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** _(local; no git ops this session)_
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (auth API live verification belongs to Phase 2 Integration)
+- **Blockers handed to Integration:** Prefer Anto’s `packages/shared` auth Zod over `docs/proposed-auth-types.ts`
+- **Commands to verify my work:**
+  ```bash
+  test -f docs/api/auth.http && test -f docs/api/auth.postman.json
+  test -f docs/testing/phase-2-auth.md
+  ```
+- **Files I expect others to connect to:** auth HTTP collections for Integration curl checks
+- **Notes for next phase me:** Phase 3 C = asset metadata worker stub
+
+## Phase 3 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** _(local; no git ops this session)_
+- **All allowed tasks done:** yes
+- **Incomplete items:** none
+- **Blockers handed to Integration:** Add `EXTRACT_METADATA` job type + enqueue after video upload (see `docs/assets/metadata.md`)
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter worker extract-meta -- "$(pwd)/storage/samples/dummy.mp4"
+  ```
+- **Files I expect others to connect to:**
+  - `VideoAssetMetadata` → Asset.metadata JSON (Anto)
+  - `extractMetadata` → worker consumer / optional sync upload path
+  - `docs/assets/metadata.md` → Integration wiring
+- **Notes for next phase me:** Phase 4 C = workflow stage helpers
 
 ---
 
