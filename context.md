@@ -666,6 +666,23 @@ _(Template above kept for other developers.)_
   - `docs/demo/golden-path-prep.md` → judge path / Arvin Phase 10 script
 - **Notes for next phase me:** Phase 5 D = prompt templates + script Zod schema (prefer `docs/ai/prompts` + `packages/shared`)
 
+## Phase 5 Completion — Cyrus Selvaraj (Dev D)
+- **Date:** 2026-10-03
+- **Branch:** phase-05-cyrus
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (prompts kept under `docs/ai/prompts` — no Arvin NEED for `packages/ai-provider/src/prompts`)
+- **Blockers handed to Integration:** Arvin/Anto should parse LLM JSON then call `assertGeneratedScript` / hooks / supporting helpers; wire prompt files into Mock/real providers
+- **Commands to verify my work:**
+  ```bash
+  # read docs/ai/prompts/README.md and examples.md
+  cd packages/shared && npx tsc -p tsconfig.json
+  node -e "const s=require('./dist/index.js'); console.log(s.generatedScriptSchema.safeParse({hook:'H',body:'B',cta:'C'}).success);"
+  ```
+- **Files I expect others to connect to:**
+  - `docs/ai/prompts/*` → Arvin `packages/ai-provider`
+  - `packages/shared/src/schemas/scriptSchema.ts` → API Scripts + worker consumers + web
+- **Notes for next phase me:** Phase 6 D = audio extract for STT (`extractAudio.ts` + shell script)
+
 ## Phase 3 Completion — Brendan Rodrigues (Dev A)
 - **Date:** 2026-10-03
 - **Branch:** phase-03-brendan
@@ -837,6 +854,7 @@ _(Template above kept for other developers.)_
 | Demo project fixture | Done Phase 4 (Cyrus) | `samples/projects/demo-project.json` + `scripts/seed/sample-project.ts` |
 | Golden path prep | Started Phase 4 (Cyrus) | `docs/demo/golden-path-prep.md` (stages IDEA→PUBLISHED) |
 | Mock AI stable | Planned Phase 5/10 (Arvin) | |
+| Script prompts + Zod | Done Phase 5 (Cyrus) | `docs/ai/prompts/**` + `packages/shared/src/schemas/scriptSchema.ts` |
 | Golden path judge script | Planned Phase 10 (Arvin) | `docs/demo/judge-script.md` |
 | Emergency pre-rendered clip | Planned Phase 10 (Cyrus) | |
 
@@ -1196,3 +1214,26 @@ _(Template above kept for other developers.)_
   ```
 - **Needs from others:** None for Phase 4; Phase 5 Lead = Anto
 - **Risks:** Next sometimes hangs on :3002 (listening, no response) — restart `next dev` if UI spins
+
+### [2026-10-03 14:42] ROLE=D NAME=Cyrus Selvaraj PHASE=5 TYPE=START
+- **Summary:** Prior Dev D phases verified on `main` (P1–P4 deliverables present; Phase 4 Integration complete). Starting Phase 5 Dev D — prompt templates + GeneratedScript Zod schema (docs path; no Arvin NEED for ai-provider prompts).
+- **Files touched:** branch `phase-05-cyrus` from `origin/main` @ `7eb0e26`
+- **APIs / types added:** None yet
+- **How to run / test what I did:** `git checkout phase-05-cyrus`
+- **Depends on:** Shared Zod + `platformSchema`; `docs/ai-contracts.md` method names
+- **Needs from others:** Arvin implements providers consuming these prompts/schemas
+- **Risks:** None
+
+### [2026-10-03 14:44] ROLE=D NAME=Cyrus Selvaraj PHASE=5 TYPE=DONE
+- **Summary:** Phase 5 Dev D complete — script/hooks/supporting prompt templates + good/bad examples; shared `generatedScriptSchema` (+ hooks/supporting) with assert helpers.
+- **Files touched:** `docs/ai/prompts/**`, `packages/shared/src/schemas/scriptSchema.ts`, `packages/shared/src/index.ts`, `context.md`
+- **APIs / types added:** `GeneratedScript`, `ScriptGenInput`, `GeneratedHooks`, `SupportingContent`, `assertGeneratedScript`, `assertGeneratedHooks`, `assertSupportingContent`
+- **How to run / test what I did:**
+  ```bash
+  cd packages/shared && npx tsc -p tsconfig.json
+  node -e "const s=require('./dist/index.js'); console.log(s.generatedScriptSchema.safeParse({hook:'H',body:'B',cta:'C'}).success, s.generatedScriptSchema.safeParse({opening:'x'}).success);"
+  # expect: true false
+  ```
+- **Depends on:** Anto Scripts API / Arvin MockAiProvider will consume these at Integration
+- **Needs from others:** Arvin — load `docs/ai/prompts/*.md` (or copy) into provider; validate model JSON with shared schemas
+- **Risks:** None for Phase 5 D scope

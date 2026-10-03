@@ -73,6 +73,23 @@ export {
   type StageEventDto,
   type StageHistoryResponse,
 } from './projects';
+export {
+  scriptGenInputSchema,
+  generatedScriptMetaSchema,
+  generatedScriptSchema,
+  scriptGenResultSchema,
+  generatedHooksSchema,
+  supportingContentSchema,
+  assertGeneratedScript,
+  assertGeneratedHooks,
+  assertSupportingContent,
+  type ScriptGenInput,
+  type GeneratedScriptMeta,
+  type GeneratedScript,
+  type ScriptGenResult,
+  type GeneratedHooks,
+  type SupportingContent,
+} from './schemas/scriptSchema';
 
 /** Response shape for `GET /api/v1/health`. */
 export type HealthResponse = {
