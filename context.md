@@ -641,6 +641,25 @@ _(Template above kept for other developers.)_
   - `scripts/media/generate-thumb.sh` → manual smoke
   - `docs/ffmpeg-notes.md` §5 derivative path convention
 - **Notes for next phase me:** Phase 4 = sample project seed fixtures + golden-path prep doc
+
+## Phase 4 Completion — Cyrus Selvaraj (Dev D)
+- **Date:** 2026-10-03
+- **Branch:** phase-04-cyrus
+- **All allowed tasks done:** yes
+- **Incomplete items:** Live DB seed needs JWT (documented `TODO_INTEGRATION`); intentionally outline-only per plan
+- **Blockers handed to Integration:** Provide durable demo token/user so `scripts/seed/sample-project.ts` can POST without manual copy-paste; Cyrus is Integration Lead after Phase 4
+- **Commands to verify my work:**
+  ```bash
+  npx tsx scripts/seed/sample-project.ts --dry-run
+  # read docs/demo/golden-path-prep.md
+  # inspect samples/projects/demo-project.json
+  ```
+- **Files I expect others to connect to:**
+  - `samples/projects/demo-project.json` → UI/demo defaults
+  - `scripts/seed/sample-project.ts` → Integration seed / Phase 10 demo bootstrap
+  - `docs/demo/golden-path-prep.md` → judge path / Arvin Phase 10 script
+- **Notes for next phase me:** Phase 5 D = prompt templates + script Zod schema (prefer `docs/ai/prompts` + `packages/shared`)
+
 ## Phase 3 Completion — Brendan Rodrigues (Dev A)
 - **Date:** 2026-10-03
 - **Branch:** phase-03-brendan
@@ -790,6 +809,8 @@ _(Template above kept for other developers.)_
 |------|--------|-------|
 | Sample script | Done Phase 1 (Arvin) | `samples/scripts/sample_script.md` |
 | Dummy video | Done Phase 1 (Cyrus) | generate via script, don’t commit huge binaries |
+| Demo project fixture | Done Phase 4 (Cyrus) | `samples/projects/demo-project.json` + `scripts/seed/sample-project.ts` |
+| Golden path prep | Started Phase 4 (Cyrus) | `docs/demo/golden-path-prep.md` (stages IDEA→PUBLISHED) |
 | Mock AI stable | Planned Phase 5/10 (Arvin) | |
 | Golden path judge script | Planned Phase 10 (Arvin) | `docs/demo/judge-script.md` |
 | Emergency pre-rendered clip | Planned Phase 10 (Cyrus) | |
@@ -984,6 +1005,29 @@ _(Template above kept for other developers.)_
 - **Depends on:** Postgres on `DATABASE_URL`; auth token; at least one asset for attach path
 - **Needs from others:** Brendan UI; Arvin workflow helpers matching enum names; Cyrus seed fixtures can target these endpoints at Integration
 - **Risks:** None remaining for Phase 4 B scope
+
+### [2026-10-03 14:12] ROLE=D NAME=Cyrus Selvaraj PHASE=4 TYPE=START
+- **Summary:** Prior Dev D phases verified on `main` (P1 media scripts, P2 security/password, P3 thumbnail helper all present). Starting Phase 4 Dev D — demo project fixture + seed outline + golden-path prep.
+- **Files touched:** branch `phase-04-cyrus` from `origin/main` @ `27c1b42`
+- **APIs / types added:** None yet
+- **How to run / test what I did:** `git checkout phase-04-cyrus`
+- **Depends on:** Anto Projects API shapes (`POST /projects`); sample script path from Phase 1
+- **Needs from others:** Durable demo JWT for live seed (Integration) — dry-run works offline
+- **Risks:** None
+
+### [2026-10-03 14:14] ROLE=D NAME=Cyrus Selvaraj PHASE=4 TYPE=DONE
+- **Summary:** Phase 4 Dev D complete — demo project JSON fixture, seed script outline targeting Anto’s Projects API, golden-path prep doc listing IDEA→PUBLISHED stages.
+- **Files touched:** `samples/projects/demo-project.json`, `scripts/seed/sample-project.ts`, `docs/demo/golden-path-prep.md`, `context.md`
+- **APIs / types added:** None (fixture + HTTP seed outline only; no shared type changes)
+- **How to run / test what I did:**
+  ```bash
+  npx tsx scripts/seed/sample-project.ts --dry-run
+  # with API up:
+  # CREATORAI_TOKEN=<jwt> npx tsx scripts/seed/sample-project.ts
+  ```
+- **Depends on:** Anto `CreateProjectRequest` (`title`, `description`, `targetPlatforms`); platforms match shared `Platform` enum
+- **Needs from others:** Integration — demo user/token for non-dry-run seed; Brendan UI can load same title/platforms
+- **Risks:** Live POST not smoked here (API/DB may be down); dry-run + JSON enum check passed
 
 ## Phase 4 Completion — Anto Oswald (Dev B)
 - **Date:** 2026-10-03
