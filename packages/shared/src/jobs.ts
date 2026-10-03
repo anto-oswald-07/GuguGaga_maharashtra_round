@@ -7,6 +7,7 @@ export const jobTypeSchema = z.enum([
   'SCORE_CLIPS',
   'RENDER_CLIP',
   'RENDER_TIMELINE',
+  'GENERATE_TIMELINE',
   'ADAPT_PLATFORM',
   'GENERATE_SCRIPT',
   'GENERATE_HOOKS',

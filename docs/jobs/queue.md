@@ -52,6 +52,24 @@ Phase 1 Integration chose DB-polling over BullMQ for the hackathon MVP. Redis re
 - Scorer: `AiProvider.scoreClipWindows` (Arvin); fallback `mockClipIdeas` (3 candidates).
 - Cutter: `cutClip` reencode (Cyrus); fallback copies source file if ffmpeg missing.
 
+## Phase 8 timelines notes
+
+| Type | Producer | Artifact |
+|------|----------|----------|
+| `GENERATE_TIMELINE` | `POST /projects/:id/timelines/generate` | `TimelineVersion` with `source=AI_PROPOSAL` — **does not** change `currentVersionId` |
+| `RENDER_TIMELINE` | `POST /timelines/:id/render` | Preview MP4 under `renders/{jobId}/timeline-preview.mp4` → Asset + `EditTimeline.previewAssetId` |
+
+### Apply semantics (FR-ED-006)
+
+1. Generate stores a **proposal** version only (`source=AI_PROPOSAL`).
+2. **Apply** = `PUT /timelines/:id` with body `{ "timeline": <json> }` (proposal JSON or user edits).
+3. PUT always appends a new `USER` version and sets `currentVersionId` — never overwrites prior rows.
+4. Render uses the **current** (applied) version only; fails if none applied yet.
+
+UI Suggest panel: read `pendingProposal` / `pendingProposalVersionId` from GET; Apply → PUT; Dismiss → ignore.
+
+Lightweight Zod validation lives in `@creatorai/shared` (`editTimelineJsonSchema`) until Cyrus’s `packages/timeline-schema` lands.
+
 ## Script content shape
 
 ```json
