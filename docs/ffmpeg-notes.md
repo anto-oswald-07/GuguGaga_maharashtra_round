@@ -78,7 +78,7 @@ Use this file for upload / cut / thumbnail smoke tests. Do **not** git-add it.
 | Dummy MP4 generation | 1 | `scripts/media/make-dummy-video.sh` |
 | Thumbnail (mid-frame JPEG) | 3 | `services/worker/src/media/thumbnail.ts` + `scripts/media/generate-thumb.sh` |
 | Audio extract for STT | 6 | `extractAudio.ts` + `extract-audio.sh` — 16 kHz mono WAV default |
-| Clip cut (`-ss` / `-to`) | 7 | prefer re-encode if keyframe drift |
+| Clip cut (`-ss` / `-t`) | 7 | `cutClip.ts` + `cut-clip.sh` — **re-encode default** (accurate) |
 | Timeline render (`filter_complex`) | 8 | from timeline JSON |
 | Aspect adapt (16:9 / 9:16 / 1:1) | 9 | crop/pad center MVP |
 
@@ -185,13 +185,71 @@ Do **not** commit generated WAV/MP3 files.
 
 ---
 
-## 7. Smoke commands
+## 7. Clip cut / RENDER_CLIP (Phase 7)
+
+Cut candidate windows to MP4 for the library. Consumer: `services/worker/src/consumers/renderClip.ts`.
+
+### 7.1 Encoding choice (document)
+
+| Mode | Behavior | When |
+|------|----------|------|
+| **`reencode` (default)** | `-ss` after `-i`, H.264 + AAC re-encode | Accurate start/end for demos & accepted candidates |
+| `copy` | `-ss` before `-i`, `-c copy` | Fast preview only — **may snap to prior keyframe** |
+
+**Decision:** always prefer `reencode` for RENDER_CLIP job output so UI tweaks to start/end match the file. Use `copy` only for throwaway local probes.
+
+### 7.2 Render path convention
+
+```
+storage/workspaces/{workspaceId}/renders/{jobId}/output.mp4
+```
+
+Helper: `renderClipPath(storageRoot, workspaceId, jobId)`.
+
+Job output JSON (for Anto Asset create):
+
+```json
+{ "outputPath": "storage/workspaces/.../renders/.../output.mp4", "startMs": 1000, "endMs": 3000, "durationMs": 2000, "mode": "reencode" }
+```
+
+### 7.3 TypeScript helper
+
+```ts
+import { cutClip, renderClipPath } from '../media/cutClip';
+
+await cutClip(
+  'storage/workspaces/.../originals/.../clip.mp4',
+  'storage/workspaces/.../renders/.../output.mp4',
+  1000, // startMs
+  3000, // endMs
+);
+// default mode: reencode
+```
+
+### 7.4 Shell smoke (manual) — 2s cut from dummy
+
+```bash
+./scripts/media/make-dummy-video.sh          # if needed
+./scripts/media/cut-clip.sh
+# → storage/samples/dummy-clip.mp4  (1.0s → 3.0s, ~2s)
+
+# custom:
+./scripts/media/cut-clip.sh path/in.mp4 path/out.mp4 0.5 2.5
+MODE=copy ./scripts/media/cut-clip.sh   # fast / may drift
+```
+
+Do **not** commit generated clip MP4s.
+
+---
+
+## 8. Smoke commands
 
 ```bash
 ./scripts/media/check-ffmpeg.sh
 ./scripts/media/make-dummy-video.sh
 ./scripts/media/generate-thumb.sh
 ./scripts/media/extract-audio.sh
+./scripts/media/cut-clip.sh
 ffprobe -hide_banner storage/samples/dummy.mp4
-ls -lh storage/samples/dummy-thumb.jpg storage/samples/dummy-audio.wav
+ls -lh storage/samples/dummy-thumb.jpg storage/samples/dummy-audio.wav storage/samples/dummy-clip.mp4
 ```

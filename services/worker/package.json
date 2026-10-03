@@ -7,9 +7,11 @@
     "./jobs/extractMetadata": "./src/jobs/extractMetadata.ts",
     "./media/thumbnail": "./src/media/thumbnail.ts",
     "./media/extractAudio": "./src/media/extractAudio.ts",
+    "./media/cutClip": "./src/media/cutClip.ts",
     "./consumers/generateScript": "./src/consumers/generateScript.ts",
     "./consumers/transcribe": "./src/consumers/transcribe.ts",
     "./consumers/align": "./src/consumers/align.ts",
+    "./consumers/renderClip": "./src/consumers/renderClip.ts",
     "./ai/provider": "./src/ai/provider.ts",
     "./ai/transcribe": "./src/ai/transcribe.ts",
     "./ai/align": "./src/ai/align.ts"
@@ -21,7 +23,8 @@
     "extract-meta": "tsx src/jobs/extractMetadata.ts",
     "generate-script": "tsx src/consumers/generateScript.ts",
     "transcribe": "tsx src/consumers/transcribe.ts",
-    "align": "tsx src/consumers/align.ts"
+    "align": "tsx src/consumers/align.ts",
+    "render-clip": "tsx src/consumers/renderClip.ts"
   },
   "dependencies": {
     "@creatorai/ai-provider": "workspace:*",
