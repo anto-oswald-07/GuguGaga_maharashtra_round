@@ -40,6 +40,18 @@ Phase 1 Integration chose DB-polling over BullMQ for the hackathon MVP. Redis re
 - Low confidence: `confidence < 0.55` → DTO `lowConfidence: true` (`LOW_CONFIDENCE_THRESHOLD` in `@creatorai/shared`).
 - Until Arvin Phase 6 C lands Whisper + fuzzy align, the API poller uses deterministic mock STT/align so Brendan’s Mapping UI can e2e.
 
+## Phase 7 clips notes
+
+| Type | Producer | Artifact |
+|------|----------|----------|
+| `SCORE_CLIPS` | `POST /projects/:id/clips/propose` | `ClipCandidate[]` (`status=proposed`); replaces prior **proposed** rows for same project+sourceAsset |
+| `RENDER_CLIP` | `POST /clips/candidates/:id/render` | Cut MP4 under `renders/{jobId}/output.mp4` → new `Asset` linked via `ClipCandidate.renderedAssetId` (`status=rendered`) |
+
+- Candidate statuses: `proposed` → `accepted`/`rejected` (PATCH) → `rendered` (RENDER_CLIP).
+- Render may auto-accept a still-`proposed` candidate (demo convenience).
+- Scorer: `AiProvider.scoreClipWindows` (Arvin); fallback `mockClipIdeas` (3 candidates).
+- Cutter: `cutClip` reencode (Cyrus); fallback copies source file if ffmpeg missing.
+
 ## Script content shape
 
 ```json

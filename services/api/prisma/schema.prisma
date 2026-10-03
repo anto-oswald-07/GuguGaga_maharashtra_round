@@ -4,6 +4,7 @@
 // Phase 4: Project + ProjectAsset + StageEvent.
 // Phase 5: ScriptDocument + ScriptVersion + Job (DB-polling queue).
 // Phase 6: Transcript + TranscriptSegment + ScriptFootageMap.
+// Phase 7: ClipCandidate (propose / accept / render → Asset).
 
 generator client {
   provider = "prisma-client-js"
@@ -66,6 +67,14 @@ enum ScriptSource {
   REFINE
 }
 
+/// Clip candidate lifecycle (SDD §5.6 / FR-CLP-*).
+enum ClipCandidateStatus {
+  PROPOSED
+  ACCEPTED
+  REJECTED
+  RENDERED
+}
+
 model User {
   id           String     @id @default(uuid()) @db.Uuid
   email        String     @unique
@@ -99,9 +108,11 @@ model Asset {
   deletedAt   DateTime?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
-  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  projects    ProjectAsset[]
-  transcripts Transcript[]
+  workspace          Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projects           ProjectAsset[]
+  transcripts        Transcript[]
+  clipSources        ClipCandidate[] @relation("ClipSourceAsset")
+  clipRenderedFrom   ClipCandidate[] @relation("ClipRenderedAsset")
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, type])
@@ -124,6 +135,7 @@ model Project {
   jobs            Job[]
   transcripts     Transcript[]
   mappings        ScriptFootageMap[]
+  clipCandidates  ClipCandidate[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, stage])
@@ -158,9 +170,10 @@ model ScriptDocument {
   title     String?
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
-  project   Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  versions  ScriptVersion[]
-  mappings  ScriptFootageMap[]
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions        ScriptVersion[]
+  mappings        ScriptFootageMap[]
+  clipCandidates  ClipCandidate[]
 
   @@index([projectId, createdAt])
 }
@@ -208,10 +221,11 @@ model Transcript {
   language  String               @default("en")
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
-  project   Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  asset     Asset                @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  segments  TranscriptSegment[]
-  mappings  ScriptFootageMap[]
+  project         Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  asset           Asset                @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  segments        TranscriptSegment[]
+  mappings        ScriptFootageMap[]
+  clipCandidates  ClipCandidate[]
 
   @@index([projectId, createdAt])
   @@index([projectId, assetId])
@@ -252,6 +266,38 @@ model ScriptFootageMap {
   scriptDocument   ScriptDocument? @relation(fields: [scriptDocumentId], references: [id], onDelete: SetNull)
 
   @@index([projectId, createdAt])
+  @@index([transcriptId])
+  @@index([scriptDocumentId])
+}
+
+/// AI-proposed (or user-tweaked) short clip window from long-form footage.
+model ClipCandidate {
+  id               String              @id @default(uuid()) @db.Uuid
+  projectId        String              @db.Uuid
+  /// Long-form source video/audio being clipped.
+  sourceAssetId    String              @db.Uuid
+  transcriptId     String?             @db.Uuid
+  scriptDocumentId String?             @db.Uuid
+  title            String
+  startMs          Int
+  endMs            Int
+  /// 0–1 score from clip scorer (FR-CLP-002).
+  score            Float
+  rationale        String?
+  status           ClipCandidateStatus @default(PROPOSED)
+  /// Set when RENDER_CLIP succeeds (0..1 Asset).
+  renderedAssetId  String?             @unique @db.Uuid
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  project          Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceAsset      Asset               @relation("ClipSourceAsset", fields: [sourceAssetId], references: [id], onDelete: Cascade)
+  transcript       Transcript?         @relation(fields: [transcriptId], references: [id], onDelete: SetNull)
+  scriptDocument   ScriptDocument?     @relation(fields: [scriptDocumentId], references: [id], onDelete: SetNull)
+  renderedAsset    Asset?              @relation("ClipRenderedAsset", fields: [renderedAssetId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([projectId, createdAt])
+  @@index([sourceAssetId])
   @@index([transcriptId])
   @@index([scriptDocumentId])
 }

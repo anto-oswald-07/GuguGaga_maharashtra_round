@@ -1666,3 +1666,59 @@ _(Template above kept for other developers.)_
 - **Depends on:** Phase 6 transcript fixtures (reuse sample_spoken + sample_script)
 - **Needs from others:** Anto ClipCandidate persistence; Brendan Clips UI; Cyrus render cutter
 - **Risks:** Heuristic only (no LLM ranking yet); openai/gemini clip score uses same mock heuristic
+
+### [2026-10-03 21:45] ROLE=B NAME=Anto Oswald PHASE=7 TYPE=START
+- **Summary:** Starting Phase 7 Dev B — Clips API (ClipCandidate + SCORE_CLIPS / RENDER_CLIP endpoints per SDD §5.6).
+- **Files touched:** (branch `phase-07-anto` from `main`)
+- **APIs / types added:** (pending)
+- **How to run / test what I did:** n/a yet
+- **Depends on:** Phase 6 transcript+script on project; Arvin `scoreClipWindows`; Cyrus `cutClip` (both already on `main`)
+- **Needs from others:** Brendan Clips UI against DTOs below
+- **Risks:** none yet
+
+### [2026-10-03 21:50] ROLE=B NAME=Anto Oswald PHASE=7 TYPE=DONE
+- **Summary:** Clips API live — propose/list/patch/render; SCORE_CLIPS persists ClipCandidate; RENDER_CLIP creates Asset + links candidate (`status=rendered`).
+- **Files touched:**
+  - `packages/shared/src/clips.ts` (+ exports in `index.ts`)
+  - `services/api/prisma/schema.prisma` + migration `20261003161500_phase7_clip_candidates`
+  - `services/api/src/modules/clips/{routes,service}.ts`
+  - `services/api/src/modules/jobs/service.ts` (SCORE_CLIPS + RENDER_CLIP handlers)
+  - `services/api/src/index.ts`
+  - `docs/jobs/queue.md`
+  - `services/worker/package.json` (missing comma between `render-clip` / `score-clips` scripts — unblock parse)
+- **APIs / types added:**
+  - `POST /api/v1/projects/:id/clips/propose` → `{ jobId }` (SCORE_CLIPS)
+  - `GET /api/v1/projects/:id/clips/candidates` → `{ items: ClipCandidateDto[] }`
+  - `PATCH /api/v1/clips/candidates/:id` → tweak title/startMs/endMs / status proposed|accepted|rejected
+  - `POST /api/v1/clips/candidates/:id/render` → `{ jobId }` (RENDER_CLIP; auto-accepts if still proposed)
+  - Shared: `ClipCandidateDto`, `proposeClipsRequestSchema`, `patchClipCandidateRequestSchema`
+  - Persist helpers: `persistClipCandidates`, `persistRenderedClip` (for poller / workers)
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter @creatorai/ai-provider build   # needed if dist stale
+  cd services/api && pnpm run prisma:deploy && pnpm run prisma:generate
+  JOB_POLLER=0 AI_PROVIDER=mock pnpm --filter api dev
+  # register → project → upload+attach VIDEO → script → transcribe+mock-complete
+  # POST .../clips/propose → POST /jobs/:id/mock-complete → GET .../clips/candidates
+  # PATCH /clips/candidates/:id {"status":"accepted","startMs":500,"endMs":2500}
+  # POST /clips/candidates/:id/render → mock-complete → candidate status=rendered + renderedAssetId
+  ```
+- **Depends on:** Transcript + ScriptVersion on project; attached source VIDEO
+- **Needs from others:**
+  - Brendan: Clips tab — propose → poll job → list/accept/tweak → render → show asset
+  - Integration (Arvin Lead per plan): optional wire worker consumers → same persist helpers
+- **Risks:** Without ffmpeg, RENDER_CLIP falls back to copying source file into `renders/{jobId}/output.mp4` (still creates Asset). Re-propose deletes prior **proposed** rows only (keeps accepted/rejected/rendered).
+
+## Phase 7 Completion — Anto Oswald (Dev B)
+- **Date:** 2026-10-03
+- **Branch:** phase-07-anto
+- **All allowed tasks done:** yes
+- **Incomplete items:** none for Dev B scope (UI = Brendan; Integration wiring polish = Arvin Lead)
+- **Blockers handed to Integration:** Apply migration on all machines; rebuild `@creatorai/ai-provider` if SCORE_CLIPS shows `provider: mock-fallback`
+- **Commands to verify my work:** see DONE entry above
+- **Files I expect others to connect to:**
+  - `services/api/src/modules/clips/service.ts` (`persistClipCandidates`, `persistRenderedClip`)
+  - `@creatorai/shared` clip types
+  - Job types `SCORE_CLIPS` / `RENDER_CLIP` via `/jobs/:id` poll
+- **Notes for next phase me:** Phase 8 Timelines API — same job+persist + versioning pattern

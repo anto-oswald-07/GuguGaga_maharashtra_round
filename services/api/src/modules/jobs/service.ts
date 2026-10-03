@@ -15,6 +15,7 @@ import {
   audioDerivativePath,
   extractAudio,
 } from 'worker/media/extractAudio';
+import { cutClip, renderClipPath } from 'worker/media/cutClip';
 import { prisma } from '../../db/prisma';
 import { storage } from '../../storage/local';
 import {
@@ -24,6 +25,12 @@ import {
   persistAlignments,
   persistTranscript,
 } from '../mapping/service';
+import {
+  loadScriptAndTranscriptForScore,
+  mockClipIdeas,
+  persistClipCandidates,
+  persistRenderedClip,
+} from '../clips/service';
 import { appendAiScriptVersion } from '../scripts/service';
 import { enqueueJob } from './queue';
 
@@ -531,6 +538,194 @@ export async function completeJobWithAi(
         count: result.count,
         alignments,
         provider: alignProvider,
+      };
+    } else if (job.type === 'SCORE_CLIPS') {
+      if (!job.projectId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'SCORE_CLIPS job missing projectId',
+        );
+      }
+      const scriptId = strField(input, 'scriptId', '');
+      const transcriptId = strField(input, 'transcriptId', '');
+      if (!scriptId || !transcriptId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'SCORE_CLIPS job missing scriptId or transcriptId',
+        );
+      }
+
+      const loaded = await loadScriptAndTranscriptForScore(
+        job.workspaceId,
+        scriptId,
+        transcriptId,
+      );
+      if (loaded.projectId !== job.projectId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'Script/transcript project mismatch',
+        );
+      }
+
+      const sourceAssetId =
+        strField(input, 'sourceAssetId', '') || loaded.sourceAssetId;
+
+      let ideas: {
+        startMs: number;
+        endMs: number;
+        score: number;
+        titleSuggestion: string;
+        rationale?: string;
+      }[];
+      let scoreProvider = 'mock-fallback';
+
+      try {
+        const clipIdeas = await provider.scoreClipWindows(
+          {
+            segments: loaded.segments,
+          },
+          {
+            hook: loaded.content.hook,
+            body: loaded.content.body,
+            cta: loaded.content.cta,
+          },
+        );
+        ideas = clipIdeas.map((c) => ({
+          startMs: c.startMs,
+          endMs: c.endMs,
+          score: c.score,
+          titleSuggestion: c.titleSuggestion,
+          rationale: c.rationale,
+        }));
+        scoreProvider = provider.name;
+      } catch {
+        const lastEnd =
+          loaded.segments.length > 0
+            ? loaded.segments[loaded.segments.length - 1]!.endMs
+            : 60_000;
+        ideas = mockClipIdeas({
+          durationMs: lastEnd,
+          scriptTitle: loaded.content.title,
+        });
+      }
+
+      const result = await persistClipCandidates({
+        workspaceId: job.workspaceId,
+        projectId: job.projectId,
+        sourceAssetId,
+        transcriptId,
+        scriptDocumentId: scriptId,
+        ideas,
+      });
+
+      output = {
+        ...output,
+        candidateIds: result.candidateIds,
+        count: result.count,
+        clipIdeas: ideas,
+        provider: scoreProvider,
+      };
+    } else if (job.type === 'RENDER_CLIP') {
+      if (!job.projectId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'RENDER_CLIP job missing projectId',
+        );
+      }
+      const candidateId = strField(input, 'candidateId', '');
+      if (!candidateId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'RENDER_CLIP job missing candidateId',
+        );
+      }
+
+      const candidate = await prisma.clipCandidate.findFirst({
+        where: {
+          id: candidateId,
+          projectId: job.projectId,
+          project: { workspaceId: job.workspaceId, deletedAt: null },
+        },
+      });
+      if (!candidate) {
+        throw new JobHttpError(404, 'not_found', 'Clip candidate not found');
+      }
+
+      const sourceAsset = await prisma.asset.findFirst({
+        where: {
+          id: candidate.sourceAssetId,
+          workspaceId: job.workspaceId,
+          deletedAt: null,
+        },
+        select: { path: true },
+      });
+      if (!sourceAsset) {
+        throw new JobHttpError(404, 'not_found', 'Source asset not found');
+      }
+
+      const absInput = storage.absoluteFromRelative(sourceAsset.path);
+      const absOutput = renderClipPath(
+        storage.getRoot(),
+        job.workspaceId,
+        jobId,
+      );
+
+      let cutResult: {
+        outputPath: string;
+        startMs: number;
+        endMs: number;
+        durationMs: number;
+        mode: string;
+      };
+      let renderMode = 'mock-copy';
+
+      try {
+        const cut = await cutClip(
+          absInput,
+          absOutput,
+          candidate.startMs,
+          candidate.endMs,
+          { mode: 'reencode' },
+        );
+        cutResult = cut;
+        renderMode = cut.mode;
+      } catch {
+        // No ffmpeg / cut failed — copy source so Asset still exists for demos.
+        const { copyFile, mkdir } = await import('node:fs/promises');
+        const { dirname } = await import('node:path');
+        await mkdir(dirname(absOutput), { recursive: true });
+        await copyFile(absInput, absOutput);
+        cutResult = {
+          outputPath: absOutput,
+          startMs: candidate.startMs,
+          endMs: candidate.endMs,
+          durationMs: Math.max(0, candidate.endMs - candidate.startMs),
+          mode: 'mock-copy',
+        };
+      }
+
+      const persisted = await persistRenderedClip({
+        workspaceId: job.workspaceId,
+        projectId: job.projectId,
+        candidateId,
+        outputPath: cutResult.outputPath,
+        jobId,
+      });
+
+      output = {
+        ...output,
+        candidateId,
+        assetId: persisted.assetId,
+        outputPath: persisted.relativePath,
+        startMs: cutResult.startMs,
+        endMs: cutResult.endMs,
+        durationMs: cutResult.durationMs,
+        mode: renderMode,
       };
     } else {
       output = {
