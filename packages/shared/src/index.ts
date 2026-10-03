@@ -169,6 +169,26 @@ export {
   type ProposeClipsRequest,
   type PatchClipCandidateRequest,
 } from './clips';
+export {
+  timelineSourceSchema,
+  TIMELINE_SOURCES,
+  editTimelineJsonSchema,
+  assertValidTimelineJson,
+  timelineVersionSchema,
+  editTimelineSchema,
+  editTimelineDetailSchema,
+  timelineListResponseSchema,
+  generateTimelineRequestSchema,
+  putTimelineRequestSchema,
+  type TimelineSource,
+  type EditTimelineJson,
+  type TimelineVersionDto,
+  type EditTimelineDto,
+  type EditTimelineDetailDto,
+  type TimelineListResponse,
+  type GenerateTimelineRequest,
+  type PutTimelineRequest,
+} from './timelines';
 
 /** Response shape for `GET /api/v1/health`. */
 export type HealthResponse = {

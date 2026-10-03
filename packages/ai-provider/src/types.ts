@@ -87,17 +87,95 @@ export type ClipIdea = {
   rationale: string;
 };
 
-export type TimelineContext = {
-  script: ScriptDoc;
-  alignments?: Alignment[];
-  clipIdeas?: ClipIdea[];
+/** Accepted clip window used when proposing a timeline (ClipCandidate / ClipIdea). */
+export type TimelineAcceptedClip = {
+  startMs: number;
+  endMs: number;
+  titleSuggestion?: string;
+  label?: string;
+  assetId?: string;
+  id?: string;
 };
 
-/** Opaque until Phase 8 timeline schema lands. */
+export type TimelineContext = {
+  script: ScriptDoc;
+  /** Script↔footage mappings (captions / soft timing cues). */
+  alignments?: Alignment[];
+  /** Ranked clip ideas (used when acceptedClips omitted). */
+  clipIdeas?: ClipIdea[];
+  /** Preferred: user-accepted ClipCandidate windows. */
+  acceptedClips?: TimelineAcceptedClip[];
+  /** Default footage assetId for video clips missing their own. */
+  sourceAssetId?: string;
+};
+
+export type TimelineTextStyle = {
+  position?: 'top' | 'center' | 'bottom';
+  fontSize?: number;
+};
+
+export type TimelineVideoClip = {
+  id: string;
+  assetId: string;
+  srcStartMs: number;
+  srcEndMs: number;
+  timelineStartMs: number;
+  label?: string;
+};
+
+export type TimelineTextItem = {
+  id: string;
+  text: string;
+  startMs: number;
+  endMs: number;
+  style?: TimelineTextStyle;
+};
+
+export type TimelineCaptionItem = {
+  id: string;
+  text: string;
+  startMs: number;
+  endMs: number;
+};
+
+export type TimelineVideoTrack = {
+  id: string;
+  type: 'video';
+  clips: TimelineVideoClip[];
+};
+
+export type TimelineTextTrack = {
+  id: string;
+  type: 'text';
+  items: TimelineTextItem[];
+};
+
+export type TimelineCaptionsTrack = {
+  id: string;
+  type: 'captions';
+  items: TimelineCaptionItem[];
+};
+
+export type TimelineTrack =
+  | TimelineVideoTrack
+  | TimelineTextTrack
+  | TimelineCaptionsTrack;
+
+/**
+ * Edit timeline JSON (SDD §4.3 / docs/timeline-notes.md).
+ * Full Zod validation lands in `@creatorai/timeline-schema` (Phase 8 D).
+ */
 export type EditTimeline = {
-  version: 1;
-  clips: Array<{ startMs: number; endMs: number; label?: string }>;
-  notes: string;
+  schemaVersion: '1.0';
+  fps: number;
+  durationMs: number;
+  tracks: TimelineTrack[];
+  transitions: unknown[];
+  meta: {
+    generatedBy: 'ai' | 'user' | 'mock';
+    prompt?: string;
+    notes?: string;
+  };
 };
 
 export type AiProviderName = 'mock' | 'openai' | 'gemini';
@@ -127,7 +205,7 @@ export interface AiProvider {
     script: ScriptDoc,
   ): Promise<ClipIdea[]>;
 
-  /** Phase 8 — stub until then. */
+  /** Phase 8 — build EditTimeline JSON (clips + hook overlay 0–3s). */
   proposeTimeline(ctx: TimelineContext): Promise<EditTimeline>;
 }
 

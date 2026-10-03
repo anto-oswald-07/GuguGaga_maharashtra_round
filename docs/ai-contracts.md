@@ -1,8 +1,8 @@
 # CreatorAi — AI Contracts
 
 > **Owner:** Dev C (Arvin)  
-> **Status:** Phase 7 — clip window scoring implemented on `@creatorai/ai-provider`.  
-> **Source of truth:** `SDD.md` §7 (AI Subsystem Design).  
+> **Status:** Phase 8 — `proposeTimeline` implemented on `@creatorai/ai-provider` (clips + hook overlay).  
+> **Source of truth:** `SDD.md` §7 (AI Subsystem Design) + §4.3 / `docs/timeline-notes.md`.  
 > **Package README:** `packages/ai-provider/README.md`
 
 ---
@@ -33,7 +33,7 @@ interface AiProvider {
 | `transcribe` | 6 | **Done** — mock word segments; OpenAI Whisper when file + key |
 | `alignScriptToTranscript` | 6 | **Done** — fuzzy match MVP, confidence 0–1 |
 | `scoreClipWindows` | 7 | **Done** — heuristic 15–60s windows; 3 stable mock candidates |
-| `proposeTimeline` | 8 | Stub (`not_implemented`) |
+| `proposeTimeline` | 8 | **Done** — EditTimeline `schemaVersion: 1.0` from clips + hook 0–3s |
 
 ---
 
@@ -63,10 +63,11 @@ Factory: `createAiProvider()` from `@creatorai/ai-provider`.
 | `transcribe.ts` | `pnpm --filter worker transcribe` |
 | `align.ts` | `pnpm --filter worker align -- --fixture` |
 | `scoreClips.ts` | `pnpm --filter worker score-clips -- --fixture` |
+| `generateTimeline.ts` | `pnpm --filter worker generate-timeline -- --fixture` |
 
-Helpers: `services/worker/src/ai/{transcribe,align,scoreClips}.ts`
+Helpers: `services/worker/src/ai/{transcribe,align,scoreClips,proposeTimeline}.ts`
 
-Persistence: optional `WORKER_CALLBACK_URL` until clips API (Anto Phase 7 B) wires Job rows.
+Persistence: optional `WORKER_CALLBACK_URL` until Timelines API (Anto Phase 8 B) wires `GENERATE_TIMELINE` Job rows.
 
 ---
 

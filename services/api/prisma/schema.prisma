@@ -5,6 +5,7 @@
 // Phase 5: ScriptDocument + ScriptVersion + Job (DB-polling queue).
 // Phase 6: Transcript + TranscriptSegment + ScriptFootageMap.
 // Phase 7: ClipCandidate (propose / accept / render → Asset).
+// Phase 8: EditTimeline + TimelineVersion (editable JSON + AI proposals).
 
 generator client {
   provider = "prisma-client-js"
@@ -48,6 +49,7 @@ enum JobType {
   SCORE_CLIPS
   RENDER_CLIP
   RENDER_TIMELINE
+  GENERATE_TIMELINE
   ADAPT_PLATFORM
   GENERATE_SCRIPT
   GENERATE_HOOKS
@@ -73,6 +75,12 @@ enum ClipCandidateStatus {
   ACCEPTED
   REJECTED
   RENDERED
+}
+
+/// Timeline version provenance (FR-ED-006 — AI never silent-overwrites).
+enum TimelineSource {
+  USER
+  AI_PROPOSAL
 }
 
 model User {
@@ -113,6 +121,7 @@ model Asset {
   transcripts        Transcript[]
   clipSources        ClipCandidate[] @relation("ClipSourceAsset")
   clipRenderedFrom   ClipCandidate[] @relation("ClipRenderedAsset")
+  timelinePreviews   EditTimeline[]  @relation("TimelinePreviewAsset")
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, type])
@@ -136,6 +145,7 @@ model Project {
   transcripts     Transcript[]
   mappings        ScriptFootageMap[]
   clipCandidates  ClipCandidate[]
+  timelines       EditTimeline[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, stage])
@@ -300,4 +310,39 @@ model ClipCandidate {
   @@index([sourceAssetId])
   @@index([transcriptId])
   @@index([scriptDocumentId])
+}
+
+/// Editable edit-decision document for a project (SDD §4.1 / §5.7).
+model EditTimeline {
+  id               String            @id @default(uuid()) @db.Uuid
+  projectId        String            @db.Uuid
+  title            String?
+  /// Points at the applied/saved version only — AI proposals never update this.
+  currentVersionId String?           @unique @db.Uuid
+  /// Last successful RENDER_TIMELINE preview asset (optional).
+  previewAssetId   String?           @db.Uuid
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  currentVersion   TimelineVersion?  @relation("TimelineCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  previewAsset     Asset?            @relation("TimelinePreviewAsset", fields: [previewAssetId], references: [id], onDelete: SetNull)
+  versions         TimelineVersion[] @relation("TimelineVersions")
+
+  @@index([projectId, createdAt])
+  @@index([previewAssetId])
+}
+
+model TimelineVersion {
+  id             String         @id @default(uuid()) @db.Uuid
+  editTimelineId String         @db.Uuid
+  version        Int
+  /// Edit timeline JSON (schemaVersion 1.0 — see shared / timeline-schema).
+  content        Json
+  source         TimelineSource @default(USER)
+  createdAt      DateTime       @default(now())
+  editTimeline   EditTimeline   @relation("TimelineVersions", fields: [editTimelineId], references: [id], onDelete: Cascade)
+  currentFor     EditTimeline?  @relation("TimelineCurrentVersion")
+
+  @@unique([editTimelineId, version])
+  @@index([editTimelineId, createdAt])
 }

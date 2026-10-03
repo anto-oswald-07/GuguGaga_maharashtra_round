@@ -63,6 +63,19 @@ const clipIdeas = await ai.scoreClipWindows(
   { hook: script.hook, body: script.body, cta: script.cta },
 );
 // clipIdeas[].score ∈ [0, 1]; titleSuggestion + rationale
+
+// Phase 8 — EditTimeline JSON (clips stacked + hook text overlay 0–3s)
+const timeline = await ai.proposeTimeline({
+  script: { hook: script.hook, body: script.body, cta: script.cta },
+  alignments,
+  acceptedClips: clipIdeas.map((c) => ({
+    startMs: c.startMs,
+    endMs: c.endMs,
+    titleSuggestion: c.titleSuggestion,
+  })),
+  sourceAssetId: '…',
+});
+// timeline.schemaVersion === '1.0'; tracks: video | text | captions
 ```
 
 ## Worker consumers
@@ -73,8 +86,9 @@ const clipIdeas = await ai.scoreClipWindows(
 | `TRANSCRIBE` | `pnpm --filter worker transcribe -- --hint-text "..."` |
 | `ALIGN_SCRIPT` | `pnpm --filter worker align -- --fixture` |
 | `SCORE_CLIPS` | `pnpm --filter worker score-clips -- --fixture` |
+| `GENERATE_TIMELINE` | `pnpm --filter worker generate-timeline -- --fixture` |
 
-Helpers: `services/worker/src/ai/{provider,transcribe,align,scoreClips}.ts`
+Helpers: `services/worker/src/ai/{provider,transcribe,align,scoreClips,proposeTimeline}.ts`
 
 ## Alignment (MVP)
 
@@ -89,12 +103,18 @@ Pure heuristic in `src/clips/scoreClipWindows.ts`:
 - Returns top 3 non-overlapping ideas (stable for identical inputs)
 - Empty/short transcript → 3 stable demo windows
 
+## Timeline proposal (MVP)
+
+Pure builder in `src/timeline/proposeTimeline.ts`:
+- Stacks `acceptedClips` (or `clipIdeas`, or stable demo windows) on a video track
+- Hook text overlay at **0–3000 ms** on a text track
+- Optional caption items from high-confidence alignments
+- Local shape assert (`assertValidTimelineShape`); uses `@creatorai/timeline-schema` when present (Cyrus Phase 8 D)
+- Identical inputs → identical timeline JSON
+
 ## Fixtures / tests
 
 - `test/fixtures/sample_script.json`
 - `test/fixtures/sample_spoken.txt`
+- `test/fixtures/sample_timeline_context.json`
 - `pnpm --filter @creatorai/ai-provider test`
-
-## Phase stubs
-
-`proposeTimeline` (8) still throws `not_implemented`.

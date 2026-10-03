@@ -1,6 +1,7 @@
 import type { Platform } from '@creatorai/shared';
 import { fuzzyAlignScriptToTranscript } from '../align/fuzzyAlign';
 import { scoreClipWindowsFromTranscript } from '../clips/scoreClipWindows';
+import { proposeTimelineFromContext } from '../timeline/proposeTimeline';
 import { mockTranscribeFromText } from '../stt/mockTranscribe';
 import {
   AiProviderError,
@@ -172,10 +173,11 @@ export class MockAiProvider implements AiProvider {
     });
   }
 
-  async proposeTimeline(_ctx: TimelineContext): Promise<EditTimeline> {
-    throw new AiProviderError(
-      'proposeTimeline is Phase 8 — not implemented in Phase 6',
-      'not_implemented',
-    );
+  /**
+   * Phase 8 — build SDD §4.3 timeline from clips + hook overlay (0–3s).
+   * Deterministic for identical context (stable demos).
+   */
+  async proposeTimeline(ctx: TimelineContext): Promise<EditTimeline> {
+    return proposeTimelineFromContext(ctx);
   }
 }

@@ -28,7 +28,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Current phase** | Phase 7 Integration complete — Phase 8 next |
+| **Current phase** | Phase 8 in progress — Dev C (`proposeTimeline`) done; A/B/D + Integration pending |
 | **Last completed tag** | `phase-1-done` (local only); Phase 2–7 Integration recorded in context — **no git tags this session** |
 | **main status** | Auth + Assets + Projects + Scripts/Jobs + Transcript/Mapping + Clips (propose/accept/render) end-to-end |
 | **Package manager** | **pnpm** workspaces (final) |
@@ -56,6 +56,7 @@
 - Seed: `scripts/seed/sample-project.ts` auto login/register `demo@creatorai.local` / `password123`
 - Postgres via compose (`POSTGRES_HOST_PORT`, default 5432; use 5433 if host busy)
 - Sample media: `storage/samples/dummy.mp4`; STT fixtures under `packages/ai-provider/test/fixtures`
+- **Timeline proposal (Phase 8 C):** `AiProvider.proposeTimeline` → EditTimeline `schemaVersion: 1.0` (clips + hook 0–3s); CLI `pnpm --filter worker generate-timeline -- --fixture`
 
 ### 2.2 Known Broken / Gaps
 - Host `:5432` often occupied — set `POSTGRES_HOST_PORT=5433` + matching `DATABASE_URL` (see `.env.example`).
@@ -77,9 +78,9 @@
 /
 ├── apps/web/              # /projects (Script + Mapping + Clips), /workflow
 ├── services/api/          # auth + assets + projects + scripts + jobs + mapping + clips
-├── services/worker/       # extractMetadata, thumbnail, extractAudio, cutClip, STT/align/scoreClips CLIs
+├── services/worker/       # extractMetadata, thumbnail, extractAudio, cutClip, STT/align/scoreClips/generateTimeline CLIs
 ├── packages/shared/       # Zod DTOs incl. mapping + clips
-├── packages/ai-provider/  # mock+Whisper STT, fuzzy align, clip window scoring
+├── packages/ai-provider/  # mock+Whisper STT, fuzzy align, clip scoring, proposeTimeline
 ├── samples/scripts/sample_script.md
 ├── samples/projects/demo-project.json
 ├── scripts/seed/sample-project.ts
@@ -1868,3 +1869,129 @@ _(Template above kept for other developers.)_
   - `apps/web/src/lib/api.ts` timeline helpers
   - `components/editor/TimelineEditor.tsx` + `editor-store.tsx`
 - **Notes for next phase me:** Phase 9 Platform Packs UI — project-tab pattern; Phase 8 Integration Lead = Cyrus
+### [2026-10-03 22:21] ROLE=B NAME=Anto Oswald PHASE=8 TYPE=START
+- **Summary:** Starting Phase 8 Dev B — Timelines API + versioning (EditTimeline / TimelineVersion + GENERATE_TIMELINE / RENDER_TIMELINE per SDD §5.7).
+- **Files touched:** (branch `phase-08-anto` from `main` @ Phase 7 integration)
+- **APIs / types added:** (pending)
+- **How to run / test what I did:** n/a yet
+- **Depends on:** Phase 7 clips/mappings/script on project; Arvin `proposeTimeline`; Cyrus `timeline-schema` + render (both may still be landing)
+- **Needs from others:** Brendan Editor UI against DTOs below
+- **Risks:** none yet
+
+### [2026-10-03 22:25] ROLE=B NAME=Anto Oswald PHASE=8 TYPE=DONE
+- **Summary:** Timelines API live — generate/list/get/put/render; AI proposals never overwrite current; Apply = PUT; invalid JSON rejected.
+- **Files touched:**
+  - `packages/shared/src/timelines.ts` (+ exports in `index.ts`, `GENERATE_TIMELINE` in `jobs.ts`)
+  - `services/api/prisma/schema.prisma` + migration `20261003164500_phase8_timelines`
+  - `services/api/src/modules/timelines/{routes,service}.ts`
+  - `services/api/src/modules/jobs/service.ts` (GENERATE_TIMELINE + RENDER_TIMELINE handlers)
+  - `services/api/src/index.ts`
+  - `docs/jobs/queue.md` (Phase 8 apply semantics)
+  - `context.md`
+- **APIs / types added:**
+  - `POST /api/v1/projects/:id/timelines/generate` → `{ jobId }` (`GENERATE_TIMELINE`)
+  - `GET /api/v1/projects/:id/timelines` → `{ items: EditTimelineDto[] }`
+  - `GET /api/v1/timelines/:id` → detail + `versions[]`
+  - `PUT /api/v1/timelines/:id` `{ timeline, title? }` → new USER version + sets `currentVersionId` (**Apply**)
+  - `POST /api/v1/timelines/:id/render` → `{ jobId }` (`RENDER_TIMELINE`; requires applied current)
+  - Shared: `editTimelineJsonSchema`, `EditTimelineDto`, `generateTimelineRequestSchema`, `putTimelineRequestSchema`
+  - Persist helpers: `persistTimelineProposal`, `persistTimelinePreview`
+- **Apply semantics (FR-ED-006):**
+  1. Generate appends `TimelineVersion` with `source=AI_PROPOSAL` only — **does not** set `currentVersionId`
+  2. UI Suggest panel reads `pendingProposal` / `pendingProposalVersionId`
+  3. **Apply** = `PUT` with proposal JSON (optionally edited) → new `USER` version becomes current
+  4. Prior versions never overwritten; list grows
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  cd services/api && pnpm run prisma:deploy && pnpm run prisma:generate
+  AI_PROVIDER=mock pnpm --filter api dev
+  # register → project → script + attach VIDEO →
+  # POST .../timelines/generate → poll job → GET .../timelines (pendingProposal set, current=null)
+  # PUT /timelines/:id {"timeline": <pendingProposal>} → current set, versions=[ai_proposal,user]
+  # PUT invalid clips (srcEnd<=srcStart) → 400
+  # POST /timelines/:id/render → poll → previewAssetId set
+  ```
+- **Depends on:** Script + attached VIDEO on project (accepted clips / mappings optional for richer mock)
+- **Needs from others:**
+  - Brendan: Editor — load timeline, Suggest Apply/Dismiss, PUT save, render + preview player
+  - Arvin: real `proposeTimeline` returning schemaVersion 1.0 JSON (API normalizes stub + mock-fallback today)
+  - Cyrus: `packages/timeline-schema` + `renderTimeline` (API uses shared zod + mock-copy preview until then)
+- **Risks:** RENDER_TIMELINE is mock-copy of first video clip until Cyrus renderer lands
+
+## Phase 8 Completion — Anto Oswald (Dev B)
+- **Date:** 2026-10-03
+- **Branch:** phase-08-anto
+- **All allowed tasks done:** yes
+- **Incomplete items:** none for Dev B scope (UI = Brendan; AI propose = Arvin; FFmpeg render / timeline-schema = Cyrus; Integration Lead = Cyrus)
+- **Blockers handed to Integration:** Apply migration on all machines; rebuild `@creatorai/shared`
+- **Commands to verify my work:** see DONE entry above
+- **Files I expect others to connect to:**
+  - `services/api/src/modules/timelines/service.ts` (`persistTimelineProposal`, `persistTimelinePreview`)
+  - `@creatorai/shared` timeline types / `editTimelineJsonSchema`
+  - Job types `GENERATE_TIMELINE` / `RENDER_TIMELINE` via `/jobs/:id` poll
+- **Notes for next phase me:** Phase 9 Packs API — same job+persist pattern
+### [2026-10-03 22:15] ROLE=C NAME=Arvin Almeida PHASE=8 TYPE=START
+- **Summary:** Starting Phase 8 Dev C — timeline proposal AI (`proposeTimeline` + worker `GENERATE_TIMELINE` consumer).
+- **Files touched:** (in progress on branch `Arvin`)
+- **APIs / types added:** (pending)
+- **How to run / test what I did:** n/a yet
+- **Depends on:** Phase 7 accepted clips + alignments; SDD §4.3 / `docs/timeline-notes.md`; Cyrus `@creatorai/timeline-schema` soft-optional
+- **Needs from others:** Anto GENERATE_TIMELINE job persist; Brendan Apply proposal UI; Cyrus schema package + renderTimeline
+- **Risks:** Schema package not shipped yet — local `assertValidTimelineShape` until Dev D
+
+### [2026-10-03 22:19] ROLE=C NAME=Arvin Almeida PHASE=8 TYPE=DONE
+- **Summary:** Phase 8 C complete. `proposeTimelineFromContext` builds SDD EditTimeline (`schemaVersion: 1.0`) from accepted clips / clipIdeas / stable demo + hook text overlay **0–3000 ms** + optional captions from alignments. Soft-validates via local shape assert (uses `@creatorai/timeline-schema` when present). Mock/openai/gemini wired; 7 new unit tests (18/18 total); worker helper + `generate-timeline --fixture` CLI. Also fixed corrupted `services/worker/src/index.ts`.
+- **Files touched:**
+  - `packages/ai-provider/src/timeline/proposeTimeline.ts` (new)
+  - `packages/ai-provider/src/{types,index,mock/MockAiProvider}.ts`
+  - `packages/ai-provider/test/propose-timeline.test.ts` + `test/fixtures/sample_timeline_context.json`
+  - `packages/ai-provider/README.md`
+  - `services/worker/src/ai/proposeTimeline.ts`, `services/worker/src/consumers/generateTimeline.ts`
+  - `services/worker/{package.json,src/index.ts}`
+  - `docs/ai-contracts.md`, `context.md`
+- **APIs / types added:**
+  - `EditTimeline` (SDD tracks shape), `TimelineAcceptedClip`, track/item types
+  - `proposeTimelineFromContext`, `stableDemoTimeline`, `assertValidTimelineShape`, `validateTimeline`
+  - Worker: `processGenerateTimelineJob` / CLI `generate-timeline`
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter @creatorai/ai-provider build
+  pnpm --filter @creatorai/ai-provider test
+  AI_PROVIDER=mock pnpm --filter worker generate-timeline -- --fixture
+  ```
+- **Depends on:** Phase 7 clip/alignment fixtures (reused sample script + new timeline context fixture)
+- **Needs from others:**
+  - Cyrus: `@creatorai/timeline-schema` `assertValidTimeline` (optional peer — already soft-loaded)
+  - Anto: `GENERATE_TIMELINE` Job → persist proposal TimelineVersion (`source=ai_proposal`)
+  - Brendan: AI Suggest panel Apply/Dismiss against proposal JSON
+- **Risks:** Caption timing uses source ms as timeline ms (MVP); no LLM rearranging yet — deterministic stack
+
+## Phase 8 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** `Arvin` (working tree; commit when ready)
+- **All allowed tasks done:** yes
+- **Incomplete items:** none for Phase 8 C scope (Timelines API = Anto 8 B; Editor UI = Brendan 8 A; timeline-schema + renderTimeline = Cyrus 8 D)
+- **Blockers handed to Integration:**
+  - Anto: wire `GENERATE_TIMELINE` → `AiProvider.proposeTimeline` → store proposal version
+  - Brendan: load proposal EditTimeline JSON into editor Apply flow
+  - Cyrus: Zod `assertValidTimeline` replaces soft local assert; `renderTimeline` consumes same JSON
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/ai-provider build
+  pnpm --filter @creatorai/ai-provider test
+  AI_PROVIDER=mock pnpm --filter worker generate-timeline -- --fixture
+  ```
+- **Files I expect others to connect to:**
+  - `@creatorai/ai-provider` `proposeTimeline` (+ `proposeTimelineFromContext`)
+  - `services/worker/src/consumers/generateTimeline.ts` → Job runner
+  - Fixture: `packages/ai-provider/test/fixtures/sample_timeline_context.json`
+- **Notes for next phase me:** Phase 9 multi-platform adaptation on same provider surface
+
+### Chronological — 2026-10-03 22:19 (Arvin / Phase 8 Dev C)
+- **Summary:** Implemented deterministic timeline proposal AI matching SDD §4.3; tests + worker CLI smoke SUCCEEDED (3 clips, hook 0–3s, schema 1.0).
+- **Files touched:** see DONE entry above
+- **How to run / test what I did:** see commands above
+- **Depends on:** timeline-notes / SDD contract
+- **Needs from others:** Anto/Brendan/Cyrus Phase 8 peers
+- **Risks:** Soft schema until Cyrus package ships
