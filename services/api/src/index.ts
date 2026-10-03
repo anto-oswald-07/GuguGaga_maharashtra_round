@@ -9,6 +9,7 @@ import {
 } from '@creatorai/shared';
 import { registerAuthRoutes } from './modules/auth/routes';
 import { registerAssetRoutes } from './modules/assets/routes';
+import { registerProjectRoutes } from './modules/projects/routes';
 
 loadEnv({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -38,6 +39,7 @@ async function main() {
 
   await registerAuthRoutes(app);
   await registerAssetRoutes(app);
+  await registerProjectRoutes(app);
 
   await app.listen({ port, host });
   app.log.info(`API listening on http://${host}:${port}${API_PREFIX}`);

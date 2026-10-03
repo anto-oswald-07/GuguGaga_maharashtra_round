@@ -1,6 +1,7 @@
 // CreatorAi API — Prisma schema
 // Phase 2: User + Workspace for auth.
 // Phase 3: Asset + local storage paths.
+// Phase 4: Project + ProjectAsset + StageEvent.
 
 generator client {
   provider = "prisma-client-js"
@@ -19,6 +20,25 @@ enum AssetType {
   OTHER
 }
 
+enum ProjectStage {
+  IDEA
+  SCRIPT
+  RECORDED
+  EDITING
+  CLIPS
+  ADAPTED
+  READY
+  PUBLISHED
+}
+
+enum Platform {
+  YOUTUBE
+  YOUTUBE_SHORTS
+  INSTAGRAM_REELS
+  TIKTOK
+  LINKEDIN
+}
+
 model User {
   id           String     @id @default(uuid()) @db.Uuid
   email        String     @unique
@@ -29,29 +49,71 @@ model User {
 }
 
 model Workspace {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @unique @db.Uuid
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @unique @db.Uuid
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   assets    Asset[]
+  projects  Project[]
 }
 
 model Asset {
-  id          String     @id @default(uuid()) @db.Uuid
-  workspaceId String     @db.Uuid
+  id          String         @id @default(uuid()) @db.Uuid
+  workspaceId String         @db.Uuid
   type        AssetType
   name        String
   path        String
   mime        String
   size        BigInt
-  tags        String[]   @default([])
+  tags        String[]       @default([])
   description String?
-  metadata    Json       @default("{}")
+  metadata    Json           @default("{}")
   deletedAt   DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projects    ProjectAsset[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, type])
+}
+
+model Project {
+  id              String         @id @default(uuid()) @db.Uuid
+  workspaceId     String         @db.Uuid
+  title           String
+  description     String?
+  stage           ProjectStage   @default(IDEA)
+  targetPlatforms Platform[]     @default([])
+  deletedAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assets          ProjectAsset[]
+  stageEvents     StageEvent[]
+
+  @@index([workspaceId, deletedAt])
+  @@index([workspaceId, stage])
+}
+
+model ProjectAsset {
+  projectId  String   @db.Uuid
+  assetId    String   @db.Uuid
+  attachedAt DateTime @default(now())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, assetId])
+  @@index([assetId])
+}
+
+model StageEvent {
+  id        String        @id @default(uuid()) @db.Uuid
+  projectId String        @db.Uuid
+  fromStage ProjectStage?
+  toStage   ProjectStage
+  createdAt DateTime      @default(now())
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }
