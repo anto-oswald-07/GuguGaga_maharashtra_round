@@ -93,6 +93,12 @@ export type GenerateSupportingRequest = z.infer<
   typeof generateSupportingRequestSchema
 >;
 
+/** Body for `POST /scripts/:id/refine`. */
+export const refineScriptRequestSchema = z.object({
+  instruction: z.string().min(1).max(2000),
+});
+export type RefineScriptRequest = z.infer<typeof refineScriptRequestSchema>;
+
 /** Response when a generate endpoint enqueues work. */
 export const enqueueJobResponseSchema = z.object({
   jobId: z.string().uuid(),

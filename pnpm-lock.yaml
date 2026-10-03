@@ -70,6 +70,9 @@ importers:
 
   services/api:
     dependencies:
+      '@creatorai/ai-provider':
+        specifier: workspace:*
+        version: link:../../packages/ai-provider
       '@creatorai/shared':
         specifier: workspace:*
         version: link:../../packages/shared

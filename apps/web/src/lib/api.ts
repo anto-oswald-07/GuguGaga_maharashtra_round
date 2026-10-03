@@ -221,6 +221,8 @@ export type ScriptContent = {
   hook: string;
   body: string;
   cta: string;
+  title?: string;
+  rawText?: string;
 };
 
 export type ScriptVersion = {
@@ -228,7 +230,7 @@ export type ScriptVersion = {
   scriptId: string;
   version: number;
   content: ScriptContent;
-  /** Free-form note: AI | MANUAL | REFINE | etc. */
+  /** Free-form note: AI | USER | REFINE | etc. */
   source?: string | null;
   createdAt: string;
 };
@@ -244,7 +246,9 @@ export type ScriptDocument = {
   id: string;
   projectId: string;
   workspaceId?: string;
+  /** Display label — API uses `title`; UI historically used `topic`. */
   topic: string | null;
+  title?: string | null;
   audience: string | null;
   tone: string | null;
   platform: ScriptPlatform | null;
@@ -299,18 +303,100 @@ export type EnqueueJobResponse = {
   scriptId?: string;
 };
 
-export function listProjectScripts(projectId: string) {
-  return apiFetch<ScriptListResponse>(`/projects/${projectId}/scripts`);
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function normalizeVersion(raw: unknown): ScriptVersion {
+  const r = asRecord(raw) ?? {};
+  const contentRaw = asRecord(r.content) ?? {};
+  return {
+    id: String(r.id ?? ""),
+    scriptId: String(r.scriptId ?? r.scriptDocumentId ?? ""),
+    version: typeof r.version === "number" ? r.version : 0,
+    content: {
+      hook: typeof contentRaw.hook === "string" ? contentRaw.hook : "",
+      body: typeof contentRaw.body === "string" ? contentRaw.body : "",
+      cta: typeof contentRaw.cta === "string" ? contentRaw.cta : "",
+      ...(typeof contentRaw.title === "string"
+        ? { title: contentRaw.title }
+        : {}),
+      ...(typeof contentRaw.rawText === "string"
+        ? { rawText: contentRaw.rawText }
+        : {}),
+    },
+    source: typeof r.source === "string" ? r.source : null,
+    createdAt: String(r.createdAt ?? ""),
+  };
+}
+
+/** Map API ScriptDocumentDto (+ detail) → UI ScriptDocument. */
+function normalizeScript(raw: unknown): ScriptDocument {
+  const r = asRecord(raw) ?? {};
+  const latest = r.latestVersion ? normalizeVersion(r.latestVersion) : null;
+  const versionsRaw = Array.isArray(r.versions) ? r.versions : null;
+  const versions =
+    versionsRaw && versionsRaw.length > 0
+      ? versionsRaw.map(normalizeVersion)
+      : latest
+        ? [latest]
+        : [];
+  const contentFromField = asRecord(r.content);
+  const content: ScriptContent | null = contentFromField
+    ? {
+        hook: typeof contentFromField.hook === "string" ? contentFromField.hook : "",
+        body: typeof contentFromField.body === "string" ? contentFromField.body : "",
+        cta: typeof contentFromField.cta === "string" ? contentFromField.cta : "",
+      }
+    : latest?.content ?? versions[0]?.content ?? null;
+  const title =
+    typeof r.title === "string"
+      ? r.title
+      : typeof r.topic === "string"
+        ? r.topic
+        : null;
+
+  return {
+    id: String(r.id ?? ""),
+    projectId: String(r.projectId ?? ""),
+    workspaceId: typeof r.workspaceId === "string" ? r.workspaceId : undefined,
+    topic: title,
+    title,
+    audience: typeof r.audience === "string" ? r.audience : null,
+    tone: typeof r.tone === "string" ? r.tone : null,
+    platform:
+      typeof r.platform === "string" ? (r.platform as ScriptPlatform) : null,
+    content,
+    hooks: Array.isArray(r.hooks)
+      ? r.hooks.filter((h): h is string => typeof h === "string")
+      : [],
+    supporting: (r.supporting as SupportingContent | null) ?? null,
+    versions,
+    createdAt: String(r.createdAt ?? ""),
+    updatedAt: String(r.updatedAt ?? ""),
+  };
+}
+
+export async function listProjectScripts(projectId: string) {
+  const raw = await apiFetch<{ items: unknown[] }>(
+    `/projects/${projectId}/scripts`,
+  );
+  return {
+    items: (raw.items ?? []).map(normalizeScript),
+  } satisfies ScriptListResponse;
 }
 
 export function createProjectScript(
   projectId: string,
   payload: Partial<GenerateScriptPayload> & { content?: ScriptContent },
 ) {
-  return apiFetch<ScriptDocument>(`/projects/${projectId}/scripts`, {
+  return apiFetch<unknown>(`/projects/${projectId}/scripts`, {
     method: "POST",
     body: payload,
-  });
+  }).then(normalizeScript);
 }
 
 export function generateProjectScript(
@@ -326,8 +412,9 @@ export function generateProjectScript(
   );
 }
 
-export function getScript(scriptId: string) {
-  return apiFetch<ScriptDocument>(`/scripts/${scriptId}`);
+export async function getScript(scriptId: string) {
+  const raw = await apiFetch<unknown>(`/scripts/${scriptId}`);
+  return normalizeScript(raw);
 }
 
 export function refineScript(scriptId: string, payload: RefineScriptPayload) {
@@ -338,39 +425,43 @@ export function refineScript(scriptId: string, payload: RefineScriptPayload) {
 }
 
 export function generateScriptHooks(scriptId: string, n = 5) {
-  return apiFetch<EnqueueJobResponse | { hooks: string[] }>(
-    `/scripts/${scriptId}/hooks`,
-    {
-      method: "POST",
-      body: { n },
-    },
-  );
+  return apiFetch<EnqueueJobResponse>(`/scripts/${scriptId}/hooks`, {
+    method: "POST",
+    body: { count: n },
+  });
 }
 
 export function generateScriptSupporting(
   scriptId: string,
   platforms?: ScriptPlatform[],
 ) {
-  return apiFetch<EnqueueJobResponse | { supporting: SupportingContent }>(
-    `/scripts/${scriptId}/supporting`,
-    {
-      method: "POST",
-      body: platforms ? { platforms } : {},
-    },
-  );
+  const list =
+    platforms && platforms.length > 0 ? platforms : (["YOUTUBE_SHORTS"] as ScriptPlatform[]);
+  return apiFetch<EnqueueJobResponse>(`/scripts/${scriptId}/supporting`, {
+    method: "POST",
+    body: { platforms: list },
+  });
 }
 
-export function saveScriptVersion(
+export async function saveScriptVersion(
   scriptId: string,
   payload: SaveScriptVersionPayload,
 ) {
-  return apiFetch<ScriptVersion | ScriptDocument>(
-    `/scripts/${scriptId}/versions`,
-    {
-      method: "POST",
-      body: payload,
+  const source =
+    payload.source === "MANUAL" || !payload.source ? "USER" : payload.source;
+  const raw = await apiFetch<unknown>(`/scripts/${scriptId}/versions`, {
+    method: "POST",
+    body: {
+      content: payload.content,
+      source,
     },
-  );
+  });
+  // API returns ScriptVersionDto; UI also accepts full document
+  const rec = asRecord(raw);
+  if (rec && Array.isArray(rec.versions)) {
+    return normalizeScript(raw);
+  }
+  return normalizeVersion(raw);
 }
 
 export function getJob(jobId: string) {

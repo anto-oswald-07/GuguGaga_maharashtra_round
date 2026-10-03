@@ -21,7 +21,7 @@ Phase 1 Integration chose DB-polling over BullMQ for the hackathon MVP. Redis re
 | Worker PATCHes internal API | No (MVP) | Would need service token; defer |
 | API webhook from worker | No | Extra hop |
 
-`POST /api/v1/jobs/:id/mock-complete` mirrors the worker path for UI testing until the consumer lands. Integration should prefer the real worker and can leave mock-complete as a demo fallback.
+`POST /api/v1/jobs/:id/mock-complete` mirrors the worker path for UI testing / fail injection. **Phase 5 Integration** runs an in-process DB poller in the API (`startJobPoller`) that claims `QUEUED` jobs and completes them with `@creatorai/ai-provider` (default `mock`). Worker CLI (`pnpm --filter worker generate-script`) remains for local smoke without the Job table.
 
 ## Job types (Phase 5+)
 

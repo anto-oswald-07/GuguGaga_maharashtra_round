@@ -6,6 +6,7 @@ import {
   generateHooksRequestSchema,
   generateScriptRequestSchema,
   generateSupportingRequestSchema,
+  refineScriptRequestSchema,
 } from '@creatorai/shared';
 import { requireAuth } from '../../auth/jwt';
 import {
@@ -15,6 +16,7 @@ import {
   enqueueGenerateHooks,
   enqueueGenerateScript,
   enqueueGenerateSupporting,
+  enqueueRefineScript,
   getScript,
   listScripts,
 } from './service';
@@ -148,6 +150,35 @@ export async function registerScriptRoutes(
           parsed.data,
         );
         return reply.status(201).send(version);
+      } catch (err) {
+        if (err instanceof ScriptHttpError) {
+          return sendScriptError(reply, err);
+        }
+        throw err;
+      }
+    },
+  );
+
+  app.post(
+    `${API_PREFIX}/scripts/:id/refine`,
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const parsed = refineScriptRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: 'validation_error',
+          message: parsed.error.issues.map((i) => i.message).join('; '),
+          statusCode: 400,
+        });
+      }
+      try {
+        const result = await enqueueRefineScript(
+          request.auth!.workspaceId,
+          id,
+          parsed.data,
+        );
+        return reply.status(202).send(result);
       } catch (err) {
         if (err instanceof ScriptHttpError) {
           return sendScriptError(reply, err);
