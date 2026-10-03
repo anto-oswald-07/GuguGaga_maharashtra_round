@@ -13,7 +13,7 @@
  *   echo '{"topic":"...","audience":"...","tone":"...","platform":"TIKTOK"}' | pnpm --filter worker generate-script -- --stdin
  *
  * Env:
- *   AI_PROVIDER=mock|openai|gemini
+   *   AI_PROVIDER=mock|openai|gemini|grok|openrouter|groq|mistral|auto
  *   WORKER_CALLBACK_URL  optional POST target, e.g. http://localhost:4000/api/v1/internal/jobs/:id/complete
  *   WORKER_INTERNAL_TOKEN  optional Bearer for callback
  */

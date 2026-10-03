@@ -120,6 +120,24 @@ export {
   type EnqueueJobResponse,
 } from './scripts';
 export {
+  scriptBeatTypeSchema,
+  SCRIPT_BEAT_TYPES,
+  sceneFulfillmentModeSchema,
+  SCENE_FULFILLMENT_MODES,
+  sceneFulfillmentSchema,
+  scriptSceneSchema,
+  fulfillSceneRequestSchema,
+  generateSceneRequestSchema,
+  scenePipelineRequestSchema,
+  type ScriptBeatType,
+  type SceneFulfillmentMode,
+  type SceneFulfillment,
+  type ScriptScene,
+  type FulfillSceneRequest,
+  type GenerateSceneRequest,
+  type ScenePipelineRequest,
+} from './scenes';
+export {
   jobTypeSchema,
   JOB_TYPES,
   jobStatusSchema,

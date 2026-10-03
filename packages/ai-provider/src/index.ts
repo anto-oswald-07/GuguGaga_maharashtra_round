@@ -9,6 +9,8 @@ export type {
   ScriptGenResult,
   SupportingContent,
   SupportingContentItem,
+  TimelineAssetSummary,
+  TimelineAudioClip,
   TimelineContext,
   Transcript,
   TranscriptSegment,
@@ -26,7 +28,13 @@ export {
 } from './mock/demoSeed';
 export { OpenAiProvider } from './openai/OpenAiProvider';
 export { GeminiProvider } from './gemini/GeminiProvider';
+export { GrokProvider } from './grok/GrokProvider';
+export { GroqProvider } from './groq/GroqProvider';
+export { OpenRouterProvider } from './openrouter/OpenRouterProvider';
+export { MistralProvider } from './mistral/MistralProvider';
+export { FallbackAiProvider } from './fallback/FallbackAiProvider';
 export { createAiProvider, type CreateAiProviderOptions } from './createProvider';
+export { httpErrorFromResponse, isFallbackWorthy } from './httpErrors';
 export {
   fuzzyAlignScriptToTranscript,
   fuzzyScore,
@@ -36,6 +44,18 @@ export {
   tokenize,
 } from './align/fuzzyAlign';
 export { mockTranscribeFromText } from './stt/mockTranscribe';
+export {
+  buildScenesFromScript,
+  ensureScriptScenes,
+  type SceneScriptParts,
+} from './scripts/buildScenes';
+export {
+  matchScenesToTranscript,
+  reviewScenesAgainstTranscript,
+  sceneMatchesToClipIdeas,
+  type SceneMatchResult,
+  type SceneReviewResult,
+} from './scenes/reviewAndMatch';
 export {
   CLIP_MAX_MS,
   CLIP_MIN_MS,
@@ -68,6 +88,7 @@ export {
 export type { PlatformCopyLimits } from './platform/copyLimits';
 export type {
   TimelineAcceptedClip,
+  TimelineAudioTrack,
   TimelineCaptionItem,
   TimelineTextItem,
   TimelineTextStyle,

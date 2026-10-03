@@ -118,12 +118,14 @@ function parseScriptContent(raw: unknown): ScriptContent {
     return { hook: '', body: '', cta: '' };
   }
   const o = raw as Record<string, unknown>;
+  const scenes = Array.isArray(o.scenes) ? (o.scenes as ScriptContent['scenes']) : undefined;
   return {
     hook: typeof o.hook === 'string' ? o.hook : '',
     body: typeof o.body === 'string' ? o.body : '',
     cta: typeof o.cta === 'string' ? o.cta : '',
     title: typeof o.title === 'string' ? o.title : undefined,
     rawText: typeof o.rawText === 'string' ? o.rawText : undefined,
+    ...(scenes && scenes.length > 0 ? { scenes } : {}),
   };
 }
 

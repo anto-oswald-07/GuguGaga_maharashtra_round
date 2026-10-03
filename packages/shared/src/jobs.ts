@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** Mirrors Prisma `JobType` / SDD §4.2 (+ Phase 5 hooks/supporting). */
+/** Mirrors Prisma `JobType` / SDD §4.2 (+ Phase 5 hooks/supporting + scene pipeline). */
 export const jobTypeSchema = z.enum([
   'TRANSCRIBE',
   'ALIGN_SCRIPT',
@@ -12,6 +12,9 @@ export const jobTypeSchema = z.enum([
   'GENERATE_SCRIPT',
   'GENERATE_HOOKS',
   'GENERATE_SUPPORTING',
+  'GENERATE_SCENE',
+  'REVIEW_FOOTAGE',
+  'MATCH_SCENES',
 ]);
 export type JobType = z.infer<typeof jobTypeSchema>;
 

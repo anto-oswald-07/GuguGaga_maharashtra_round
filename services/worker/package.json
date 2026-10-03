@@ -10,6 +10,7 @@
     "./media/cutClip": "./src/media/cutClip.ts",
     "./media/renderTimeline": "./src/media/renderTimeline.ts",
     "./media/adaptAspect": "./src/media/adaptAspect.ts",
+    "./media/generateSceneMedia": "./src/media/generateSceneMedia.ts",
     "./consumers/generateScript": "./src/consumers/generateScript.ts",
     "./consumers/transcribe": "./src/consumers/transcribe.ts",
     "./consumers/align": "./src/consumers/align.ts",

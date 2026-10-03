@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { platformSchema } from './projects';
+import { scriptSceneSchema } from './scenes';
 
 /** How a script version was produced. */
 export const scriptSourceSchema = z.enum(['USER', 'AI', 'REFINE']);
@@ -8,8 +9,8 @@ export type ScriptSource = z.infer<typeof scriptSourceSchema>;
 export const SCRIPT_SOURCES = scriptSourceSchema.options;
 
 /**
- * Structured script body (hook / body / CTA).
- * Cyrus Phase 5 D may mirror this in `schemas/scriptSchema.ts` — keep fields aligned at Integration.
+ * Structured script body (hook / body / CTA + optional production scenes).
+ * Scenes are the checklist the Footage tab fulfills (upload or AI).
  */
 export const scriptContentSchema = z.object({
   hook: z.string().min(1).max(2000),
@@ -17,6 +18,8 @@ export const scriptContentSchema = z.object({
   cta: z.string().min(1).max(2000),
   title: z.string().max(500).optional(),
   rawText: z.string().max(50000).optional(),
+  /** Ordered production beats — optional for backward-compatible scripts. */
+  scenes: z.array(scriptSceneSchema).max(40).optional(),
 });
 export type ScriptContent = z.infer<typeof scriptContentSchema>;
 

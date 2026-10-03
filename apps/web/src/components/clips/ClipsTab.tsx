@@ -239,6 +239,38 @@ export function ClipsTab({ projectId, assetIds }: ClipsTabProps) {
     }
   }
 
+  async function onAcceptAllProposed() {
+    const proposed = candidates.filter((c) => c.status === "proposed");
+    if (proposed.length === 0) {
+      setError("No proposed candidates to accept.");
+      return;
+    }
+    setSelectedIds(new Set(proposed.map((c) => c.id)));
+    setSavePending(true);
+    setError(null);
+    try {
+      const results = await Promise.all(
+        proposed.map((c) =>
+          updateClipCandidate(c.id, { status: "accepted" }),
+        ),
+      );
+      const byId = new Map(results.map((r) => [r.id, r]));
+      setCandidates((prev) => prev.map((c) => byId.get(c.id) ?? c));
+      setSelectedIds(new Set());
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Accept all failed",
+      );
+      await refresh();
+    } finally {
+      setSavePending(false);
+    }
+  }
+
   async function onRender(candidate: ClipCandidateDto) {
     if (candidate.status !== "accepted" && candidate.status !== "rendered") {
       setError("Accept the candidate before rendering.");
@@ -308,8 +340,8 @@ export function ClipsTab({ projectId, assetIds }: ClipsTabProps) {
       <div>
         <h2 className="text-lg font-semibold tracking-tight">Clips</h2>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Propose highlight candidates, tweak boundaries, accept/reject, and
-          render MP4 clip assets.
+          Scene auto-trims land here as proposed candidates — tweak boundaries,
+          accept all, then render. You can still propose freeform highlights.
         </p>
       </div>
 
@@ -382,6 +414,17 @@ export function ClipsTab({ projectId, assetIds }: ClipsTabProps) {
             className="rounded-md border border-[var(--border)] bg-white px-3 py-1.5 text-sm disabled:opacity-40"
           >
             Batch accept ({selectedIds.size})
+          </button>
+          <button
+            type="button"
+            disabled={
+              busy ||
+              candidates.filter((c) => c.status === "proposed").length === 0
+            }
+            onClick={() => void onAcceptAllProposed()}
+            className="rounded-md border border-[var(--border)] bg-white px-3 py-1.5 text-sm disabled:opacity-40"
+          >
+            Accept all proposed
           </button>
         </div>
       </div>

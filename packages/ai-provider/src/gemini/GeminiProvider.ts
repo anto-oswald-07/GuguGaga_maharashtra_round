@@ -1,5 +1,6 @@
 import type { Platform } from '@creatorai/shared';
 import { fuzzyAlignScriptToTranscript } from '../align/fuzzyAlign';
+import { httpErrorFromResponse } from '../httpErrors';
 import { MockAiProvider } from '../mock/MockAiProvider';
 import { clampSupportingItem } from '../platform/generatePlatformCopy';
 import { mockTranscribeFromText } from '../stt/mockTranscribe';
@@ -20,7 +21,7 @@ import {
   type TranscribeInput,
 } from '../types';
 
-const DEFAULT_MODEL = 'gemini-2.0-flash';
+const DEFAULT_MODEL = 'gemini-3.8-flash';
 
 function extractJsonObject(text: string): unknown {
   const trimmed = text.trim();
@@ -59,7 +60,7 @@ export class GeminiProvider implements AiProvider {
     }
   }
 
-  private async generate(prompt: string): Promise<string> {
+  private async generate(prompt: string, attempt = 0): Promise<string> {
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/` +
       `${encodeURIComponent(this.model)}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
@@ -76,10 +77,12 @@ export class GeminiProvider implements AiProvider {
     });
     if (!res.ok) {
       const body = await res.text();
-      throw new AiProviderError(
-        `Gemini HTTP ${res.status}: ${body.slice(0, 300)}`,
-        'http_error',
-      );
+      // Temporary capacity spikes (503) / rate limits — brief retry before failover.
+      if ((res.status === 503 || res.status === 429) && attempt < 2) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+        return this.generate(prompt, attempt + 1);
+      }
+      throw httpErrorFromResponse('Gemini', res.status, body);
     }
     const data = (await res.json()) as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
@@ -172,7 +175,9 @@ script=${script.slice(0, 6000)}`,
    */
   async transcribe(input: TranscribeInput): Promise<Transcript> {
     if (input.hintText?.trim()) {
-      return mockTranscribeFromText(input.hintText);
+      return mockTranscribeFromText(input.hintText, {
+        durationMs: input.durationMs,
+      });
     }
     if (input.filePath || input.audio) {
       return this.mockFallback.transcribe(input);

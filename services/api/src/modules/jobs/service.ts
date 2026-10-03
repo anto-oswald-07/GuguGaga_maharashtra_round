@@ -8,10 +8,18 @@ import type {
   ScriptContent,
   ScriptSource,
 } from '@creatorai/shared';
-import { createAiProvider } from '@creatorai/ai-provider';
+import {
+  createAiProvider,
+  ensureScriptScenes,
+  matchScenesToTranscript,
+  reviewScenesAgainstTranscript,
+  sceneMatchesToClipIdeas,
+} from '@creatorai/ai-provider';
 import type { Job, Prisma } from '@prisma/client';
-import { access } from 'node:fs/promises';
+import { access, mkdir, rename, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import {
   audioDerivativePath,
   extractAudio,
@@ -22,6 +30,7 @@ import {
   renderTimelinePath,
 } from 'worker/media/renderTimeline';
 import { adaptAspect } from 'worker/media/adaptAspect';
+import { generateScenePlaceholderMedia } from 'worker/media/generateSceneMedia';
 import { prisma } from '../../db/prisma';
 import { storage } from '../../storage/local';
 import {
@@ -38,6 +47,7 @@ import {
   persistRenderedClip,
 } from '../clips/service';
 import {
+  loadProjectMediaAssets,
   loadTimelineGenerateContext,
   loadTimelineRenderContext,
   mockTimelineJson,
@@ -52,6 +62,11 @@ import {
   persistAdaptedPack,
 } from '../packs/service';
 import { appendAiScriptVersion } from '../scripts/service';
+import {
+  applySceneFulfillment,
+  loadScriptScenesForJob,
+  persistScriptScenes,
+} from '../scenes/service';
 import { enqueueJob } from './queue';
 
 /** Prefer extracted WAV for Whisper; fall back to original if extract fails. */
@@ -114,6 +129,18 @@ function asRecord(raw: unknown): Record<string, unknown> {
     return raw as Record<string, unknown>;
   }
   return {};
+}
+
+/** Read duration from asset.metadata (ffprobe enrich / upload). */
+function durationMsFromAssetMetadata(metadata: unknown): number | null {
+  const m = asRecord(metadata);
+  if (typeof m.durationMs === 'number' && Number.isFinite(m.durationMs)) {
+    return Math.max(0, Math.floor(m.durationMs));
+  }
+  if (typeof m.durationSec === 'number' && Number.isFinite(m.durationSec)) {
+    return Math.max(0, Math.floor(m.durationSec * 1000));
+  }
+  return null;
 }
 
 function toJobDto(row: Job): JobDto {
@@ -304,6 +331,10 @@ export async function completeJobWithAi(
           'GENERATE_SCRIPT job missing projectId',
         );
       }
+      const projectAssets = await loadProjectMediaAssets(
+        job.workspaceId,
+        job.projectId,
+      );
       const generated = await provider.generateScript({
         topic: strField(input, 'topic', 'your topic'),
         audience: strField(input, 'audience', 'creators'),
@@ -313,6 +344,7 @@ export async function completeJobWithAi(
           typeof input.refineInstruction === 'string'
             ? input.refineInstruction
             : undefined,
+        assets: projectAssets,
       });
 
       const content: ScriptContent = {
@@ -321,6 +353,13 @@ export async function completeJobWithAi(
         cta: generated.cta,
         title: generated.title,
         rawText: generated.fullText,
+        scenes: ensureScriptScenes({
+          hook: generated.hook,
+          body: generated.body,
+          cta: generated.cta,
+          title: generated.title,
+          scenes: generated.scenes,
+        }, { deterministic: true }),
       };
       const source: ScriptSource = input.refineInstruction
         ? 'REFINE'
@@ -338,12 +377,32 @@ export async function completeJobWithAi(
         source,
       });
 
+      // Auto-advance IDEA → SCRIPT when a script lands.
+      const projectAfterScript = await prisma.project.findFirst({
+        where: { id: job.projectId, workspaceId: job.workspaceId },
+        select: { stage: true },
+      });
+      if (projectAfterScript?.stage === 'IDEA') {
+        await prisma.project.update({
+          where: { id: job.projectId },
+          data: { stage: 'SCRIPT' },
+        });
+        await prisma.stageEvent.create({
+          data: {
+            projectId: job.projectId,
+            fromStage: 'IDEA',
+            toStage: 'SCRIPT',
+          },
+        });
+      }
+
       output = {
         ...output,
         scriptId: result.scriptId,
         versionId: result.versionId,
         version: result.version,
         content,
+        sceneCount: content.scenes?.length ?? 0,
         provider: generated.provider,
         model: generated.model,
       };
@@ -400,11 +459,13 @@ export async function completeJobWithAi(
           workspaceId: job.workspaceId,
           deletedAt: null,
         },
-        select: { name: true, path: true },
+        select: { name: true, path: true, metadata: true },
       });
       if (!asset) {
         throw new JobHttpError(404, 'not_found', 'Asset not found');
       }
+
+      const durationMs = durationMsFromAssetMetadata(asset.metadata);
 
       const { filePath, extracted } = await resolveSttFilePath(
         job.workspaceId,
@@ -452,6 +513,7 @@ export async function completeJobWithAi(
           filePath,
           hintText,
           language,
+          durationMs: durationMs ?? undefined,
         });
         segments = transcript.segments.map((s) => ({
           startMs: s.startMs,
@@ -460,7 +522,7 @@ export async function completeJobWithAi(
         }));
       } catch {
         // Keep e2e green if provider misconfigured — deterministic mock segments.
-        segments = mockTranscriptSegments(asset.name);
+        segments = mockTranscriptSegments(asset.name, durationMs ?? undefined);
         sttProvider = 'mock-fallback';
       }
 
@@ -800,13 +862,14 @@ export async function completeJobWithAi(
           },
           alignments: ctx.alignments,
           sourceAssetId: ctx.assetId,
+          assets: ctx.assets,
           acceptedClips: ctx.clipWindows.map((w, i) => ({
             id: `accepted-${i + 1}`,
             startMs: w.startMs,
             endMs: w.endMs,
             titleSuggestion: w.title ?? 'Clip',
             label: w.title,
-            assetId: ctx.assetId,
+            assetId: w.assetId ?? ctx.assetId,
           })),
         });
         timelineJson = normalizeProviderTimeline(proposed, fallback);
@@ -1086,6 +1149,397 @@ export async function completeJobWithAi(
         packs: packResults,
         count: packResults.length,
         copyProvider,
+      };
+    } else if (job.type === 'GENERATE_SCENE') {
+      if (!job.projectId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'GENERATE_SCENE job missing projectId',
+        );
+      }
+      const scriptId = strField(input, 'scriptId', '');
+      const sceneId = strField(input, 'sceneId', '');
+      if (!scriptId || !sceneId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'GENERATE_SCENE job missing scriptId or sceneId',
+        );
+      }
+
+      const { scenes } = await loadScriptScenesForJob(
+        job.workspaceId,
+        job.projectId,
+        scriptId,
+      );
+      const scene = scenes.find((s) => s.id === sceneId);
+      if (!scene) {
+        throw new JobHttpError(404, 'not_found', 'Scene not found on script');
+      }
+
+      const assetId = randomUUID();
+      const outDir = storage.absoluteFromRelative(
+        path.posix.join('workspaces', job.workspaceId, 'originals', assetId),
+      );
+      const media = await generateScenePlaceholderMedia({
+        outputDir: outDir,
+        sceneId,
+        title: scene.title,
+        spokenText: scene.spokenText,
+        durationMs: scene.targetDurationMs,
+      });
+
+      const filename = `scene-${scene.ordinal + 1}-${scene.title
+        .replace(/[^\w.\-()+ ]+/g, '_')
+        .slice(0, 80)}.${media.extension}`;
+      const destRel = path.posix.join(
+        'workspaces',
+        job.workspaceId,
+        'originals',
+        assetId,
+        filename,
+      );
+      const destAbs = storage.absoluteFromRelative(destRel);
+      await mkdir(path.dirname(destAbs), { recursive: true });
+      if (media.absolutePath !== destAbs) {
+        await rename(media.absolutePath, destAbs);
+      }
+      const fileSize = (await stat(destAbs)).size;
+      const assetType = media.mime.startsWith('video/') ? 'VIDEO' : 'DOCUMENT';
+
+      await prisma.asset.create({
+        data: {
+          id: assetId,
+          workspaceId: job.workspaceId,
+          type: assetType,
+          name: filename,
+          path: destRel,
+          mime: media.mime,
+          size: BigInt(fileSize),
+          tags: ['scene', 'ai-generated', scene.beatType.toLowerCase()],
+          description: `AI scene: ${scene.title}`,
+          metadata: {
+            sceneId,
+            scriptId,
+            durationMs: media.durationMs,
+            generateMode: media.mode,
+          },
+        },
+      });
+      await prisma.projectAsset.upsert({
+        where: {
+          projectId_assetId: {
+            projectId: job.projectId,
+            assetId,
+          },
+        },
+        create: { projectId: job.projectId, assetId },
+        update: {},
+      });
+
+      const applied = await applySceneFulfillment({
+        workspaceId: job.workspaceId,
+        projectId: job.projectId,
+        scriptId,
+        sceneId,
+        fulfillment: {
+          mode: 'AI_GENERATED',
+          assetId,
+          opinion: `AI placeholder generated (${media.mode}) for “${scene.title}”. Replace with real footage when ready.`,
+          matchConfidence: media.mode === 'ffmpeg' ? 0.55 : 0.3,
+        },
+      });
+
+      const project = await prisma.project.findFirst({
+        where: { id: job.projectId, workspaceId: job.workspaceId },
+        select: { stage: true },
+      });
+      if (project && ['IDEA', 'SCRIPT'].includes(project.stage)) {
+        await prisma.project.update({
+          where: { id: job.projectId },
+          data: { stage: 'RECORDED' },
+        });
+        await prisma.stageEvent.create({
+          data: {
+            projectId: job.projectId,
+            fromStage: project.stage,
+            toStage: 'RECORDED',
+          },
+        });
+      }
+
+      output = {
+        ...output,
+        scriptId,
+        sceneId,
+        assetId,
+        versionId: applied.versionId,
+        mode: media.mode,
+        durationMs: media.durationMs,
+      };
+    } else if (job.type === 'REVIEW_FOOTAGE') {
+      if (!job.projectId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'REVIEW_FOOTAGE job missing projectId',
+        );
+      }
+      const scriptId = strField(input, 'scriptId', '');
+      if (!scriptId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'REVIEW_FOOTAGE job missing scriptId',
+        );
+      }
+      const filterSceneId =
+        typeof input.sceneId === 'string' ? input.sceneId : null;
+
+      const { content, scenes } = await loadScriptScenesForJob(
+        job.workspaceId,
+        job.projectId,
+        scriptId,
+      );
+      const targetScenes = filterSceneId
+        ? scenes.filter((s) => s.id === filterSceneId)
+        : scenes;
+
+      // Prefer transcript from the first filled scene asset; else latest project transcript.
+      let segments: { startMs: number; endMs: number; text: string }[] = [];
+      const filledAssetId = targetScenes.find(
+        (s) => s.fulfillment?.assetId,
+      )?.fulfillment?.assetId;
+      if (filledAssetId) {
+        const t = await prisma.transcript.findFirst({
+          where: {
+            projectId: job.projectId,
+            assetId: filledAssetId,
+          },
+          include: { segments: { orderBy: { ordinal: 'asc' } } },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (t) {
+          segments = t.segments.map((s) => ({
+            startMs: s.startMs,
+            endMs: s.endMs,
+            text: s.text,
+          }));
+        }
+      }
+      if (segments.length === 0) {
+        const latest = await prisma.transcript.findFirst({
+          where: { projectId: job.projectId },
+          include: { segments: { orderBy: { ordinal: 'asc' } } },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (latest) {
+          segments = latest.segments.map((s) => ({
+            startMs: s.startMs,
+            endMs: s.endMs,
+            text: s.text,
+          }));
+        }
+      }
+
+      const reviews = reviewScenesAgainstTranscript(targetScenes, segments);
+      const reviewById = new Map(reviews.map((r) => [r.sceneId, r]));
+      const nextScenes = scenes.map((s) => {
+        const r = reviewById.get(s.id);
+        if (!r) return s;
+        return {
+          ...s,
+          fulfillment: {
+            ...s.fulfillment,
+            opinion: r.opinion,
+            matchConfidence: r.matchConfidence,
+          },
+        };
+      });
+
+      const persisted = await persistScriptScenes({
+        workspaceId: job.workspaceId,
+        projectId: job.projectId,
+        scriptId,
+        content,
+        scenes: nextScenes,
+        source: 'AI',
+      });
+
+      output = {
+        ...output,
+        scriptId,
+        versionId: persisted.versionId,
+        reviews,
+        count: reviews.length,
+      };
+    } else if (job.type === 'MATCH_SCENES') {
+      if (!job.projectId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'MATCH_SCENES job missing projectId',
+        );
+      }
+      const scriptId = strField(input, 'scriptId', '');
+      if (!scriptId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'MATCH_SCENES job missing scriptId',
+        );
+      }
+      const filterSceneId =
+        typeof input.sceneId === 'string' ? input.sceneId : null;
+
+      const { content, scenes } = await loadScriptScenesForJob(
+        job.workspaceId,
+        job.projectId,
+        scriptId,
+      );
+      const targetScenes = (
+        filterSceneId ? scenes.filter((s) => s.id === filterSceneId) : scenes
+      ).filter((s) => s.fulfillment?.mode !== 'EMPTY' && s.fulfillment?.assetId);
+
+      if (targetScenes.length === 0) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'No filled scenes to match — upload or generate scene footage first',
+        );
+      }
+
+      // Group by source asset so we create candidates per footage file.
+      const byAsset = new Map<string, typeof targetScenes>();
+      for (const scene of targetScenes) {
+        const aid = scene.fulfillment!.assetId!;
+        const list = byAsset.get(aid) ?? [];
+        list.push(scene);
+        byAsset.set(aid, list);
+      }
+
+      const allCandidateIds: string[] = [];
+      const matchSummaries: Array<{
+        sceneId: string;
+        startMs: number;
+        endMs: number;
+        score: number;
+        candidateId?: string;
+      }> = [];
+
+      for (const [sourceAssetId, assetScenes] of byAsset) {
+        const transcript = await prisma.transcript.findFirst({
+          where: { projectId: job.projectId, assetId: sourceAssetId },
+          include: { segments: { orderBy: { ordinal: 'asc' } } },
+          orderBy: { createdAt: 'desc' },
+        });
+        let segments =
+          transcript?.segments.map((s) => ({
+            startMs: s.startMs,
+            endMs: s.endMs,
+            text: s.text,
+          })) ?? [];
+
+        if (segments.length === 0) {
+          // Synthetic segments from scene spoken text so demos still trim.
+          let t = 0;
+          segments = assetScenes.map((s) => {
+            const startMs = t;
+            const endMs = t + Math.max(3000, s.targetDurationMs);
+            t = endMs;
+            return { startMs, endMs, text: s.spokenText };
+          });
+        }
+
+        const matches = matchScenesToTranscript(assetScenes, segments);
+        const ideas = sceneMatchesToClipIdeas(matches);
+        const persisted = await persistClipCandidates({
+          workspaceId: job.workspaceId,
+          projectId: job.projectId,
+          sourceAssetId,
+          transcriptId: transcript?.id ?? null,
+          scriptDocumentId: scriptId,
+          ideas,
+        });
+        allCandidateIds.push(...persisted.candidateIds);
+
+        // Map candidates back by title/order (persist returns score-desc).
+        const candidates = await prisma.clipCandidate.findMany({
+          where: { id: { in: persisted.candidateIds } },
+          select: { id: true, title: true, startMs: true, endMs: true, rationale: true },
+        });
+        for (const m of matches) {
+          const cand =
+            candidates.find((c) => c.rationale?.includes(`sceneId=${m.sceneId}`)) ??
+            candidates.find((c) => c.title === m.titleSuggestion);
+          matchSummaries.push({
+            sceneId: m.sceneId,
+            startMs: m.startMs,
+            endMs: m.endMs,
+            score: m.score,
+            candidateId: cand?.id,
+          });
+        }
+      }
+
+      const summaryByScene = new Map(
+        matchSummaries.map((m) => [m.sceneId, m]),
+      );
+      const nextScenes = scenes.map((s) => {
+        const m = summaryByScene.get(s.id);
+        if (!m) return s;
+        return {
+          ...s,
+          fulfillment: {
+            ...s.fulfillment,
+            mode: 'TRIMMED' as const,
+            clipCandidateId: m.candidateId,
+            matchConfidence: m.score,
+            opinion:
+              s.fulfillment?.opinion ??
+              `Auto-trimmed ${m.startMs}–${m.endMs}ms (score ${m.score}).`,
+          },
+        };
+      });
+
+      const scriptPersisted = await persistScriptScenes({
+        workspaceId: job.workspaceId,
+        projectId: job.projectId,
+        scriptId,
+        content,
+        scenes: nextScenes,
+        source: 'AI',
+      });
+
+      const project = await prisma.project.findFirst({
+        where: { id: job.projectId, workspaceId: job.workspaceId },
+        select: { stage: true },
+      });
+      if (
+        project &&
+        ['IDEA', 'SCRIPT', 'RECORDED', 'EDITING'].includes(project.stage)
+      ) {
+        await prisma.project.update({
+          where: { id: job.projectId },
+          data: { stage: 'CLIPS' },
+        });
+        await prisma.stageEvent.create({
+          data: {
+            projectId: job.projectId,
+            fromStage: project.stage,
+            toStage: 'CLIPS',
+          },
+        });
+      }
+
+      output = {
+        ...output,
+        scriptId,
+        versionId: scriptPersisted.versionId,
+        candidateIds: allCandidateIds,
+        matches: matchSummaries,
+        count: matchSummaries.length,
       };
     } else {
       output = {

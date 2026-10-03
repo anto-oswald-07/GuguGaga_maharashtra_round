@@ -238,7 +238,7 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
                     : "px-1 py-2 text-[var(--muted)] hover:text-[var(--foreground)]"
                 }
               >
-                Footage &amp; Mapping
+                Footage &amp; Scenes
               </button>
               <button
                 type="button"
@@ -327,6 +327,9 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
             <MappingTab
               projectId={project.id}
               assetIds={project.assetIds}
+              onAssetsChanged={() => {
+                void refresh();
+              }}
             />
           ) : tab === "clips" ? (
             <ClipsTab projectId={project.id} assetIds={project.assetIds} />

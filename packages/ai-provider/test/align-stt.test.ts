@@ -57,6 +57,20 @@ describe('mockTranscribeFromText', () => {
       assert.equal(segments[i]!.startMs, segments[i - 1]!.endMs);
     }
   });
+
+  it('fits segments into durationMs when provided', () => {
+    const { segments } = mockTranscribeFromText(
+      'one two three four five six seven eight nine ten eleven twelve',
+      { durationMs: 5000, wordsPerSegment: 4 },
+    );
+    assert.ok(segments.length >= 2);
+    assert.equal(segments[0]!.startMs, 0);
+    assert.equal(segments[segments.length - 1]!.endMs, 5000);
+    for (let i = 1; i < segments.length; i += 1) {
+      assert.equal(segments[i]!.startMs, segments[i - 1]!.endMs);
+      assert.ok(segments[i]!.endMs > segments[i]!.startMs);
+    }
+  });
 });
 
 describe('fuzzyAlignScriptToTranscript', () => {

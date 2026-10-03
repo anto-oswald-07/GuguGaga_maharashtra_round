@@ -72,6 +72,7 @@ export async function processTranscribeJob(
         audio: input.audio,
         hintText: input.hintText,
         language: input.language,
+        durationMs: input.durationMs,
       },
       { providerName: opts.providerName },
     );

@@ -2,7 +2,7 @@
   "name": "@creatorai/ai-provider",
   "version": "0.0.1",
   "private": true,
-  "description": "CreatorAi LLM + STT providers (mock + OpenAI + Gemini)",
+  "description": "CreatorAi LLM + STT providers (mock + OpenAI + Gemini + Grok + OpenRouter + Groq + Mistral + fallback)",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

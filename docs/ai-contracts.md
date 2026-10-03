@@ -28,13 +28,13 @@ interface AiProvider {
 
 | Method | Phase | Status |
 |--------|-------|--------|
-| `generateScript` | 5 | **Done** — mock + openai + gemini |
+| `generateScript` | 5 | **Done** — mock + openai + gemini + grok + openrouter + groq + mistral (+ **auto fallback**) |
 | `generateHooks` | 5 | **Done** |
 | `generateSupporting` | 5 / 9 | **Done** — platform-tuned copy + soft clamp; see `docs/ai/platform-copy-guidelines.md` |
 | `transcribe` | 6 | **Done** — mock word segments; OpenAI Whisper when file + key |
 | `alignScriptToTranscript` | 6 | **Done** — fuzzy match MVP, confidence 0–1 |
 | `scoreClipWindows` | 7 | **Done** — heuristic 15–60s windows; 3 stable mock candidates |
-| `proposeTimeline` | 8 | **Done** — EditTimeline `schemaVersion: 1.0` from clips + hook 0–3s |
+| `proposeTimeline` | 8 | **Done** — EditTimeline `schemaVersion: 1.0`; **grok** analyses assets for holds/audio |
 
 ---
 
@@ -45,14 +45,35 @@ interface AiProvider {
 | `MockAiProvider` | Deterministic fixtures (default `AI_PROVIDER=mock`) |
 | `OpenAiProvider` | Chat Completions + Whisper when `OPENAI_API_KEY` set; clip score → mock heuristic; supporting clamped post-hoc |
 | `GeminiProvider` | generateContent; STT / clip score use mock fallback; supporting clamped post-hoc |
+| `GrokProvider` | xAI Grok (`XAI_API_KEY`) — scripts + **asset-aware** timeline suggestions (image holds / audio mix) |
+| `OpenRouterProvider` | OpenRouter Chat Completions (`OPENROUTER_API_KEY`, default `qwen/qwen3.8-27b:free`) |
+| `GroqProvider` | Groq Chat Completions (`GROQ_API_KEY`) |
+| `MistralProvider` | Mistral Chat Completions (`MISTRAL_API_KEY`) |
+| `FallbackAiProvider` | Chains keyed providers; skips on rate limit / quota / credit errors |
 
 ```bash
-AI_PROVIDER=mock
-OPENAI_API_KEY=
+AI_PROVIDER=auto
+AI_FALLBACK=1
+AI_FALLBACK_PROVIDERS=gemini,openrouter,groq,mistral,openai,grok,mock
 GEMINI_API_KEY=
+OPENROUTER_API_KEY=
+GROQ_API_KEY=
+MISTRAL_API_KEY=
+OPENAI_API_KEY=
+# Free signup credits often available at https://console.x.ai
+# XAI_API_KEY=
+# XAI_MODEL=grok-4.3
 ```
 
-Factory: `createAiProvider()` from `@creatorai/ai-provider`.
+Factory: `createAiProvider()` from `@creatorai/ai-provider`. On rate limit / empty credits the next backend in the chain is used; `mock` is always last so jobs keep working offline.
+
+### Grok asset analysis
+
+When `AI_PROVIDER=grok`:
+- **Generate script** receives the project’s VIDEO / IMAGE / AUDIO catalog and writes copy that can be covered by that media.
+- **Suggest timeline** asks Grok to order stills (hold durations), video trims, and parallel audio beds, returning rationale + change bullets in `meta.notes`.
+
+STT still uses mock (or OpenAI Whisper when `AI_PROVIDER=openai`).
 
 ---
 

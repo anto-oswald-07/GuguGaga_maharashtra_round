@@ -14,6 +14,7 @@ import type {
   ScriptSource,
   ScriptVersionDto,
 } from '@creatorai/shared';
+import { ensureScriptScenes } from '@creatorai/ai-provider';
 import type {
   Prisma,
   ScriptDocument,
@@ -39,13 +40,56 @@ function parseContent(raw: unknown): ScriptContent {
     return { hook: '', body: '', cta: '' };
   }
   const o = raw as Record<string, unknown>;
+  const scenes = Array.isArray(o.scenes) ? (o.scenes as ScriptContent['scenes']) : undefined;
   return {
     hook: typeof o.hook === 'string' ? o.hook : '',
     body: typeof o.body === 'string' ? o.body : '',
     cta: typeof o.cta === 'string' ? o.cta : '',
     ...(typeof o.title === 'string' ? { title: o.title } : {}),
     ...(typeof o.rawText === 'string' ? { rawText: o.rawText } : {}),
+    ...(scenes && scenes.length > 0 ? { scenes } : {}),
   };
+}
+
+/** Derive + persist scenes once so Footage can fulfill stable scene IDs. */
+async function ensurePersistedScenes(
+  scriptDocumentId: string,
+  latest: ScriptVersion | null,
+): Promise<ScriptVersion | null> {
+  if (!latest) return null;
+  const content = parseContent(latest.content);
+  if (content.scenes && content.scenes.length > 0) return latest;
+  if (!content.hook.trim() && !content.body.trim() && !content.cta.trim()) {
+    return latest;
+  }
+  const scenes = ensureScriptScenes(
+    {
+      hook: content.hook,
+      body: content.body,
+      cta: content.cta,
+      title: content.title,
+    },
+    { deterministic: true },
+  );
+  if (scenes.length === 0) return latest;
+  const nextContent: ScriptContent = { ...content, scenes };
+  const nextVersion = latest.version + 1;
+  const created = await prisma.$transaction(async (tx) => {
+    const version = await tx.scriptVersion.create({
+      data: {
+        scriptDocumentId,
+        version: nextVersion,
+        content: nextContent as Prisma.InputJsonValue,
+        source: 'AI',
+      },
+    });
+    await tx.scriptDocument.update({
+      where: { id: scriptDocumentId },
+      data: { updatedAt: new Date() },
+    });
+    return version;
+  });
+  return created;
 }
 
 function toVersionDto(row: ScriptVersion): ScriptVersionDto {
@@ -162,6 +206,16 @@ export async function listScripts(
     orderBy: { updatedAt: 'desc' },
   });
 
+  const withScenes = await Promise.all(
+    rows.map(async (r) => {
+      const latest = await ensurePersistedScenes(r.id, r.versions[0] ?? null);
+      return {
+        ...r,
+        versions: latest ? [latest] : [],
+      };
+    }),
+  );
+
   const counts = await prisma.scriptVersion.groupBy({
     by: ['scriptDocumentId'],
     where: { scriptDocumentId: { in: rows.map((r) => r.id) } },
@@ -172,7 +226,7 @@ export async function listScripts(
   );
 
   return {
-    items: rows.map((r) => toDocumentDto(r, countMap.get(r.id) ?? 0)),
+    items: withScenes.map((r) => toDocumentDto(r, countMap.get(r.id) ?? 0)),
   };
 }
 
@@ -181,10 +235,15 @@ export async function getScript(
   scriptId: string,
 ): Promise<ScriptDocumentDetailDto> {
   const row = await findOwnedScript(workspaceId, scriptId);
-  // versions already desc; reverse for chronological list
-  const chronological = [...row.versions].reverse();
+  const latest = row.versions[0] ?? null;
+  const ensured = await ensurePersistedScenes(scriptId, latest);
+  const versions =
+    ensured && latest && ensured.id !== latest.id
+      ? [ensured, ...row.versions]
+      : row.versions;
+  const chronological = [...versions].reverse();
   return {
-    ...toDocumentDto(row, row.versions.length),
+    ...toDocumentDto({ ...row, versions: ensured ? [ensured] : row.versions }, versions.length),
     versions: chronological.map(toVersionDto),
   };
 }
