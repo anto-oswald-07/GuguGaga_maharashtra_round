@@ -227,6 +227,28 @@ Copy-paste this template every time:
 - **Needs from others:** Integration will merge worker + web into workspace.
 - **Risks:** Documented in PROGRESS (compose plugin / port 5432 on this laptop).
 
+### [2026-10-03 12:30] ROLE=D NAME=Cyrus Selvaraj PHASE=2 TYPE=START
+- **Summary:** Started Phase 2 Dev D on branch `phase-02-cyrus` — auth security checklist + password policy helper.
+- **Files touched:** (branch created from updated `main`)
+- **APIs / types added:** None yet
+- **How to run / test what I did:** `git checkout phase-02-cyrus`
+- **Depends on:** `packages/shared` from Phase 1; Anto implements Auth API in parallel
+- **Needs from others:** None to start (`password.ts` did not exist)
+- **Risks:** Possible merge conflict on `packages/shared/src/index.ts` if Anto also exports auth DTOs there
+
+### [2026-10-03 12:32] ROLE=D NAME=Cyrus Selvaraj PHASE=2 TYPE=DONE
+- **Summary:** Phase 2 Dev D complete — auth security checklist, password rules doc, shared `checkPasswordStrength` / `isPasswordAcceptable` (min 8).
+- **Files touched:** `docs/security/auth-checklist.md`, `docs/security/password-rules.md`, `packages/shared/src/validation/password.ts`, `packages/shared/src/index.ts` (re-exports), `context.md`
+- **APIs / types added:** `MIN_PASSWORD_LENGTH`, `isPasswordAcceptable`, `checkPasswordStrength`, type `PasswordStrengthResult`
+- **How to run / test what I did:**
+  ```bash
+  cd packages/shared && npx tsc -p tsconfig.json
+  node -e "const m=require('./dist/index.js'); console.log(m.isPasswordAcceptable('short'), m.isPasswordAcceptable('longenough'), m.checkPasswordStrength('password1'));"
+  # expect: false true { acceptable:true, score:2, hints:[...] }
+  ```
+- **Depends on:** Anto should enforce min-8 server-side on register (see checklist)
+- **Needs from others:** Anto — wire password gate into register Zod; Brendan — optional UI hints; Integration — resolve `index.ts` export merge if needed
+- **Risks:** None for Phase 2 D scope
 ### [2026-10-03 17:55] ROLE=C NAME=Arvin Almeida PHASE=1 TYPE=START
 - **Summary:** Started Phase 1 Dev C — samples pack, worker skeleton, AI contracts doc. Verified A/B/D deliverables already present on main; Dev C was the only Phase 1 gap.
 - **Files touched:** (starting)
@@ -350,41 +372,22 @@ _(Template above kept for other developers.)_
 - **Files I expect others to connect to:** `apps/web` package name `web`; `NEXT_PUBLIC_API_BASE_URL` points at Anto’s API
 - **Notes for next phase me:** Phase 2 is Auth UI — build against documented `/auth/login` and `/auth/register` shapes even before API merge
 
-## Phase 1 Completion — Arvin Almeida (Dev C)
+## Phase 2 Completion — Cyrus Selvaraj (Dev D)
 - **Date:** 2026-10-03
-- **Branch:** _(working on local main; git untouched per request)_
+- **Branch:** phase-02-cyrus
 - **All allowed tasks done:** yes
 - **Incomplete items:** none
-- **Blockers handed to Integration:** None — worker package name is `worker`; sample script at `samples/scripts/sample_script.md`
+- **Blockers handed to Integration:** If Anto’s branch also edits `packages/shared/src/index.ts`, keep both auth DTO exports and password helper re-exports
 - **Commands to verify my work:**
   ```bash
-  pnpm --filter worker start
-  # expect: worker skeleton started
-  test -f samples/scripts/sample_script.md && test -f docs/ai-contracts.md
+  # read docs/security/auth-checklist.md and docs/security/password-rules.md
+  cd packages/shared && npx tsc -p tsconfig.json
+  node -e "const m=require('./dist/index.js'); console.log(m.MIN_PASSWORD_LENGTH, m.isPasswordAcceptable('abcdefgh'));"
   ```
 - **Files I expect others to connect to:**
-  - `samples/scripts/sample_script.md` → Mock AI / golden path (Phase 5/10)
-  - `services/worker` → job consumers (Phase 5+)
-  - `docs/ai-contracts.md` → `packages/ai-provider` (Phase 5)
-- **Notes for next phase me:** Phase 2 C is auth test kits only; real AI code starts Phase 5
-
-## Phase 2 Completion — Arvin Almeida (Dev C)
-- **Date:** 2026-10-03
-- **Branch:** _(working on local main; git untouched per request)_
-- **All allowed tasks done:** yes
-- **Incomplete items:** Live curl against real auth API (blocked until Anto Phase 2 B)
-- **Blockers handed to Integration:** Reconcile `docs/proposed-auth-types.ts` with Anto’s shared Zod; adopt SDD nested error shape
-- **Commands to verify my work:**
-  ```bash
-  # collections are static docs — verify files exist:
-  test -f docs/api/auth.http && test -f docs/api/auth.postman.json
-  test -f docs/testing/phase-2-auth.md && test -f docs/proposed-auth-types.ts
-  # after API: follow docs/testing/phase-2-auth.md checklists
-  ```
-- **Files I expect others to connect to:**
-  - `docs/api/auth.http` / `auth.postman.json` → Integration verification
-  - `docs/proposed-auth-types.ts` → merge into `packages/shared` if Anto did not publish types
-- **Notes for next phase me:** Phase 3 C = asset metadata worker stub + types
+  - `packages/shared/src/validation/password.ts` → Anto register validation
+  - `docs/security/auth-checklist.md` → Integration verify (JWT secret, no token logging, min-8)
+- **Notes for next phase me:** Phase 3 = thumbnail FFmpeg helper (`services/worker/src/media/thumbnail.ts` + shell script)
 
 ---
 
