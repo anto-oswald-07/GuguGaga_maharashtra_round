@@ -5,6 +5,7 @@ import {
   API_PREFIX,
   type HealthResponse,
 } from '@creatorai/shared';
+import { registerAuthRoutes } from './modules/auth/routes';
 
 loadEnv({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -17,6 +18,8 @@ async function main() {
   app.get(`${API_PREFIX}/health`, async (): Promise<HealthResponse> => {
     return { status: 'ok', service: 'api' };
   });
+
+  await registerAuthRoutes(app);
 
   await app.listen({ port, host });
   app.log.info(`API listening on http://${host}:${port}${API_PREFIX}`);
