@@ -45,41 +45,30 @@ Expect `source: "ffprobe"` when FFmpeg is installed; `source: "mock"` otherwise.
 
 ---
 
-## How the API will enqueue `EXTRACT_METADATA` (future / Integration)
+## How the API enqueues / runs `EXTRACT_METADATA` (Phase 3 Integration)
 
-Anto’s assets upload (Phase 3 B) should **not** block the HTTP response on ffprobe. Recommended MVP flow:
+**Decision (2026-10-03 Integration):** sync MVP — no `Job` table yet.
 
-1. `POST /api/v1/assets` stores the file under `storage/workspaces/{workspaceId}/originals/...` and creates the `Asset` row (`metadata` JSON null or `{}`).
-2. API creates a `Job` row:
-   - `type`: `EXTRACT_METADATA` (extend `JobType` enum / string union; not in SDD §4.2 yet — add at Integration)
-   - `status`: `QUEUED`
-   - `input`: `{ assetId, filePath }` (path relative to `STORAGE_ROOT` or absolute)
-   - `workspaceId` from `request.auth`
-3. Worker (DB-poll MVP, per Phase 1 Integration decision) claims the job → `RUNNING`.
-4. Worker calls `extractMetadata(filePath)`.
-5. On success:
-   - Patch `Asset.metadata` with `{ durationMs, width, height, codec }` (omit or keep `source` for debug)
-   - Set job `SUCCEEDED`, store output JSON
-6. On unexpected throw (should be rare — extractMetadata itself mocks on probe failure):
-   - Job `FAILED` with message; leave asset metadata empty
+1. `POST /api/v1/assets` stores the file under `storage/workspaces/{workspaceId}/originals/...` and creates the `Asset` row.
+2. For `VIDEO` uploads, the API calls `enrichVideoAsset` inline (`services/api/src/modules/assets/enrich.ts`):
+   - `extractMetadata(absolutePath)` from `worker/jobs/extractMetadata` (ffprobe, mock fallback)
+   - `generateThumbnail` → `workspaces/{workspaceId}/derivatives/{assetId}/thumb.jpg`
+   - If ffmpeg is missing, writes a tiny placeholder JPEG and sets `thumbnailSource: "placeholder"`
+3. Persists into `Asset.metadata`:
+   `{ durationMs, width, height, codec, metaSource, thumbnailPath, thumbnailSource }`
+4. `GET /api/v1/assets/:id/thumbnail` serves the derivative (auth required).
 
-### Sync fallback (optional for Integration)
+### Future async path
 
-If queue wiring is not ready, API may call `extractMetadata` **inline** after upload for video MIME types only, then persist metadata in the same request. Prefer async job for real demos so uploads stay fast.
-
-### Auth / tenancy
-
-- Only enqueue for assets in the caller’s `workspaceId`.
-- Worker must re-check workspace ownership before writing metadata.
-
-### Thumbnail coordination (Dev D)
-
-After metadata (or in parallel), Cyrus’s thumbnail job can use the same asset path. Metadata does not depend on thumbnails.
+When a Job table exists, prefer enqueueing `EXTRACT_METADATA` / thumbnail jobs instead of blocking the upload response. Prefer async job for real demos so uploads stay fast.
 
 ---
 
-## Non-goals this phase
+## Non-goals (Phase 3 Dev C parallel work)
 
-- No API route changes (Anto owns assets API).
-- No queue consumer loop yet (Phase 5+ / Integration wiring).
-- No STT / AI calls.
+Dev C did not own API routes during the parallel phase. **Integration** later wired sync enrichment into the assets upload path (see above).
+
+Still out of scope until a later phase:
+- Job queue consumer loop / `EXTRACT_METADATA` job rows
+- STT / AI calls
+- Async enrichment (preferred once Job table exists)

@@ -46,7 +46,7 @@ export function AssetLibrary() {
         type: type || undefined,
         q: debouncedQ || undefined,
       });
-      setAssets(result.assets ?? []);
+      setAssets(result.items ?? []);
     } catch (err) {
       setAssets([]);
       setError(

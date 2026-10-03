@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import Fastify from 'fastify';
+import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import {
   API_PREFIX,
@@ -19,6 +20,12 @@ const MAX_FILE_BYTES = 100 * 1024 * 1024;
 
 async function main() {
   const app = Fastify({ logger: true });
+
+  // Web (Next) runs on a different origin (e.g. :3000 / :3002) than the API (:4000).
+  await app.register(cors, {
+    origin: true,
+    credentials: true,
+  });
 
   await app.register(multipart, {
     limits: { fileSize: MAX_FILE_BYTES, files: 1 },

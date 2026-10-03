@@ -97,6 +97,27 @@ export function AssetDetailDrawer({
             <p className="mt-1 text-xs text-[var(--muted)]">
               {asset.mime} · {(asset.size / 1024).toFixed(1)} KB
             </p>
+            {asset.type === "VIDEO" && asset.metadata ? (
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                {[
+                  typeof asset.metadata.durationMs === "number"
+                    ? `${(asset.metadata.durationMs / 1000).toFixed(1)}s`
+                    : null,
+                  typeof asset.metadata.width === "number" &&
+                  typeof asset.metadata.height === "number"
+                    ? `${asset.metadata.width}×${asset.metadata.height}`
+                    : null,
+                  typeof asset.metadata.codec === "string"
+                    ? asset.metadata.codec
+                    : null,
+                  typeof asset.metadata.thumbnailSource === "string"
+                    ? `thumb:${asset.metadata.thumbnailSource}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            ) : null}
           </div>
           <button
             type="button"

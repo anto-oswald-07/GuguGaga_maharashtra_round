@@ -3,6 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "description": "CreatorAi background worker skeleton (jobs arrive Phase 6+)",
+  "exports": {
+    "./jobs/extractMetadata": "./src/jobs/extractMetadata.ts",
+    "./media/thumbnail": "./src/media/thumbnail.ts"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",

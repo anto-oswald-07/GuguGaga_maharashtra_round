@@ -28,60 +28,62 @@
 
 | Field | Value |
 |-------|-------|
-| **Current phase** | Phase 1 complete — Phase 2 next |
-| **Last completed tag** | `phase-1-done` (pending push) |
-| **main status** | Monorepo foundation: `apps/web`, `services/api`, `services/worker`, `packages/shared`, media scripts, samples |
+| **Current phase** | Phase 3 Integration complete — Phase 4 next |
+| **Last completed tag** | `phase-1-done` (local only); Phase 2/3 Integration recorded in context — **no git tags/commits this session (user request)** |
+| **main status** | Auth + Assets end-to-end: register/login/me, asset CRUD, sync video metadata+thumb enrichment, UI list uses `{ items }` |
 | **Package manager** | **pnpm** workspaces (final) |
-| **Queue decision** | **DB-polling queue for MVP**; Redis remains optional in compose (`--profile redis`) for later BullMQ |
+| **Queue decision** | **DB-polling queue for MVP**; Redis remains optional in compose (`--profile redis`) for later BullMQ. Phase 3 video enrichment is **sync inline** until Job table exists. |
 | **Default AI provider** | `mock` until keys available |
 | **API base URL (local)** | `http://localhost:4000/api/v1` |
 | **Web app (local)** | `http://localhost:3000` |
-| **Who is Integration Lead next** | Brendan (after Phase 2) |
+| **Who is Integration Lead next** | Cyrus (after Phase 4) |
 
 ### 2.1 What Already Works
 - `pnpm install` at root (workspace: web, api, worker, shared)
 - `GET /api/v1/health` → `{ status: 'ok', service: 'api' }`
-- `pnpm --filter web dev` (Next.js shell + nav stubs)
-- `pnpm --filter worker dev` → `worker skeleton started`
-- `./scripts/media/check-ffmpeg.sh` / `make-dummy-video.sh`
+- Auth: `POST /auth/register`, `POST /auth/login`, `GET /auth/me` (JWT `userId`+`workspaceId`)
+- Assets: multipart upload/list/get/patch/soft-delete + `/content` + `/thumbnail`
+- Video upload sync-enriches `metadata` (ffprobe or mock) + derivative thumb (ffmpeg or placeholder JPEG)
+- Web: login/register, asset library (list envelope `{ items }`), video card thumb/placeholder
+- `pnpm --filter worker` skeleton + `extractMetadata` / `generateThumbnail` exported for API
+- Postgres via compose (`POSTGRES_HOST_PORT`, default 5432; use 5433 if host busy)
 - Sample script at `samples/scripts/sample_script.md`
 
 ### 2.2 Known Broken / Gaps
-- Host `:5432` may already be occupied; use Podman/Docker mapped to `5433` and set `DATABASE_URL` accordingly (see `.env.example` note).
-- Arvin’s Phase 1 branch never shipped code; Integration Lead scaffolded worker + `docs/ai-contracts.md` + samples during mini-phase.
-- No auth / domain models yet (Phase 2).
+- Host `:5432` often occupied — set `POSTGRES_HOST_PORT=5433` + matching `DATABASE_URL` (see `.env.example`).
+- This laptop has no ffmpeg/ffprobe → metadata `metaSource=mock`, thumbs `thumbnailSource=placeholder` (by design).
+- No Job table yet — enrichment is sync MVP; move to queued jobs in a later phase.
+- Web still has local `api.ts` types (not importing `@creatorai/shared` Zod at runtime) — shapes aligned.
+- Git tags `phase-2-done` / `phase-3-done` not created (no git ops this session).
 
 ### 2.3 Active Blockers
 - None.
 
 ### 2.4 Open NEED Items (from developers)
-- None open for Phase 1.
+- None open for Phase 2/3.
 
 ### 2.5 Important Paths That Exist
 ```
 /
 ├── apps/web/
-├── services/api/
-├── services/worker/
-├── packages/shared/
+├── services/api/          # auth + assets + enrich.ts
+├── services/worker/       # extractMetadata + thumbnail exports
+├── packages/shared/       # auth + assets Zod, assetMetadata types
 ├── samples/scripts/sample_script.md
 ├── scripts/media/
-├── storage/.gitkeep
-├── docs/ffmpeg-notes.md
-├── docs/timeline-notes.md
-├── docs/ai-contracts.md
-├── docker-compose.yml
+├── storage/
+├── docs/api/ auth.http + auth.postman.json
+├── docs/assets/metadata.md
+├── docs/testing/phase-2-auth.md
+├── docs/security/
+├── docker-compose.yml     # POSTGRES_HOST_PORT
 ├── pnpm-workspace.yaml
 ├── .env.example
-├── README.md
-├── SRS.md
-├── SDD.md
-├── DEVELOPMENT_PLAN.md
 └── context.md
 ```
 
 ### 2.6 Env Vars In Use
-Root `.env.example`: `DATABASE_URL`, `JWT_SECRET`, `PORT`, `STORAGE_ROOT`. Optional `REDIS_URL`. Web: `NEXT_PUBLIC_API_BASE_URL`.
+Root `.env.example`: `POSTGRES_HOST_PORT`, `DATABASE_URL`, `JWT_SECRET`, `PORT`, `STORAGE_ROOT`. Optional `REDIS_URL`. Web: `NEXT_PUBLIC_API_BASE_URL`.
 
 ---
 
@@ -723,6 +725,48 @@ _(Template above kept for other developers.)_
 - **Tag pushed:** `phase-1-done` (local; push when ready)
 - **Follow-ups for Phase 2:** Auth (Anto API + Brendan UI); Arvin docs/http collection; Cyrus security docs. Ensure Postgres reachable (if host `:5432` busy, map container to `5433`).
 
+## INTEGRATION COMPLETE — Phase 2
+- **Date:** 2026-10-03
+- **Lead:** Arvin Almeida (acting; plan listed Brendan — closed retroactively during Phase 3 Integration session per team request; **no git**)
+- **Branches merged (in order):** Work already on working tree / main-line workspace (no merge commits this session)
+- **Conflicts & resolutions:**
+  - Web auth already consumed `{ token, user, workspace }` (token only used for storage) — OK vs Anto Zod
+  - Host Postgres occupied `:5432` → compose `POSTGRES_HOST_PORT=5433` + `.env` DATABASE_URL
+- **Verification checklist results:**
+  - [x] Register/login/me works via curl
+  - [x] Duplicate email → HTTP 409 `conflict`
+  - [x] Shared Zod schemas used by API (`registerRequestSchema` / `loginRequestSchema` / `AuthTokenResponse`)
+  - [x] Web forms present against same paths/shapes (login/register use `token`)
+  - [x] `context.md` updated
+- **Decisions made:**
+  - Logout remains client-side token discard (no server blacklist) — Anto Phase 2 note stands
+  - Prefer Anto `packages/shared` auth Zod over `docs/proposed-auth-types.ts`
+- **Updated Current Snapshot:** yes
+- **Tag pushed:** none this session (user: do not touch git)
+- **Follow-ups for Phase 3:** Already delivered in same session — see Phase 3 Integration below
+
+## INTEGRATION COMPLETE — Phase 3
+- **Date:** 2026-10-03
+- **Lead:** Arvin Almeida
+- **Branches merged (in order):** Parallel Phase 3 A/B/C/D already present; Integration wired contracts + enrichment (no git)
+- **Conflicts & resolutions:**
+  - **List envelope:** shared/API `{ items }` vs web `{ assets }` → fixed web to `items`
+  - **Enrichment:** no Job model → **sync MVP** after video upload (`enrich.ts` calls worker exports)
+  - ffmpeg missing → mock metadata + placeholder JPEG thumb (demo-safe)
+- **Verification checklist results:**
+  - [x] Upload works (curl multipart image + video)
+  - [x] List/filter/tag/delete works (`items` envelope; soft-delete excluded)
+  - [x] Video gets thumb or placeholder (`thumbnailSource: placeholder` without ffmpeg; `GET .../thumbnail` 200)
+  - [x] Files land under `storage/workspaces/.../originals|derivatives/...`
+- **Decisions made:**
+  - Sync enrichment until Job table exists; document in `docs/assets/metadata.md`
+  - API depends on `worker` workspace package via subpath exports
+  - `GET /api/v1/assets/:id/thumbnail` serves derivative (Bearer auth; web fetches blob for cards)
+  - Compose supports `POSTGRES_HOST_PORT` override
+- **Updated Current Snapshot:** yes
+- **Tag pushed:** none this session (user: do not touch git)
+- **Follow-ups for Phase 4:** Projects/Kanban; later replace sync enrichment with DB-polled jobs; optional web import of shared Zod types
+
 ---
 
 ## 8. Interface Contract Scratchpad
@@ -732,11 +776,11 @@ _(Template above kept for other developers.)_
 | Date | Author | Contract name | Temporary location | Final home (after Integration) | Status |
 |------|--------|---------------|--------------------|--------------------------------|--------|
 | — | — | — | — | — | — |
-| 2026-10-03 | Brendan | AuthResponse | `apps/web/src/lib/api.ts` | `packages/shared` (Anto Phase 2) | Assumed — awaiting Anto |
-| 2026-10-03 | Brendan | RegisterPayload | `apps/web/src/lib/api.ts` | `packages/shared` | Assumed `{ email, password, name }` |
-| 2026-10-03 | Brendan | LoginPayload | `apps/web/src/lib/api.ts` | `packages/shared` | Assumed `{ email, password }` |
-| 2026-10-03 | Arvin | Auth DTOs + ApiErrorBody | `docs/proposed-auth-types.ts` | `packages/shared` (prefer Anto’s Zod if present) | Proposed |
-| 2026-10-03 | Brendan | Asset + AssetListResponse | `apps/web/src/lib/api.ts` | `packages/shared` (Anto Phase 3) | Assumed — `{ assets: Asset[] }`, multipart `file` |
+| 2026-10-03 | Brendan | AuthResponse | `apps/web/src/lib/api.ts` | `packages/shared` (Anto Phase 2) | Resolved — aligned to `{ token, user, workspace }` |
+| 2026-10-03 | Brendan | RegisterPayload | `apps/web/src/lib/api.ts` | `packages/shared` | Resolved — matches Anto Zod |
+| 2026-10-03 | Brendan | LoginPayload | `apps/web/src/lib/api.ts` | `packages/shared` | Resolved — matches Anto Zod |
+| 2026-10-03 | Arvin | Auth DTOs + ApiErrorBody | `docs/proposed-auth-types.ts` | Prefer Anto Zod in `packages/shared` | Superseded by Anto — keep as reference only |
+| 2026-10-03 | Brendan | Asset + AssetListResponse | `apps/web/src/lib/api.ts` | `packages/shared` | Resolved Phase 3 Integration — list is `{ items: Asset[] }` (web fixed) |
 
 ---
 
@@ -851,3 +895,35 @@ _(Template above kept for other developers.)_
 - **Depends on:** —
 - **Needs from others:** Integration — keep the negation when merging
 - **Risks:** None
+
+### [2026-10-03 19:05] ROLE=C NAME=Arvin Almeida PHASE=2 TYPE=INTEGRATION
+- **Summary:** Closed Phase 2 Integration (retroactive) without git. Verified register/login/me + duplicate 409 via curl against live API. Postgres on host :5432 busy → compose `POSTGRES_HOST_PORT=5433`.
+- **Files touched:** `docker-compose.yml` (`POSTGRES_HOST_PORT`), `.env.example`, `context.md` (local `.env` gitignored)
+- **APIs / types added:** None (auth already present)
+- **How to run / test what I did:**
+  ```bash
+  cp .env.example .env   # set POSTGRES_HOST_PORT=5433 + DATABASE_URL :5433 if needed
+  docker compose up -d postgres
+  pnpm --filter api prisma:deploy && pnpm --filter api dev
+  curl -s localhost:4000/api/v1/auth/register -H 'content-type: application/json' \
+    -d '{"email":"t@example.com","password":"password123","name":"T"}'
+  ```
+- **Depends on:** Phase 2 A/B/C/D deliverables already on tree
+- **Needs from others:** None
+- **Risks:** None for auth happy path
+
+### [2026-10-03 19:05] ROLE=C NAME=Arvin Almeida PHASE=3 TYPE=INTEGRATION
+- **Summary:** Phase 3 Integration — fixed list `{ items }` vs `{ assets }`; wired sync video metadata+thumbnail enrichment; thumbnail route + UI placeholder; curl smoke green.
+- **Files touched:**
+  - `apps/web/src/lib/api.ts`, `AssetLibrary.tsx`, `AssetCard.tsx`, `AssetDetailDrawer.tsx`
+  - `services/api/src/modules/assets/{service,routes,enrich}.ts`, `services/api/package.json`
+  - `services/worker/package.json` (subpath exports)
+  - `docs/assets/metadata.md`, `docker-compose.yml`, `.env.example`, `context.md`
+- **APIs / types added:**
+  - `GET /api/v1/assets/:id/thumbnail`
+  - Sync enrich writes `Asset.metadata` with duration/size/codec + `thumbnailPath`/`thumbnailSource`
+- **How to run / test what I did:** See INTEGRATION COMPLETE — Phase 3; smoke already passed (mock meta + placeholder thumb without ffmpeg)
+- **Depends on:** worker exports, shared asset DTOs, local storage adapter
+- **Needs from others:** None for Phase 3 close
+- **Risks:** Sync enrichment adds latency on large videos — replace with Job queue later
+- **Decision:** Sync MVP enrichment (no Job table); placeholder JPEG when ffmpeg missing
