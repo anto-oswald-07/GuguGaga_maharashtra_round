@@ -74,7 +74,6 @@ export {
   type StageHistoryResponse,
 } from './projects';
 export {
-<<<<<<< HEAD
   scriptGenInputSchema,
   generatedScriptMetaSchema,
   generatedScriptSchema,
@@ -91,7 +90,7 @@ export {
   type GeneratedHooks,
   type SupportingContent,
 } from './schemas/scriptSchema';
-=======
+export {
   scriptSourceSchema,
   SCRIPT_SOURCES,
   scriptContentSchema,
@@ -134,7 +133,6 @@ export {
   type JobListResponse,
   type MockCompleteJobRequest,
 } from './jobs';
->>>>>>> 2f0c2897b56ca0cc197610560655c0634e0c464c
 
 /** Response shape for `GET /api/v1/health`. */
 export type HealthResponse = {
