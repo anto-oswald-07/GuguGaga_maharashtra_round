@@ -157,6 +157,38 @@ Copy-paste this template every time:
 - **Needs from others:** Integration: `chmod +x scripts/media/*.sh` after merge; Anto ignore `storage/samples/` binaries
 - **Risks:** None remaining for Phase 1 D scope
 
+### [2026-10-03 16:57] ROLE=A NAME=Brendan Rodrigues PHASE=1 TYPE=START
+- **Summary:** Started Phase 1 Dev A — Frontend Shell Only on branch `phase-01-brendan`.
+- **Files touched:** _(none yet)_
+- **APIs / types added:** None
+- **How to run / test what I did:** N/A
+- **Depends on:** Node 20+, pnpm
+- **Needs from others:** None to start (workspace wiring is Anto’s later)
+- **Risks:** None
+
+### [2026-10-03 17:05] ROLE=A NAME=Brendan Rodrigues PHASE=1 TYPE=DONE
+- **Summary:** Scaffolded Next.js App Router + TypeScript + Tailwind in `apps/web` with CreatorAi top nav and stub routes for all Phase 1 pages. Standalone install works via `cd apps/web && pnpm install && pnpm dev`. Did **not** create root `pnpm-workspace.yaml` (Anto’s job).
+- **Files touched:** `apps/web/**` (Next app, layout/nav, stub pages, `.env.example`, `README.md`), `context.md`
+- **APIs / types added:** None (frontend shell only). Env: `NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/api/v1`
+- **How to run / test what I did:**
+  ```bash
+  cd apps/web && pnpm install && pnpm dev
+  # open http://localhost:3000 and click each nav link
+  # dynamic stubs: /projects/demo and /projects/demo/editor
+  ```
+- **Depends on:** Nothing runtime from other devs for this phase
+- **Needs from others:** Anto — root `pnpm-workspace.yaml` + root scripts so `pnpm --filter web dev` works from repo root (Integration)
+- **Risks:** Until root workspace exists, web must be run from `apps/web` directly
+
+### [2026-10-03 17:05] ROLE=A NAME=Brendan Rodrigues PHASE=1 TYPE=NEED
+- **Summary:** Need monorepo workspace wiring so package name `web` is visible from root.
+- **Files touched:** None
+- **APIs / types added:** None
+- **How to run / test what I did:** N/A
+- **Depends on:** Anto Phase 1 root `package.json` + `pnpm-workspace.yaml` including `apps/*`
+- **Needs from others:** Anto / Integration — include `apps/web` in workspace; optional root script alias for `web`
+- **Risks:** Judges/devs trying `pnpm --filter web` from root will fail until Integration merges Anto + Brendan
+
 ### [2026-10-03 17:05] ROLE=B NAME=Anto Oswald PHASE=1 TYPE=START
 - **Summary:** Started Phase 1 Dev B — monorepo tooling, API stub, Postgres compose, `packages/shared`.
 - **Files touched:** (branch `phase-01-anto` created from `main`)
@@ -255,6 +287,21 @@ _(Earlier phases: none.)_
 - **Notes for next phase me:** Phase 2 = Auth API + Prisma User model; keep shared types as source of truth.
 
 _(Template above kept for other developers.)_
+
+## Phase 1 Completion — Brendan Rodrigues (Dev A)
+- **Date:** 2026-10-03
+- **Branch:** phase-01-brendan
+- **All allowed tasks done:** yes
+- **Incomplete items:** Root workspace wiring (intentionally left to Anto)
+- **Blockers handed to Integration:** Wire `apps/web` into root pnpm workspace; verify `pnpm --filter web dev` from root
+- **Commands to verify my work:**
+  ```bash
+  cd apps/web && pnpm install && pnpm dev
+  # click nav: Dashboard, Assets, Projects, Workflow, Jobs, Insights, Login, Register
+  # also visit /projects/demo and /projects/demo/editor
+  ```
+- **Files I expect others to connect to:** `apps/web` package name `web`; `NEXT_PUBLIC_API_BASE_URL` points at Anto’s API
+- **Notes for next phase me:** Phase 2 is Auth UI — build against documented `/auth/login` and `/auth/register` shapes even before API merge
 
 ---
 
