@@ -7,6 +7,7 @@
 // Phase 7: ClipCandidate (propose / accept / render → Asset).
 // Phase 8: EditTimeline + TimelineVersion (editable JSON + AI proposals).
 // Phase 9: PlatformPack (aspect + copy + publish status).
+// Phase 10: InsightMetric (manual engagement for creator intelligence).
 
 generator client {
   provider = "prisma-client-js"
@@ -108,13 +109,14 @@ model User {
 }
 
 model Workspace {
-  id        String    @id @default(uuid()) @db.Uuid
-  userId    String    @unique @db.Uuid
-  createdAt DateTime  @default(now())
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String          @id @default(uuid()) @db.Uuid
+  userId    String          @unique @db.Uuid
+  createdAt DateTime        @default(now())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   assets    Asset[]
   projects  Project[]
   jobs      Job[]
+  insights  InsightMetric[]
 }
 
 model Asset {
@@ -164,6 +166,7 @@ model Project {
   clipCandidates  ClipCandidate[]
   timelines       EditTimeline[]
   packs           PlatformPack[]
+  insightMetrics  InsightMetric[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, stage])
@@ -390,4 +393,23 @@ model PlatformPack {
   @@index([projectId, status])
   @@index([outputAssetId])
   @@index([sourceAssetId])
+}
+
+/// Manual post-publish engagement (views/likes) for insights dashboard (FR-INT-003).
+model InsightMetric {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @db.Uuid
+  projectId   String    @db.Uuid
+  packId      String?   @db.Uuid
+  platform    Platform?
+  views       Int       @default(0)
+  likes       Int       @default(0)
+  notes       String?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, projectId])
+  @@index([projectId, createdAt])
 }
