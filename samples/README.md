@@ -1,16 +1,29 @@
-# Demo content pack (Phase 1)
+# CreatorAi — Demo Content Pack
 
-## Ideal footage
-- Keep demo clips **under 3 minutes** total so FFmpeg jobs stay fast on laptops.
-- Prefer one talking-head or screen-record take plus 1–2 B-roll beats.
+Sample content for local demos and judge walkthroughs. Keep footage short so transcription, clipping, and timeline render stay fast.
 
-## Example topic
-**How I batch-create Reels in one afternoon**
+## Guidelines
 
-## Sample script
-See [`scripts/sample_script.md`](./scripts/sample_script.md) (Hook / Body / CTA).
+| Item | Recommendation |
+|------|----------------|
+| Ideal footage length | **Under 3 minutes** for demos |
+| Example topic | “How I batch-create Reels in one afternoon” |
+| Script fixture | `samples/scripts/sample_script.md` |
+| Dummy video | Generate via `./scripts/media/make-dummy-video.sh` → `storage/samples/dummy.mp4` (do **not** commit binaries) |
 
-## Notes for Integration / later phases
-- Worker skeleton lives in `services/worker` (jobs start Phase 6+).
-- AI method contracts are listed in `docs/ai-contracts.md` (no real provider calls yet).
-- Dummy media: generate with `scripts/media/make-dummy-video.sh` (Cyrus) into `storage/samples/dummy.mp4`.
+## What’s in this folder
+
+- `scripts/sample_script.md` — Hook / Body / CTA script used by Mock AI and golden-path demos (Phase 5+)
+
+## How to use in a demo
+
+1. Register/login (Phase 2).
+2. Create a project aimed at Reels / Shorts.
+3. Paste or load the sample script text.
+4. Attach short footage (dummy MP4 or your own < 3 min clip).
+5. Walk Script → Mapping → Clips → Timeline → Platform Packs.
+
+## Notes
+
+- Do not commit large media files into `samples/`. Link or generate them locally.
+- Sample script text is intentionally short and structured for deterministic Mock AI output.
