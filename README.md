@@ -47,4 +47,20 @@ curl http://localhost:4000/api/v1/health
 # → {"status":"ok","service":"api"}
 ```
 
-Web app (`apps/web`) and worker (`services/worker`) arrive from other Phase 1 branches; Integration wires the full monorepo.
+### 6. Web app
+```bash
+pnpm --filter web dev
+# → http://localhost:3000
+```
+
+### 7. Worker skeleton
+```bash
+pnpm --filter worker dev
+# → prints "worker skeleton started"
+```
+
+### 8. FFmpeg check / dummy video
+```bash
+./scripts/media/check-ffmpeg.sh
+./scripts/media/make-dummy-video.sh   # → storage/samples/dummy.mp4 (gitignored)
+```
