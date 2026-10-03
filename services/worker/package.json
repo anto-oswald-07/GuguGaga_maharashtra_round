@@ -8,12 +8,14 @@
     "./media/thumbnail": "./src/media/thumbnail.ts",
     "./media/extractAudio": "./src/media/extractAudio.ts",
     "./media/cutClip": "./src/media/cutClip.ts",
+    "./media/renderTimeline": "./src/media/renderTimeline.ts",
     "./consumers/generateScript": "./src/consumers/generateScript.ts",
     "./consumers/transcribe": "./src/consumers/transcribe.ts",
     "./consumers/align": "./src/consumers/align.ts",
     "./consumers/renderClip": "./src/consumers/renderClip.ts",
     "./consumers/scoreClips": "./src/consumers/scoreClips.ts",
     "./consumers/generateTimeline": "./src/consumers/generateTimeline.ts",
+    "./consumers/renderTimeline": "./src/consumers/renderTimeline.ts",
     "./ai/provider": "./src/ai/provider.ts",
     "./ai/transcribe": "./src/ai/transcribe.ts",
     "./ai/align": "./src/ai/align.ts",
@@ -30,11 +32,13 @@
     "align": "tsx src/consumers/align.ts",
     "render-clip": "tsx src/consumers/renderClip.ts",
     "score-clips": "tsx src/consumers/scoreClips.ts",
-    "generate-timeline": "tsx src/consumers/generateTimeline.ts"
+    "generate-timeline": "tsx src/consumers/generateTimeline.ts",
+    "render-timeline": "tsx src/consumers/renderTimeline.ts"
   },
   "dependencies": {
     "@creatorai/ai-provider": "workspace:*",
-    "@creatorai/shared": "workspace:*"
+    "@creatorai/shared": "workspace:*",
+    "@creatorai/timeline-schema": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.7",

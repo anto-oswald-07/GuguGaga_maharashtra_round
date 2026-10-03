@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0",
+  "fps": 30,
+  "durationMs": 2000,
+  "tracks": [
+    {
+      "id": "v1",
+      "type": "video",
+      "clips": [
+        {
+          "id": "c1",
+          "assetId": "dummy-asset",
+          "srcStartMs": 3000,
+          "srcEndMs": 1000,
+          "timelineStartMs": 0
+        }
+      ]
+    }
+  ],
+  "transitions": []
+}

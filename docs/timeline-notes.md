@@ -1,7 +1,7 @@
-# Timeline Notes — CreatorAi
+# Timeline Notes — CreatorAi (FINAL)
 
-> Owned by Dev D (Cyrus). Phase 1 summary of the editable Edit Timeline JSON from SDD §4.3.
-> Implementation package lands in Phase 8: `packages/timeline-schema`.
+> Owned by Dev D (Cyrus). **FINAL** for Phase 8 — implementation lives in
+> `@creatorai/timeline-schema` + `services/worker/src/media/renderTimeline.ts`.
 
 ---
 
@@ -17,7 +17,22 @@ Rules:
 
 ---
 
-## 2. Conceptual schema (SDD §4.3)
+## 2. Schema contract (`schemaVersion: "1.0"`)
+
+Package: `@creatorai/timeline-schema`
+
+```ts
+import {
+  assertValidTimeline,
+  editTimelineSchema,
+  safeParseTimeline,
+  type EditTimeline,
+} from '@creatorai/timeline-schema';
+
+const tl = assertValidTimeline(rawJson); // throws TimelineValidationError
+```
+
+Canonical shape (SDD §4.3):
 
 ```json
 {
@@ -34,7 +49,8 @@ Rules:
           "assetId": "uuid",
           "srcStartMs": 12000,
           "srcEndMs": 28000,
-          "timelineStartMs": 0
+          "timelineStartMs": 0,
+          "label": "optional"
         }
       ]
     },
@@ -60,9 +76,19 @@ Rules:
     }
   ],
   "transitions": [],
-  "meta": { "generatedBy": "ai", "prompt": "..." }
+  "meta": { "generatedBy": "ai", "prompt": "...", "notes": "..." }
 }
 ```
+
+Validation rules (Zod):
+
+- `schemaVersion` must be exactly `"1.0"`
+- At least one `video` track with ≥1 clip
+- Each clip: `srcEndMs > srcStartMs`
+- Each text/caption item: `endMs > startMs`
+- `meta.generatedBy`: `ai` | `user` | `system` | `mock`
+
+Fixtures / tests: `packages/timeline-schema/test/fixtures/**` + `pnpm --filter @creatorai/timeline-schema test`.
 
 ---
 
@@ -77,36 +103,81 @@ Rules:
 | `tracks[].clips` | Video track source slices (`assetId` + src range + timeline start) |
 | `tracks[].items` | Text/caption timed overlays |
 | `transitions` | Basic transitions (may be empty in early MVP) |
-| `meta` | Provenance (AI vs user, prompt, etc.) |
+| `meta` | Provenance (AI vs user, prompt, notes) |
 
 ---
 
-## 4. Track types (MVP)
+## 4. Track types → renderer
 
-| `type` | Contents | Renderer expectation (Phase 8) |
+| `type` | Contents | Renderer (`renderTimeline.ts`) |
 |--------|----------|--------------------------------|
-| `video` | `clips[]` with asset + trim | FFmpeg concat / trim from originals |
-| `text` | `items[]` with style | `drawtext` overlays (minimum required) |
-| `captions` | `items[]` timed text | Softsubs (VTT/SRT) and/or burn-in if feasible |
+| `video` | `clips[]` | `trim` + `concat` (sorted by `timelineStartMs`); needs `assetPaths[assetId]` |
+| `text` | `items[]` + style | **`drawtext` overlays** (required MVP) |
+| `captions` | `items[]` | Softsubs: write sibling `.srt`, mux `mov_text`; optional `--burn-captions` |
+
+**Assumptions (MVP):**
+
+- Clips are treated as a contiguous concat in `timelineStartMs` order (gaps not filled with black).
+- Source media must include an audio stream (demo `dummy.mp4` does).
+- Default output size 1280×720 (letterboxed).
 
 ---
 
-## 5. Versioning semantics (API — Phase 8)
+## 5. Render path + consumer
+
+```
+storage/workspaces/{workspaceId}/renders/{jobId}/output.mp4
+(+ sibling .srt when captions present)
+```
+
+Helper: `renderTimelinePath(storageRoot, workspaceId, jobId)`.
+
+Consumer: `services/worker/src/consumers/renderTimeline.ts` (`RENDER_TIMELINE`).
+
+Job output JSON:
+
+```json
+{
+  "outputPath": "storage/.../renders/.../output.mp4",
+  "softsubsPath": "storage/.../renders/.../output.srt",
+  "durationMs": 2000,
+  "clipCount": 1,
+  "textOverlayCount": 1,
+  "captionCount": 1
+}
+```
+
+Smoke:
+
+```bash
+pnpm --filter @creatorai/timeline-schema test
+# from repo root, with dummy.mp4:
+pnpm --filter worker render-timeline -- \
+  --timeline packages/timeline-schema/test/fixtures/valid-timeline.json \
+  --asset dummy-asset=storage/samples/dummy.mp4 \
+  --output storage/samples/dummy-timeline.mp4
+```
+
+---
+
+## 6. Versioning semantics (API — Phase 8 B)
 
 - Each user save (`PUT /timelines/:id`) creates a new `TimelineVersion`.
-- AI generate stores a proposal (`source=ai_proposal` or equivalent); Apply turns it into the working version.
+- AI generate stores a proposal; Apply turns it into the working version.
 - Previous versions stay readable (FR-ED-005 is P1; version rows still created).
+- API should call `assertValidTimeline` / `safeParseTimeline` before persist.
 
 ---
 
-## 6. Phase 8 ownership reminder
+## 7. Ownership
 
 | Piece | Owner |
 |-------|--------|
-| `packages/timeline-schema` (zod + `assertValidTimeline`) | Cyrus |
-| `services/worker/src/media/renderTimeline.ts` | Cyrus |
+| `packages/timeline-schema` (zod + `assertValidTimeline`) | Cyrus — **done** |
+| `services/worker/src/media/renderTimeline.ts` | Cyrus — **done** |
+| `services/worker/src/consumers/renderTimeline.ts` | Cyrus — **done** |
 | Timeline editor UI | Brendan |
 | Timelines API + versions | Anto |
 | `proposeTimeline` AI | Arvin |
 
-This doc is the Phase 1 contract scratchpad until `packages/timeline-schema` ships.
+AI `proposeTimeline` optionally peer-calls `assertValidTimeline` when this package is installed.
