@@ -26,7 +26,7 @@
     "generate-script": "tsx src/consumers/generateScript.ts",
     "transcribe": "tsx src/consumers/transcribe.ts",
     "align": "tsx src/consumers/align.ts",
-    "render-clip": "tsx src/consumers/renderClip.ts"
+    "render-clip": "tsx src/consumers/renderClip.ts",
     "score-clips": "tsx src/consumers/scoreClips.ts"
   },
   "dependencies": {

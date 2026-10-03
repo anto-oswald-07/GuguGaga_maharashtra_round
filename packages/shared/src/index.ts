@@ -156,6 +156,19 @@ export {
   type AlignScriptRequest,
   type PatchMappingRequest,
 } from './mapping';
+export {
+  clipCandidateStatusSchema,
+  CLIP_CANDIDATE_STATUSES,
+  clipCandidateSchema,
+  clipCandidateListResponseSchema,
+  proposeClipsRequestSchema,
+  patchClipCandidateRequestSchema,
+  type ClipCandidateStatus,
+  type ClipCandidateDto,
+  type ClipCandidateListResponse,
+  type ProposeClipsRequest,
+  type PatchClipCandidateRequest,
+} from './clips';
 
 /** Response shape for `GET /api/v1/health`. */
 export type HealthResponse = {
