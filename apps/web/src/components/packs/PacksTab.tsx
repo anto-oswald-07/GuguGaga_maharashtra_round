@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
+  deletePack,
   generateProjectPacks,
   getPackDownload,
   listProjectPacks,
@@ -190,6 +191,34 @@ export function PacksTab({
     }
   }
 
+  async function onDelete(packId: string) {
+    const pack = packs.find((p) => p.id === packId);
+    const label = pack
+      ? `${pack.platform} pack`
+      : "this pack";
+    if (
+      !window.confirm(`Delete ${label}? This cannot be undone.`)
+    ) {
+      return;
+    }
+    setSavePending(true);
+    setError(null);
+    try {
+      await deletePack(packId);
+      setPacks((prev) => prev.filter((p) => p.id !== packId));
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Delete pack failed",
+      );
+    } finally {
+      setSavePending(false);
+    }
+  }
+
   const busy = actionPending || polling || savePending;
 
   return (
@@ -253,6 +282,7 @@ export function PacksTab({
               onSaveCopy={(id, payload) => void onSaveCopy(id, payload)}
               onStatusChange={(id, status) => void onStatusChange(id, status)}
               onDownload={(id) => void onDownload(id)}
+              onDelete={(id) => void onDelete(id)}
             />
           ))}
         </div>

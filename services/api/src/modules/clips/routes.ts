@@ -7,6 +7,7 @@ import {
 import { requireAuth } from '../../auth/jwt';
 import {
   ClipsHttpError,
+  deleteClipCandidate,
   enqueueProposeClips,
   enqueueRenderClip,
   listClipCandidates,
@@ -94,6 +95,26 @@ export async function registerClipsRoutes(
           request.auth!.workspaceId,
           id,
           parsed.data,
+        );
+        return reply.status(200).send(result);
+      } catch (err) {
+        if (err instanceof ClipsHttpError) {
+          return sendClipsError(reply, err);
+        }
+        throw err;
+      }
+    },
+  );
+
+  app.delete(
+    `${API_PREFIX}/clips/candidates/:id`,
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      try {
+        const result = await deleteClipCandidate(
+          request.auth!.workspaceId,
+          id,
         );
         return reply.status(200).send(result);
       } catch (err) {

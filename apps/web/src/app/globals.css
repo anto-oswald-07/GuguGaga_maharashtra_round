@@ -55,3 +55,155 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* Landing — brand atmosphere + entrance motion */
+.landing-hero-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      900px 480px at 12% -10%,
+      color-mix(in srgb, var(--brand) 22%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      700px 420px at 88% 8%,
+      color-mix(in srgb, var(--brand-soft) 90%, transparent),
+      transparent 55%
+    ),
+    linear-gradient(
+      165deg,
+      #f4f8f7 0%,
+      var(--background) 45%,
+      #e6eef0 100%
+    );
+  animation: landing-drift 18s ease-in-out infinite alternate;
+}
+
+.landing-fade {
+  opacity: 0;
+  transform: translateY(12px);
+  animation: landing-rise 0.7s ease forwards;
+}
+
+.landing-delay-1 {
+  animation-delay: 0.05s;
+}
+.landing-delay-2 {
+  animation-delay: 0.18s;
+}
+.landing-delay-3 {
+  animation-delay: 0.32s;
+}
+.landing-delay-4 {
+  animation-delay: 0.46s;
+}
+
+.landing-feature {
+  padding-top: 0.25rem;
+  border-top: 2px solid transparent;
+  transition:
+    border-color 0.25s ease,
+    transform 0.25s ease;
+}
+
+.landing-feature:hover {
+  border-top-color: var(--brand);
+  transform: translateY(-2px);
+}
+
+.landing-flow-step {
+  animation: landing-rise 0.55s ease both;
+}
+
+.landing-flow-step:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.landing-flow-step:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.landing-flow-step:nth-child(3) {
+  animation-delay: 0.15s;
+}
+.landing-flow-step:nth-child(4) {
+  animation-delay: 0.2s;
+}
+.landing-flow-step:nth-child(5) {
+  animation-delay: 0.25s;
+}
+.landing-flow-step:nth-child(6) {
+  animation-delay: 0.3s;
+}
+.landing-flow-step:nth-child(7) {
+  animation-delay: 0.35s;
+}
+
+@keyframes landing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-drift {
+  from {
+    background-position: 0% 0%, 100% 0%, 0 0;
+  }
+  to {
+    background-position: 4% 6%, 96% 4%, 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-hero-bg,
+  .landing-fade,
+  .landing-flow-step,
+  .landing-feature {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Workflow kanban — contained scrollbars */
+.workflow-board-scroll {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent;
+}
+
+.workflow-board-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.workflow-board-scroll::-webkit-scrollbar-track {
+  margin: 0 1.25rem;
+  background: transparent;
+}
+
+.workflow-board-scroll::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--muted) 40%, transparent);
+}
+
+.workflow-board-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+
+.workflow-column-body {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 35%, transparent) transparent;
+}
+
+.workflow-column-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.workflow-column-body::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+}

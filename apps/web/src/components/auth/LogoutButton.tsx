@@ -8,7 +8,7 @@ export function LogoutButton() {
 
   function onLogout() {
     clearToken();
-    router.push("/login");
+    router.push("/");
   }
 
   return (

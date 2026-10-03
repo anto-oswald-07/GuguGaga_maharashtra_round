@@ -96,3 +96,9 @@ export function detachProjectAssets(id: string, assetIds: string[]) {
 export function getProjectStageHistory(id: string) {
   return apiFetch<StageHistoryResponse>(`/projects/${id}/stage-history`);
 }
+
+export function deleteProject(id: string) {
+  return apiFetch<{ id: string; deletedAt: string }>(`/projects/${id}`, {
+    method: "DELETE",
+  });
+}

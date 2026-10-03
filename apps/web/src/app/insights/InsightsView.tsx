@@ -105,8 +105,8 @@ export function InsightsView() {
 
       {source === "fallback" ? (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
-          Showing local list aggregates — Insights API not available yet
-          (clips/platform mix fill in after Anto overview).
+          Showing local list aggregates — Insights API unreachable
+          (clips/platform mix need a healthy API).
         </p>
       ) : null}
 

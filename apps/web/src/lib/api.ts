@@ -417,6 +417,12 @@ export async function getScript(scriptId: string) {
   return normalizeScript(raw);
 }
 
+export function deleteScript(scriptId: string) {
+  return apiFetch<{ id: string; deleted: true }>(`/scripts/${scriptId}`, {
+    method: "DELETE",
+  });
+}
+
 export function refineScript(scriptId: string, payload: RefineScriptPayload) {
   return apiFetch<EnqueueJobResponse>(`/scripts/${scriptId}/refine`, {
     method: "POST",
@@ -805,6 +811,13 @@ export function renderClipCandidate(candidateId: string) {
   );
 }
 
+export function deleteClipCandidate(candidateId: string) {
+  return apiFetch<{ id: string; deleted: true }>(
+    `/clips/candidates/${candidateId}`,
+    { method: "DELETE" },
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Timelines (Phase 8) — SDD §4.3 / §5.7                                      */
 /* TODO_SHARED: replace with `@creatorai/timeline-schema` once Cyrus lands it */
@@ -821,6 +834,18 @@ export type TimelineVideoClip = {
   srcStartMs: number;
   srcEndMs: number;
   timelineStartMs: number;
+  label?: string;
+  /** Images hold as stills for (srcEndMs - srcStartMs). */
+  mediaKind?: "video" | "image";
+};
+
+export type TimelineAudioClip = {
+  id: string;
+  assetId: string;
+  srcStartMs: number;
+  srcEndMs: number;
+  timelineStartMs: number;
+  label?: string;
 };
 
 export type TimelineTextItem = {
@@ -844,6 +869,12 @@ export type TimelineVideoTrack = {
   clips: TimelineVideoClip[];
 };
 
+export type TimelineAudioTrack = {
+  id: string;
+  type: "audio";
+  clips: TimelineAudioClip[];
+};
+
 export type TimelineTextTrack = {
   id: string;
   type: "text";
@@ -858,6 +889,7 @@ export type TimelineCaptionsTrack = {
 
 export type TimelineTrack =
   | TimelineVideoTrack
+  | TimelineAudioTrack
   | TimelineTextTrack
   | TimelineCaptionsTrack;
 
@@ -905,6 +937,7 @@ export function emptyTimelineJson(
     durationMs: 0,
     tracks: [
       { id: "v1", type: "video", clips: [] },
+      { id: "a1", type: "audio", clips: [] },
       { id: "t1", type: "text", items: [] },
       { id: "cap1", type: "captions", items: [] },
     ],
@@ -924,6 +957,10 @@ function normalizeTextStyle(raw: unknown): TimelineTextStyle | undefined {
 
 function normalizeVideoClip(raw: unknown): TimelineVideoClip {
   const r = asRecord(raw) ?? {};
+  const mediaKind =
+    r.mediaKind === "image" || r.mediaKind === "video"
+      ? r.mediaKind
+      : undefined;
   return {
     id: String(r.id ?? cryptoRandomId()),
     assetId: String(r.assetId ?? ""),
@@ -935,6 +972,25 @@ function normalizeVideoClip(raw: unknown): TimelineVideoClip {
       typeof r.timelineStartMs === "number"
         ? r.timelineStartMs
         : Number(r.timelineStartMs) || 0,
+    ...(typeof r.label === "string" ? { label: r.label } : {}),
+    ...(mediaKind ? { mediaKind } : {}),
+  };
+}
+
+function normalizeAudioClip(raw: unknown): TimelineAudioClip {
+  const r = asRecord(raw) ?? {};
+  return {
+    id: String(r.id ?? cryptoRandomId()),
+    assetId: String(r.assetId ?? ""),
+    srcStartMs:
+      typeof r.srcStartMs === "number" ? r.srcStartMs : Number(r.srcStartMs) || 0,
+    srcEndMs:
+      typeof r.srcEndMs === "number" ? r.srcEndMs : Number(r.srcEndMs) || 0,
+    timelineStartMs:
+      typeof r.timelineStartMs === "number"
+        ? r.timelineStartMs
+        : Number(r.timelineStartMs) || 0,
+    ...(typeof r.label === "string" ? { label: r.label } : {}),
   };
 }
 
@@ -972,6 +1028,10 @@ function normalizeTrack(raw: unknown): TimelineTrack {
       ? r.items.map(normalizeCaptionItem)
       : [];
     return { id, type: "captions", items };
+  }
+  if (type === "audio") {
+    const clips = Array.isArray(r.clips) ? r.clips.map(normalizeAudioClip) : [];
+    return { id, type: "audio", clips };
   }
   const clips = Array.isArray(r.clips) ? r.clips.map(normalizeVideoClip) : [];
   return { id, type: "video", clips };
@@ -1342,13 +1402,21 @@ export async function updatePackStatus(
   packId: string,
   payload: UpdatePackStatusPayload,
 ) {
+  // API Zod (`packStatusSchema`) expects lowercase; UI keeps DRAFT|READY|PUBLISHED.
+  const status = payload.status.toLowerCase() as "draft" | "ready" | "published";
   const raw = await apiFetch<unknown>(`/packs/${packId}/status`, {
     method: "PATCH",
-    body: payload,
+    body: { status },
   });
   return normalizePlatformPack(raw);
 }
 
 export function getPackDownload(packId: string) {
   return apiFetch<PackDownloadResponse>(`/packs/${packId}/download`);
+}
+
+export function deletePack(packId: string) {
+  return apiFetch<{ id: string; deleted: true }>(`/packs/${packId}`, {
+    method: "DELETE",
+  });
 }

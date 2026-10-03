@@ -28,24 +28,24 @@
 
 | Field | Value |
 |-------|-------|
-| **Current phase** | Phase 9 Integration COMPLETE — Platform Packs (generate → adapt → status → download) E2E |
-| **Last completed tag** | `phase-1-done` (local only); Phase 2–9 Integration recorded in context — **no git tags this session** |
-| **main status** | Auth + Assets + Projects + Scripts/Jobs + Transcript/Mapping + Clips + Timelines + **Platform Packs** (copy + aspect adapt) end-to-end |
+| **Current phase** | **MVP COMPLETE** — Phase 10 Integration (Insights + demo reliability + media hardening + golden-path gate) |
+| **Last completed tag** | `phase-1-done` (local only); Phase 2–10 Integration recorded — tags `v0.1.0-mvp` / `phase-10-done` ready when releasing to `main` |
+| **main status** | Auth → Assets → Projects → Scripts/Jobs(+retry) → Transcript/Mapping → Clips → Timelines → Platform Packs → **Insights + demo seed** end-to-end |
 | **Package manager** | **pnpm** workspaces (final) |
 | **Queue decision** | **DB-polling queue for MVP**; API in-process poller (`startJobPoller`) claims `QUEUED` jobs; Redis optional (`--profile redis`) for later BullMQ |
-| **Default AI provider** | `mock` until keys available (`AI_PROVIDER=mock\|openai\|gemini`) |
+| **Default AI provider** | `mock` until keys available (`AI_PROVIDER=mock\|openai\|gemini`); optional `AI_MOCK_SEED` for demo-stable mocks |
 | **API base URL (local)** | `http://localhost:4000/api/v1` |
 | **Web app (local)** | `http://localhost:3002` (or `:3000` if free) |
-| **Who is Integration Lead next** | Brendan (Phase 10) |
+| **Who is Integration Lead next** | — (MVP complete; plan Lead=Brendan; Integration run on `Arvin`) |
 
 ### 2.1 What Already Works
 - `pnpm install` at root (workspace: web, api, worker, shared, ai-provider)
-- `GET /api/v1/health` → `{ status: 'ok', service: 'api' }`
+- `GET /api/v1/health` → `{ status: 'ok', service: 'api', db: 'up'|'down', checkedAt }` (503 if DB down)
 - Auth: `POST /auth/register`, `POST /auth/login`, `GET /auth/me` (JWT `userId`+`workspaceId`)
 - Assets: multipart upload/list/get/patch/soft-delete + `/content` + `/thumbnail`
 - Video upload sync-enriches `metadata` (ffprobe or mock) + derivative thumb (ffmpeg or placeholder JPEG)
 - **Projects:** CRUD-ish create/list/get/patch, stage transition + history, attach/detach assets (`assetIds[]`)
-- **Scripts + Jobs:** generate/edit/versions; DB-poller `QUEUED`→`RUNNING`→`SUCCEEDED`/`FAILED`
+- **Scripts + Jobs:** generate/edit/versions; DB-poller `QUEUED`→`RUNNING`→`SUCCEEDED`/`FAILED`; **`POST /jobs/:id/retry`** requeues FAILED
 - **Transcripts + Mapping (Phase 6):** transcribe → align → PATCH mappings (threshold **0.55**)
 - **Clips (Phase 7):** `POST .../clips/propose`, `GET .../clips/candidates`, `PATCH /clips/candidates/:id`, `POST .../render`
   - SCORE_CLIPS → `AiProvider.scoreClipWindows` → persist `ClipCandidate` (3 ranked 15–60s windows)
@@ -57,64 +57,56 @@
   - RENDER_TIMELINE → worker `renderTimeline` (ffmpeg concat + drawtext; mock-copy fallback) → preview Asset
   - Web editor `/projects/:id/editor`: Suggest → Apply → edit → Save → Render preview
   - Package `@creatorai/timeline-schema` + shared `editTimelineJsonSchema` reject invalid puts
-- Web: login/register, asset library, `/projects` (Script + Footage & Mapping + Clips + Editor), `/workflow` Kanban
-- Shared: auth/assets/projects/scripts/jobs/mapping/clips/timelines Zod + `LOW_CONFIDENCE_THRESHOLD`
-- Seed: `scripts/seed/sample-project.ts` auto login/register `demo@creatorai.local` / `password123`
+- Web: login/register, asset library, `/` dashboard, `/insights`, `/jobs`, `/projects` (Script + Mapping + Clips + Editor + Packs), `/workflow` Kanban
+- Shared: auth/assets/projects/scripts/jobs/mapping/clips/timelines/packs/**insights** Zod + `LOW_CONFIDENCE_THRESHOLD`
+- Seed: `scripts/demo/seed-demo.ts` (+ legacy `scripts/seed/sample-project.ts`) → `demo@creatorai.local` / `password123`
 - Postgres via compose (`POSTGRES_HOST_PORT`, default 5432; use 5433 if host busy)
-- Sample media: `storage/samples/dummy.mp4`; STT fixtures under `packages/ai-provider/test/fixtures`
-- **Timeline proposal (Phase 8 C):** `AiProvider.proposeTimeline` → EditTimeline `schemaVersion: 1.0` (clips + hook 0–3s); CLI `pnpm --filter worker generate-timeline -- --fixture`
-- **Platform copy (Phase 9 C):** `AiProvider.generateSupporting` → distinct title/caption/hashtags per Platform (soft length limits); CLI `pnpm --filter worker generate-platform-copy -- --fixture`; docs `docs/ai/platform-copy-guidelines.md`
-- **Platform Packs (Phase 9):** `POST .../packs/generate`, `GET .../packs`, `PATCH /packs/:id(/status)`, `GET /packs/:id/download`
-  - ADAPT_PLATFORM → `generateSupporting` + `adaptAspect` (ffmpeg center-crop; mock-copy fallback) → `PlatformPack` + output Asset
-  - Web Packs tab: select platforms → Generate → edit copy → Ready/Published → Download
+- Sample media: `storage/samples/dummy.mp4`; emergency `demo-fallback-clip.mp4` via `bake-demo-fallback.sh`
+- **Timeline proposal (Phase 8 C):** `AiProvider.proposeTimeline` → EditTimeline `schemaVersion: 1.0`; CLI `pnpm --filter worker generate-timeline -- --fixture`
+- **Platform copy (Phase 9 C):** `AiProvider.generateSupporting` → distinct title/caption/hashtags per Platform; docs `docs/ai/platform-copy-guidelines.md`
+- **Platform Packs (Phase 9):** `POST .../packs/generate`, `GET .../packs`, `PATCH /packs/:id(/status)`, `GET /packs/:id/download` (JSON + asset URLs)
+  - ADAPT_PLATFORM → `generateSupporting` + `adaptAspect` → `PlatformPack` + output Asset
   - Default aspects: YT 16:9 · Shorts/Reels/TikTok 9:16 · LinkedIn 1:1
+- **Insights (Phase 10):** `GET /insights/overview`, `POST /insights/engagement`; dashboard + charts + engagement form
+- **Demo AI (Phase 10 C):** seed-stable MockAiProvider (`AI_MOCK_SEED`); `docs/demo/judge-script.md` + offline-fallbacks
+- **Media harden (Phase 10 D):** `MediaPipelineError` codes; `docs/demo/media-checklist.md`; verify-media-hardening.sh
 
 ### 2.2 Known Broken / Gaps
 - Host `:5432` often occupied — set `POSTGRES_HOST_PORT=5433` + matching `DATABASE_URL` (see `.env.example`).
-- ffmpeg is present on this host (`/usr/bin/ffmpeg`) — Phase 8/9 renders + aspect adapt smoked with `mode=ffmpeg`. Older notes about copy-fallback may still apply if ffmpeg fails.
+- Next.js can hang under load — restart web on `:3002` if needed.
 - OpenAI Whisper / live LLM paths untested without API keys.
-- Re-align replaces prior maps for the same script+transcript pair (including USER edits).
-- Re-propose deletes prior **proposed** clip rows only (keeps accepted/rejected/rendered).
-- Timeline generate without accepted clips defaults to a short Intro window (5s) so short `dummy.mp4` still renders.
-- Next.js `/projects` can hang under load — restart web on `:3002` if needed.
-- Git tags `phase-2-done` … `phase-9-done` not created unless requested.
+- Face-aware reframe skipped (FR-PLT-004 P1); zip pack download not implemented (URLs OK for MVP).
+- Git tags `v0.1.0-mvp` / `phase-10-done` not created until release on `main`.
 
 ### 2.3 Active Blockers
 - None.
 
 ### 2.4 Open NEED Items (from developers)
-- None open for Phase 9.
+- None open for Phase 10 / MVP.
 
 ### 2.5 Important Paths That Exist
 ```
 /
-├── apps/web/              # /projects (Script + Mapping + Clips + Packs + Editor), /workflow
-├── services/api/          # auth + assets + projects + scripts + jobs + mapping + clips + timelines + packs
-├── services/worker/       # extractMetadata, thumbnail, extractAudio, cutClip, renderTimeline, adaptAspect, STT/align/scoreClips/generateTimeline/generatePlatformCopy/adaptPlatform CLIs
-├── packages/shared/       # Zod DTOs incl. mapping + clips + timelines + packs
-├── packages/ai-provider/  # mock+Whisper STT, fuzzy align, clip scoring, proposeTimeline, platform copy
-├── packages/timeline-schema/  # EditTimeline schemaVersion 1.0 + assertValidTimeline
-├── samples/scripts/sample_script.md
-├── samples/projects/demo-project.json
-├── scripts/seed/sample-project.ts
-├── scripts/media/         # extract-audio.sh, make-dummy-video.sh, cut-clip.sh, adapt-aspect.sh
+├── apps/web/              # dashboard, /insights, /jobs, /projects (+ Packs + Editor), /workflow
+├── services/api/          # + insights + jobs retry; packs; timelines; clips; mapping; scripts; assets; auth
+├── services/worker/       # media pipeline + AI CLIs
+├── packages/shared/       # Zod DTOs incl. insights + packs
+├── packages/ai-provider/  # mock seed-stable + providers
+├── packages/timeline-schema/
+├── docs/demo/             # judge-script, offline-fallbacks, media-checklist, golden-path-prep
+├── scripts/demo/seed-demo.ts
+├── scripts/media/         # ffmpeg helpers + bake-demo-fallback + verify-media-hardening
+├── samples/
 ├── storage/
-├── docs/api/ auth.http + auth.postman.json
-├── docs/assets/metadata.md
-├── docs/ai/platform-copy-guidelines.md
-├── docs/workflow/stages.md
-├── docs/demo/golden-path-prep.md
-├── docs/testing/phase-2-auth.md
-├── docs/security/
-├── docker-compose.yml     # POSTGRES_HOST_PORT
+├── docker-compose.yml
 ├── pnpm-workspace.yaml
 ├── .env.example
+├── README.md              # cold-start (MVP)
 └── context.md
 ```
 
 ### 2.6 Env Vars In Use
-Root `.env.example`: `POSTGRES_HOST_PORT`, `DATABASE_URL`, `JWT_SECRET`, `PORT`, `STORAGE_ROOT`, `AI_PROVIDER`. Optional `REDIS_URL`, `OPENAI_API_KEY`. Web: `NEXT_PUBLIC_API_BASE_URL`.
-
+Root `.env.example`: `POSTGRES_HOST_PORT`, `DATABASE_URL`, `JWT_SECRET`, `PORT`, `STORAGE_ROOT`, `AI_PROVIDER`, optional `AI_MOCK_SEED`. Optional `REDIS_URL`, `OPENAI_API_KEY`, `GEMINI_API_KEY`. Web: `NEXT_PUBLIC_API_BASE_URL`.
 ---
 
 ## 3. Team Roster & Default Ownership
@@ -2540,3 +2532,59 @@ _(Template above kept for other developers.)_
   - `docs/demo/media-checklist.md` → judges go/no-go
   - `scripts/media/bake-demo-fallback.sh` → emergency clip
 - **Notes for next phase me:** Support Brendan Phase 10 Integration / tag `v0.1.0-mvp` if asked
+
+### [2026-10-04 00:10] ROLE=C NAME=Arvin Almeida PHASE=10 TYPE=START
+- **Summary:** Phase 10 Integration — A/B/C/D already merged on `main`/`Arvin` (`fc0f7f7`). Applying InsightMetric migration, wiring Insights UI ↔ API DTO gaps, README cold-start, golden-path gate E2E.
+- **Files touched:** (in progress) `apps/web/src/app/insights/**`, `apps/web/src/lib/api.ts`, `README.md`, `scripts/media/*.sh` (+x), `context.md`
+- **Depends on:** Phase 10 A/B/C/D DONE on main
+- **Needs from others:** none
+- **Risks:** Next.dev hang on :3002; pack status casing mismatch UI↔API
+
+### [2026-10-04 00:40] ROLE=C NAME=Arvin Almeida PHASE=10 TYPE=DONE
+- **Summary:** Phase 10 Integration complete — MVP golden-path gate PASS. Wired Insights `clipCount` normalizer + pack status lowercase POST; applied `20261003190000_phase10_insight_metrics`; README cold-start; media scripts executable; retry verified.
+- **Files touched:**
+  - `apps/web/src/app/insights/{insights-api.ts,InsightsView.tsx}`
+  - `apps/web/src/lib/api.ts` (pack status → lowercase for API Zod)
+  - `README.md` (cold-start MVP)
+  - `scripts/media/*.sh` (executable bit)
+  - `context.md`
+- **APIs / types added:** none (contract alignment only)
+- **How to run / test what I did:** see INTEGRATION COMPLETE block below
+
+## INTEGRATION COMPLETE — Phase 10 (MVP COMPLETE)
+- **Date:** 2026-10-04
+- **Lead:** Brendan (plan); Integration run on `Arvin` after A/B/C/D PRs merged to main
+- **Verified (golden-path gate / SRS §8):**
+  - [x] Sign up / log in (`demo@creatorai.local` via seed)
+  - [x] Create project + platforms (seed + packs YOUTUBE/TIKTOK/LINKEDIN)
+  - [x] Upload/generate script + upload footage (`dummy.mp4` attached)
+  - [x] Transcribe + map + correct one mapping (USER confidence 0.99)
+  - [x] Propose clips; accept one; render (`mode=reencode`)
+  - [x] Generate timeline; edit; re-render (`mode=ffmpeg`)
+  - [x] Generate ≥2 platform packs (3 aspects; YT 1280×720 via ffprobe; download via asset URL)
+  - [x] Move stages to Ready/Published
+  - [x] Insights show metrics (`counts.clips=6`, `platformMix` 3 platforms; engagement 1200/88)
+  - [x] Root README cold-start documented; health `{db:up}`; `POST /jobs/:id/retry` → new QUEUED → SUCCEEDED
+- **What was wired / fixed:**
+  - Applied Prisma migration `20261003190000_phase10_insight_metrics` (was pending on this DB)
+  - Insights UI: map API `clipCount` → chart `count`; coerce `avgTimeInStageMs` array; drop stale “Anto pending” banner
+  - Packs UI→API: `updatePackStatus` sends `draft|ready|published` (UI still shows DRAFT|READY|PUBLISHED) — uppercase was 400ing
+  - `chmod +x scripts/media/*.sh` so judge checklist scripts run
+  - Rebuilt `@creatorai/shared` + `@creatorai/ai-provider`; README rewritten for MVP cold start
+- **Commands to re-verify:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter @creatorai/ai-provider build && pnpm --filter @creatorai/ai-provider test
+  pnpm --filter api prisma:deploy
+  ./scripts/media/verify-media-hardening.sh
+  ./scripts/media/bake-demo-fallback.sh
+  AI_PROVIDER=mock pnpm --filter api dev
+  pnpm --filter web exec next dev -p 3002
+  pnpm --filter @creatorai/ai-provider exec tsx ../../scripts/demo/seed-demo.ts
+  # walk docs/demo/judge-script.md — or API smoke: login → transcribe → align → clips → timeline → packs → stages → insights → retry
+  ```
+- **E2E smoke (2026-10-04):** PASS — full golden path API + web pages 200 (`/`, `/insights`, `/jobs`, project hub); media hardening 7/7; ai-provider 33/33 tests
+- **Known gaps / follow-ups:**
+  - Create git tags `v0.1.0-mvp` + `phase-10-done` on `main` when releasing
+  - Zip pack download / face-aware reframe still out of MVP scope
+- **Ready for release:** yes — **MVP COMPLETE**

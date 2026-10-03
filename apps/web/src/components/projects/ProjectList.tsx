@@ -12,6 +12,7 @@ import {
 } from "@/components/projects/constants";
 import {
   ApiError,
+  deleteProject,
   listProjects,
   type Project,
 } from "@/components/projects/project-api";
@@ -25,6 +26,7 @@ export function ProjectList() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hasToken()) {
@@ -70,6 +72,32 @@ export function ProjectList() {
     }, 0);
     return () => window.clearTimeout(t);
   }, [ready, refresh]);
+
+  async function onDelete(project: Project) {
+    if (
+      !window.confirm(
+        `Delete project “${project.title}”? This hides it from the workspace.`,
+      )
+    ) {
+      return;
+    }
+    setDeletingId(project.id);
+    setError(null);
+    try {
+      await deleteProject(project.id);
+      setProjects((prev) => prev.filter((p) => p.id !== project.id));
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Delete failed",
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   if (!ready) {
     return (
@@ -140,7 +168,12 @@ export function ProjectList() {
       {projects.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2">
           {projects.map((project) => (
-            <ProjectListItem key={project.id} project={project} />
+            <ProjectListItem
+              key={project.id}
+              project={project}
+              deleting={deletingId === project.id}
+              onDelete={(p) => void onDelete(p)}
+            />
           ))}
         </div>
       ) : null}

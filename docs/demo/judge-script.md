@@ -45,7 +45,7 @@ Demo account (if seeded): `demo@creatorai.local` / `password123`.
 
 1. Click **Login** in the nav.
 2. Email `demo@creatorai.local`, password `password123` → Submit.
-3. Land on Dashboard.
+3. Land on Dashboard (`/dashboard`).
 
 **Cold path (no seed):**
 
@@ -140,7 +140,7 @@ Stage should move toward **SCRIPT** / **RECORDED** as you progress (UI may requi
 
 ## 9. Insights metrics (SRS §8.9)
 
-1. Nav → **Insights** (and/or Dashboard `/`).
+1. Nav → **Insights** (and/or Dashboard `/dashboard`).
 2. Show project / asset / clip / job counts or stage distribution (Phase 10 A/B).
 3. If engagement form is present, submit a sample views/likes value.
 

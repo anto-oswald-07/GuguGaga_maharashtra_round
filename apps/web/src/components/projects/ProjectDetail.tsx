@@ -13,6 +13,7 @@ import {
 } from "@/components/projects/constants";
 import {
   ApiError,
+  deleteProject,
   getProject,
   getProjectStageHistory,
   transitionProjectStage,
@@ -45,6 +46,7 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [stagePending, setStagePending] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
   const [tab, setTab] = useState<HubTab>("overview");
 
   useEffect(() => {
@@ -111,6 +113,32 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
     }
   }
 
+  async function onDeleteProject() {
+    if (!project) return;
+    if (
+      !window.confirm(
+        `Delete project “${project.title}”? This hides it from the workspace.`,
+      )
+    ) {
+      return;
+    }
+    setDeletePending(true);
+    setError(null);
+    try {
+      await deleteProject(project.id);
+      router.push("/projects");
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Delete failed",
+      );
+      setDeletePending(false);
+    }
+  }
+
   if (!ready) {
     return (
       <section className="mx-auto max-w-6xl px-4 py-12">
@@ -142,29 +170,39 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
 
       {project ? (
         <>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {project.title}
-            </h1>
-            {project.description ? (
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                {project.description}
-              </p>
-            ) : null}
-            <div className="mt-3 flex flex-wrap gap-2 text-xs text-[var(--muted)]">
-              {project.targetPlatforms.length > 0 ? (
-                project.targetPlatforms.map((p: Platform) => (
-                  <span
-                    key={p}
-                    className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5"
-                  >
-                    {PLATFORM_LABELS[p] ?? p}
-                  </span>
-                ))
-              ) : (
-                <span>No platforms set</span>
-              )}
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {project.title}
+              </h1>
+              {project.description ? (
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  {project.description}
+                </p>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-[var(--muted)]">
+                {project.targetPlatforms.length > 0 ? (
+                  project.targetPlatforms.map((p: Platform) => (
+                    <span
+                      key={p}
+                      className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5"
+                    >
+                      {PLATFORM_LABELS[p] ?? p}
+                    </span>
+                  ))
+                ) : (
+                  <span>No platforms set</span>
+                )}
+              </div>
             </div>
+            <button
+              type="button"
+              disabled={deletePending}
+              onClick={() => void onDeleteProject()}
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-800 hover:border-red-300 disabled:opacity-40"
+            >
+              {deletePending ? "Deleting…" : "Delete project"}
+            </button>
           </div>
 
           <div className="border-b border-[var(--border)]">

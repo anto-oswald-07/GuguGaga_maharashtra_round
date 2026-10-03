@@ -13,6 +13,7 @@ import {
   ScriptHttpError,
   createScript,
   createScriptVersion,
+  deleteScript,
   enqueueGenerateHooks,
   enqueueGenerateScript,
   enqueueGenerateSupporting,
@@ -121,6 +122,23 @@ export async function registerScriptRoutes(
       try {
         const script = await getScript(request.auth!.workspaceId, id);
         return reply.status(200).send(script);
+      } catch (err) {
+        if (err instanceof ScriptHttpError) {
+          return sendScriptError(reply, err);
+        }
+        throw err;
+      }
+    },
+  );
+
+  app.delete(
+    `${API_PREFIX}/scripts/:id`,
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      try {
+        const result = await deleteScript(request.auth!.workspaceId, id);
+        return reply.status(200).send(result);
       } catch (err) {
         if (err instanceof ScriptHttpError) {
           return sendScriptError(reply, err);

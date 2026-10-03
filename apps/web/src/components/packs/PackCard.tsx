@@ -19,6 +19,7 @@ type PackCardProps = {
   onSaveCopy: (packId: string, payload: UpdatePackCopyPayload) => void;
   onStatusChange: (packId: string, status: PackStatus) => void;
   onDownload: (packId: string) => void;
+  onDelete: (packId: string) => void;
 };
 
 function hashtagsToText(tags: string[]) {
@@ -39,6 +40,7 @@ export function PackCard({
   onSaveCopy,
   onStatusChange,
   onDownload,
+  onDelete,
 }: PackCardProps) {
   const [title, setTitle] = useState(pack.title);
   const [caption, setCaption] = useState(pack.caption);
@@ -174,6 +176,14 @@ export function PackCard({
           className="rounded-md bg-[var(--brand)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
         >
           Download
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onDelete(pack.id)}
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm text-red-800 disabled:opacity-40"
+        >
+          Delete
         </button>
       </div>
 

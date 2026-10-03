@@ -70,10 +70,13 @@ function TimelineEditorInner({ projectId }: TimelineEditorProps) {
     return () => window.clearTimeout(t);
   }, [router]);
 
-  const projectVideos = useMemo(() => {
+  const projectMedia = useMemo(() => {
     const idSet = new Set(assetIds);
     return assets.filter(
-      (a) => idSet.has(a.id) && a.type === "VIDEO" && !a.deletedAt,
+      (a) =>
+        idSet.has(a.id) &&
+        (a.type === "VIDEO" || a.type === "IMAGE" || a.type === "AUDIO") &&
+        !a.deletedAt,
     );
   }, [assets, assetIds]);
 
@@ -400,7 +403,7 @@ function TimelineEditorInner({ projectId }: TimelineEditorProps) {
       {/* Layout: bin | preview | tracks | inspector */}
       <div className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1.2fr)_minmax(0,1fr)_16rem] lg:items-stretch">
         <div className="min-h-[16rem] lg:min-h-[28rem]">
-          <MediaBin assets={projectVideos} loading={loading} />
+          <MediaBin assets={projectMedia} loading={loading} />
         </div>
         <div className="min-h-[16rem] lg:min-h-[28rem]">
           <PreviewPane

@@ -9,6 +9,7 @@ type KanbanColumnProps = {
   projects: Project[];
   pendingId: string | null;
   onMove: (projectId: string, stage: ProjectStage) => void;
+  onDelete?: (project: Project) => void;
   stages: readonly ProjectStage[];
 };
 
@@ -17,19 +18,24 @@ export function KanbanColumn({
   projects,
   pendingId,
   onMove,
+  onDelete,
   stages,
 }: KanbanColumnProps) {
   return (
-    <div className="flex w-56 shrink-0 flex-col rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-      <header className="border-b border-[var(--border)] px-3 py-2">
-        <h2 className="text-sm font-semibold">{STAGE_LABELS[stage]}</h2>
-        <p className="text-xs text-[var(--muted)]">
-          {projects.length} project{projects.length === 1 ? "" : "s"}
-        </p>
+    <div className="flex w-64 shrink-0 flex-col self-stretch overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] sm:w-72">
+      <header className="shrink-0 border-b border-[var(--border)] bg-[var(--brand-soft)]/35 px-4 py-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold tracking-tight">
+            {STAGE_LABELS[stage]}
+          </h2>
+          <span className="rounded-md bg-[var(--surface)] px-2 py-0.5 text-xs tabular-nums text-[var(--muted)]">
+            {projects.length}
+          </span>
+        </div>
       </header>
-      <div className="flex flex-1 flex-col gap-2 p-2">
+      <div className="workflow-column-body flex flex-1 flex-col gap-3 overflow-y-auto p-3.5 sm:p-4">
         {projects.length === 0 ? (
-          <p className="px-1 py-4 text-center text-xs text-[var(--muted)]">
+          <p className="gg-empty flex flex-1 items-center justify-center rounded-lg px-3 py-12 text-center text-sm text-[var(--muted)]">
             Empty
           </p>
         ) : (
@@ -39,6 +45,7 @@ export function KanbanColumn({
               project={project}
               pending={pendingId === project.id}
               onMove={onMove}
+              onDelete={onDelete}
               stages={stages}
             />
           ))

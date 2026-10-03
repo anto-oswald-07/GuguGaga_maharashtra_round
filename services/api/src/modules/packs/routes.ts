@@ -8,6 +8,7 @@ import {
 import { requireAuth } from '../../auth/jwt';
 import {
   PacksHttpError,
+  deletePack,
   enqueueGeneratePacks,
   getPackDownload,
   listPacks,
@@ -147,6 +148,23 @@ export async function registerPacksRoutes(
           request.auth!.workspaceId,
           id,
         );
+        return reply.status(200).send(result);
+      } catch (err) {
+        if (err instanceof PacksHttpError) {
+          return sendPacksError(reply, err);
+        }
+        throw err;
+      }
+    },
+  );
+
+  app.delete(
+    `${API_PREFIX}/packs/:id`,
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      try {
+        const result = await deletePack(request.auth!.workspaceId, id);
         return reply.status(200).send(result);
       } catch (err) {
         if (err instanceof PacksHttpError) {

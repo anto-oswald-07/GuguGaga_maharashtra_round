@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
+  deleteClipCandidate,
   listAssets,
   listClipCandidates,
   listProjectScripts,
@@ -247,6 +248,39 @@ export function ClipsTab({ projectId, assetIds }: ClipsTabProps) {
     await startJob("Render clip", () => renderClipCandidate(candidate.id));
   }
 
+  async function onDelete(candidate: ClipCandidateDto) {
+    if (
+      !window.confirm(
+        `Delete clip “${candidate.title || "Untitled clip"}”? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setSavePending(true);
+    setError(null);
+    try {
+      await deleteClipCandidate(candidate.id);
+      setCandidates((prev) => prev.filter((c) => c.id !== candidate.id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(candidate.id);
+        return next;
+      });
+      setEditing((prev) => (prev?.id === candidate.id ? null : prev));
+      setPreview((prev) => (prev?.id === candidate.id ? null : prev));
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Delete clip failed",
+      );
+    } finally {
+      setSavePending(false);
+    }
+  }
+
   function onToggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -368,6 +402,7 @@ export function ClipsTab({ projectId, assetIds }: ClipsTabProps) {
             onAccept={(c) => void onAccept(c)}
             onReject={(c) => void onReject(c)}
             onRender={(c) => void onRender(c)}
+            onDelete={(c) => void onDelete(c)}
             busy={busy}
           />
           {editing ? (
