@@ -1364,3 +1364,64 @@ _(Template above kept for other developers.)_
 - **Files touched:** `services/api/src/modules/jobs/{service,processor}.ts`, `services/api/src/modules/scripts/{routes,service}.ts`, `services/api/src/index.ts`, `services/api/package.json`, `packages/shared/src/{scripts,index}.ts`, `apps/web/src/lib/api.ts`, `docs/jobs/queue.md`, `.env.example`, `context.md`
 - **Needs from others:** None for Phase 5; Phase 6 Lead = Brendan
 - **Risks:** Next.dev hang on :3002; real LLM keys untested
+
+### [2026-10-03 21:01] ROLE=B NAME=Anto Oswald PHASE=6 TYPE=START
+- **Summary:** Started Phase 6 Dev B on `phase-06-anto` — Transcript & Mapping API (SDD §5.5).
+- **Files touched:** (branch `phase-06-anto` created from `main` after Phase 5 Integration @ `48d925b`)
+- **APIs / types added:** Planned — Prisma `Transcript` / `TranscriptSegment` / `ScriptFootageMap`; `POST .../transcribe`, `GET .../transcripts`, `POST .../align`, `GET .../mappings`, `PATCH /mappings/:id`; job handlers `TRANSCRIBE` + `ALIGN_SCRIPT` with mock STT/align until Arvin Phase 6 C
+- **How to run / test what I did:** `git checkout phase-06-anto`
+- **Depends on:** Phase 5 Jobs table + project asset attach + scripts
+- **Needs from others:** Arvin — Whisper STT + fuzzy `alignScriptToTranscript`; Cyrus — audio extract paths for worker; Brendan — Mapping UI polls jobs + PATCH
+- **Risks:** Mock STT/align will be replaced at Integration; keep `persistTranscript` / `persistAlignments` as the DB write contract
+
+### [2026-10-03 21:03] ROLE=B NAME=Anto Oswald PHASE=6 TYPE=DONE
+- **Summary:** Phase 6 Dev B complete — mapping module + Prisma models + shared Zod DTOs; poller/mock-complete persist transcripts & mappings; authz workspace-scoped; curl smoke PASS.
+- **Files touched:**
+  - `services/api/prisma/schema.prisma` + migration `20261003153000_phase6_transcript_mapping`
+  - `services/api/src/modules/mapping/{routes,service}.ts`
+  - `services/api/src/modules/jobs/service.ts` (TRANSCRIBE / ALIGN_SCRIPT handlers)
+  - `services/api/src/index.ts`
+  - `packages/shared/src/mapping.ts` + `index.ts` exports
+  - `docs/jobs/queue.md`
+  - `context.md`
+- **APIs / types added:**
+  - `POST /api/v1/projects/:id/transcribe` body `{ assetId, language? }` → `{ jobId }` (202)
+  - `GET /api/v1/projects/:id/transcripts` → `{ items: TranscriptDetail[] }` (segments included)
+  - `POST /api/v1/projects/:id/align` body `{ scriptId, transcriptId? }` → `{ jobId }` (202)
+  - `GET /api/v1/projects/:id/mappings` → `{ items, lowConfidenceThreshold: 0.55 }`
+  - `PATCH /api/v1/mappings/:id` body partial `{ scriptRef?, startMs?, endMs?, confidence? }` → mapping DTO (`source=USER`)
+  - Shared: `LOW_CONFIDENCE_THRESHOLD`, transcript/mapping Zod + request schemas
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter api prisma:deploy   # or migrate deploy
+  JOB_POLLER=0 AI_PROVIDER=mock pnpm --filter api dev
+  # register → create project → upload+attach video → create script
+  # POST .../transcribe → POST /jobs/:id/mock-complete → GET .../transcripts
+  # POST .../align → mock-complete → GET .../mappings → PATCH /mappings/:id
+  ```
+- **Depends on:** Attached VIDEO/AUDIO asset on project; script with ≥1 version
+- **Needs from others:**
+  - Brendan: Mapping UI — poll job, list segments/maps, highlight `lowConfidence`, PATCH corrections
+  - Arvin: replace mock STT/align in job handler with Whisper + fuzzy align (call same `persistTranscript` / `persistAlignments`)
+  - Cyrus: audio extract feeding STT input path
+- **Risks:** Re-align deletes prior maps for same scriptDocumentId+transcriptId (including USER edits on that pair) — Integration may want preserve-USER later
+
+## Phase 6 Completion — Anto Oswald (Dev B)
+- **Date:** 2026-10-03
+- **Branch:** phase-06-anto
+- **All allowed tasks done:** yes
+- **Incomplete items:** Real Whisper/fuzzy align (owned by Dev C); audio extract (Dev D)
+- **Blockers handed to Integration:** Wire Arvin consumers to `persistTranscript` / `persistAlignments`; UI against DTOs above
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  cd services/api && pnpm exec prisma migrate deploy && pnpm exec prisma generate
+  JOB_POLLER=0 AI_PROVIDER=mock pnpm --filter api dev
+  # Smoke: transcribe → mock-complete → align → mock-complete → PATCH mapping; other user gets 404
+  ```
+- **Files I expect others to connect to:**
+  - `services/api/src/modules/mapping/service.ts` (`persistTranscript`, `persistAlignments`)
+  - `@creatorai/shared` mapping types
+  - Job types `TRANSCRIBE` / `ALIGN_SCRIPT` via existing `/jobs/:id` poll
+- **Notes for next phase me:** Phase 7 Clips API — same job+persist pattern
