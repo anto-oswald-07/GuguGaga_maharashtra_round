@@ -1,5 +1,5 @@
 /**
- * FFmpeg clip cutter (Phase 7 — Dev D).
+ * FFmpeg clip cutter (Phase 7 — Dev D; hardened Phase 10).
  * Cuts a precise [startMs, endMs] window to MP4 under the renders path.
  *
  * Render path convention (SDD §4.4):
@@ -12,13 +12,14 @@
  *   only use when speed matters more than boundary precision.
  */
 
-import { execFile } from 'node:child_process';
-import { access, mkdir } from 'node:fs/promises';
-import { constants } from 'node:fs';
-import { dirname } from 'node:path';
-import { promisify } from 'node:util';
-
-const execFileAsync = promisify(execFile);
+import {
+  assertCutRangeMs,
+  assertInputReadable,
+  assertOutputWritten,
+  assertPositiveDuration,
+  ensureOutputDir,
+  runFfmpeg,
+} from './mediaGuard';
 
 /** How to cut: re-encode (accurate, default) or stream-copy (fast, may drift). */
 export type CutClipMode = 'reencode' | 'copy';
@@ -43,26 +44,6 @@ export type CutClipResult = {
   mode: CutClipMode;
 };
 
-async function assertReadable(path: string): Promise<void> {
-  try {
-    await access(path, constants.R_OK);
-  } catch {
-    throw new Error(`Input media not readable: ${path}`);
-  }
-}
-
-function assertRange(startMs: number, endMs: number): void {
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
-    throw new Error(`startMs/endMs must be finite numbers (got ${startMs}, ${endMs})`);
-  }
-  if (startMs < 0) {
-    throw new Error(`startMs must be >= 0 (got ${startMs})`);
-  }
-  if (endMs <= startMs) {
-    throw new Error(`endMs must be > startMs (got start=${startMs}, end=${endMs})`);
-  }
-}
-
 /**
  * Build the SDD render path for a cut clip job.
  */
@@ -85,9 +66,12 @@ export async function cutClip(
   endMs: number,
   options: CutClipOptions = {},
 ): Promise<CutClipResult> {
-  await assertReadable(inputPath);
-  assertRange(startMs, endMs);
-  await mkdir(dirname(outputPath), { recursive: true });
+  await assertInputReadable(inputPath, 'video');
+  const sourceDurationSec = await assertPositiveDuration(inputPath, {
+    kind: 'video',
+  });
+  assertCutRangeMs(startMs, endMs, sourceDurationSec);
+  await ensureOutputDir(outputPath);
 
   const mode: CutClipMode = options.mode ?? 'reencode';
   const durationMs = endMs - startMs;
@@ -139,8 +123,11 @@ export async function cutClip(
     );
   }
 
-  await execFileAsync('ffmpeg', args, { maxBuffer: 20 * 1024 * 1024 });
-  await access(outputPath, constants.R_OK);
+  await runFfmpeg(args, {
+    maxBuffer: 20 * 1024 * 1024,
+    op: `cutClip(${mode})`,
+  });
+  await assertOutputWritten(outputPath, 'cutClip');
 
   return {
     inputPath,

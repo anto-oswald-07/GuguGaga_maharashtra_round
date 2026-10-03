@@ -948,7 +948,7 @@ _(Template above kept for other developers.)_
 | Clip cut RENDER | Done Phase 7 (Cyrus) | `cutClip.ts` + `renderClip.ts` + `cut-clip.sh` (re-encode default) |
 | Timeline schema + render | Done Phase 8 (Cyrus) | `@creatorai/timeline-schema` + `renderTimeline.ts` (drawtext + softsubs) |
 | Golden path judge script | Planned Phase 10 (Arvin) | `docs/demo/judge-script.md` |
-| Emergency pre-rendered clip | Planned Phase 10 (Cyrus) | |
+| Emergency pre-rendered clip | Phase 10 D (Cyrus) | `scripts/media/bake-demo-fallback.sh` → `storage/samples/demo-fallback-clip.mp4` (see `docs/demo/media-checklist.md`) |
 
 ---
 
@@ -2341,3 +2341,44 @@ _(Template above kept for other developers.)_
   - Face-aware reframe skipped (FR-PLT-004 P1)
   - Zip download not implemented (URLs OK for MVP)
 - **Ready for Phase 10:** yes (Brendan Integration Lead)
+
+### Chronological — 2026-10-03 18:12 (Cyrus / Phase 10 Dev D)
+- **Summary:** Phase 10 D complete — media pipeline hardening (`MediaPipelineError` codes for missing/empty/zero-duration/OOB/ffmpeg), demo fallback bake script, judges’ `media-checklist.md`, verify smoke.
+- **Files touched:**
+  - `services/worker/src/media/mediaGuard.ts` (new)
+  - `services/worker/src/media/{cutClip,extractAudio,thumbnail,adaptAspect,renderTimeline}.ts` (guards)
+  - `scripts/media/bake-demo-fallback.sh` (new)
+  - `scripts/media/verify-media-hardening.sh` (new)
+  - `docs/demo/media-checklist.md` (new)
+  - `context.md`
+- **APIs / types added:**
+  - `MediaPipelineError` + codes: `INPUT_MISSING` | `INPUT_EMPTY` | `ZERO_DURATION` | `RANGE_INVALID` | `RANGE_OUT_OF_BOUNDS` | `ASSET_UNMAPPED` | `FFMPEG_MISSING` | `FFMPEG_FAILED` | `OUTPUT_MISSING`
+  - Helpers: `assertInputReadable`, `assertPositiveDuration`, `assertCutRangeMs`, `runFfmpeg`, `assertOutputWritten`
+- **How to run / test what I did:**
+  ```bash
+  ./scripts/media/check-ffmpeg.sh
+  ./scripts/media/make-dummy-video.sh
+  ./scripts/media/bake-demo-fallback.sh
+  ./scripts/media/verify-media-hardening.sh
+  ```
+- **E2E smoke:** PASS — 6/6 verify checks (happy path + missing + empty + OOB + zero window)
+- **Needs from others:** Integration may surface `err.code` / `err.message` on job failures; use fallback clip if live render fails
+- **Notes for next phase me:** Final Integration (Brendan) — MVP COMPLETE gate
+
+## Phase 10 Completion — Cyrus Selvaraj (Dev D)
+- **Date:** 2026-10-03
+- **Branch:** phase-10-cyrus
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (binaries stay gitignored; bake on judges’ machine)
+- **Blockers handed to Integration:** Prefer `MediaPipelineError.message` for `job.error`; emergency Asset = `storage/samples/demo-fallback-clip.mp4` after `bake-demo-fallback.sh`
+- **Commands to verify my work:**
+  ```bash
+  ./scripts/media/verify-media-hardening.sh
+  ./scripts/media/bake-demo-fallback.sh
+  ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0:s=x storage/samples/demo-fallback-clip.mp4
+  ```
+- **Files I expect others to connect to:**
+  - `services/worker/src/media/mediaGuard.ts` → clearer job failures
+  - `docs/demo/media-checklist.md` → judges go/no-go
+  - `scripts/media/bake-demo-fallback.sh` → emergency clip
+- **Notes for next phase me:** Support Brendan Phase 10 Integration / tag `v0.1.0-mvp` if asked

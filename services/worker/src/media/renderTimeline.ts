@@ -11,11 +11,8 @@
  *   storage/workspaces/{workspaceId}/renders/{jobId}/output.mp4
  */
 
-import { execFile } from 'node:child_process';
-import { access, mkdir, writeFile } from 'node:fs/promises';
-import { constants } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { promisify } from 'node:util';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   assertValidTimeline,
   type CaptionItem,
@@ -23,8 +20,14 @@ import {
   type TextItem,
   type VideoClip,
 } from '@creatorai/timeline-schema';
-
-const execFileAsync = promisify(execFile);
+import {
+  MediaPipelineError,
+  assertInputReadable,
+  assertOutputWritten,
+  assertPositiveDuration,
+  ensureOutputDir,
+  runFfmpeg,
+} from './mediaGuard';
 
 export type RenderTimelineOptions = {
   /** Map assetId → readable media path on disk. */
@@ -155,14 +158,6 @@ export function captionsToSrt(items: CaptionItem[]): string {
     .join('\n');
 }
 
-async function assertReadable(path: string): Promise<void> {
-  try {
-    await access(path, constants.R_OK);
-  } catch {
-    throw new Error(`Input media not readable: ${path}`);
-  }
-}
-
 /**
  * Build ffmpeg inputs + filter_complex from a validated timeline.
  * Does not execute ffmpeg.
@@ -176,7 +171,25 @@ export function buildFfmpegPlan(
 ): FfmpegTimelinePlan {
   const clips = collectVideoClips(timeline);
   if (clips.length < 1) {
-    throw new Error('timeline has no video clips');
+    throw new MediaPipelineError(
+      'RANGE_INVALID',
+      'timeline has no video clips — cannot render preview',
+    );
+  }
+  if (!(timeline.durationMs > 0)) {
+    throw new MediaPipelineError(
+      'ZERO_DURATION',
+      `timeline.durationMs must be > 0 (got ${timeline.durationMs})`,
+    );
+  }
+  for (const clip of clips) {
+    if (!(clip.srcEndMs > clip.srcStartMs)) {
+      throw new MediaPipelineError(
+        'RANGE_INVALID',
+        `Video clip "${clip.id}" has zero/negative source window ` +
+          `(srcStartMs=${clip.srcStartMs}, srcEndMs=${clip.srcEndMs})`,
+      );
+    }
   }
 
   const width = options.width ?? 1280;
@@ -187,8 +200,10 @@ export function buildFfmpegPlan(
   function inputIndexFor(assetId: string): number {
     const path = options.assetPaths[assetId];
     if (!path) {
-      throw new Error(
-        `No media path mapped for assetId "${assetId}" (pass assetPaths)`,
+      throw new MediaPipelineError(
+        'ASSET_UNMAPPED',
+        `No media path mapped for assetId "${assetId}" (pass assetPaths). ` +
+          `Job cannot resolve originals/renders for this timeline clip.`,
       );
     }
     const existing = inputIndexByPath.get(path);
@@ -306,12 +321,16 @@ export async function renderTimeline(
   for (const clip of clips) {
     const path = options.assetPaths[clip.assetId];
     if (!path) {
-      throw new Error(`No media path mapped for assetId "${clip.assetId}"`);
+      throw new MediaPipelineError(
+        'ASSET_UNMAPPED',
+        `No media path mapped for assetId "${clip.assetId}"`,
+      );
     }
-    await assertReadable(path);
+    await assertInputReadable(path, `asset ${clip.assetId}`);
+    await assertPositiveDuration(path, { kind: `asset ${clip.assetId}` });
   }
 
-  await mkdir(dirname(options.outputPath), { recursive: true });
+  await ensureOutputDir(options.outputPath);
 
   const plan = buildFfmpegPlan(timeline, options);
 
@@ -365,8 +384,11 @@ export async function renderTimeline(
 
   args.push(options.outputPath);
 
-  await execFileAsync('ffmpeg', args, { maxBuffer: 40 * 1024 * 1024 });
-  await access(options.outputPath, constants.R_OK);
+  await runFfmpeg(args, {
+    maxBuffer: 40 * 1024 * 1024,
+    op: 'renderTimeline',
+  });
+  await assertOutputWritten(options.outputPath, 'renderTimeline');
 
   return {
     outputPath: options.outputPath,
