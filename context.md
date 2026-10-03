@@ -227,6 +227,53 @@ Copy-paste this template every time:
 - **Needs from others:** Integration will merge worker + web into workspace.
 - **Risks:** Documented in PROGRESS (compose plugin / port 5432 on this laptop).
 
+### [2026-10-03 17:55] ROLE=C NAME=Arvin Almeida PHASE=1 TYPE=START
+- **Summary:** Started Phase 1 Dev C — samples pack, worker skeleton, AI contracts doc. Verified A/B/D deliverables already present on main; Dev C was the only Phase 1 gap.
+- **Files touched:** (starting)
+- **APIs / types added:** None
+- **How to run / test what I did:** N/A
+- **Depends on:** Root pnpm workspace globs already include `services/*` (Anto)
+- **Needs from others:** None for Phase 1 C scope
+- **Risks:** None
+
+### [2026-10-03 17:56] ROLE=C NAME=Arvin Almeida PHASE=1 TYPE=DONE
+- **Summary:** Phase 1 Dev C complete — demo samples, worker skeleton package, `docs/ai-contracts.md` listing SDD `AiProvider` methods (no implementation).
+- **Files touched:** `samples/README.md`, `samples/scripts/sample_script.md`, `services/worker/package.json`, `services/worker/tsconfig.json`, `services/worker/src/index.ts`, `services/worker/README.md`, `docs/ai-contracts.md`, `context.md`
+- **APIs / types added:** None (AI contracts documented only; `packages/ai-provider` is Phase 5)
+- **How to run / test what I did:**
+  ```bash
+  pnpm install
+  pnpm --filter worker start
+  # → prints: worker skeleton started
+  # sample script path: samples/scripts/sample_script.md
+  ```
+- **Depends on:** Workspace includes `services/*`
+- **Needs from others:** Integration may add root script alias for worker; no blockers
+- **Risks:** None remaining for Phase 1 C scope
+
+### [2026-10-03 17:58] ROLE=C NAME=Arvin Almeida PHASE=2 TYPE=START
+- **Summary:** Started Phase 2 Dev C — auth HTTP/Postman collections, testing guide, proposed auth types (Anto has not created `packages/shared` auth types yet).
+- **Files touched:** (starting)
+- **APIs / types added:** None yet
+- **How to run / test what I did:** N/A
+- **Depends on:** Anto Phase 2 auth API for live curl verification later; docs usable offline now
+- **Needs from others:** Anto — final register/login/me JSON field names (`token` vs `accessToken`) at Integration
+- **Risks:** Proposed types may differ slightly from Anto’s Zod schemas — prefer Anto’s at merge
+
+### [2026-10-03 18:00] ROLE=C NAME=Arvin Almeida PHASE=2 TYPE=DONE
+- **Summary:** Phase 2 Dev C complete — auth happy-path + negative HTTP examples, Postman collection, testing doc with SDD error JSON, proposed types under `docs/` to avoid colliding with Anto’s shared package.
+- **Files touched:** `docs/api/auth.http`, `docs/api/auth.postman.json`, `docs/testing/phase-2-auth.md`, `docs/proposed-auth-types.ts`, `context.md`
+- **APIs / types added:** Proposed only in `docs/proposed-auth-types.ts` (`RegisterRequest`, `LoginRequest`, `AuthSuccessResponse`, `MeResponse`, `ApiErrorBody`, …). Did **not** edit `packages/shared` or API code.
+- **How to run / test what I did:**
+  ```bash
+  # After Anto’s auth API is up:
+  # open docs/api/auth.http in REST Client, or import docs/api/auth.postman.json
+  # follow checklists in docs/testing/phase-2-auth.md
+  ```
+- **Depends on:** Auth routes from Anto (Phase 2 B) for live execution
+- **Needs from others:** Integration — reconcile proposed types vs Anto Zod; note Phase 1 flat `ApiError` vs SDD nested `{ error: { code, message, details } }`
+- **Risks:** Live curl cannot fully pass until Phase 2 B lands
+
 ---
 
 ## 6. Phase Completion Blocks (paste at end of your phase)
@@ -303,6 +350,42 @@ _(Template above kept for other developers.)_
 - **Files I expect others to connect to:** `apps/web` package name `web`; `NEXT_PUBLIC_API_BASE_URL` points at Anto’s API
 - **Notes for next phase me:** Phase 2 is Auth UI — build against documented `/auth/login` and `/auth/register` shapes even before API merge
 
+## Phase 1 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** _(working on local main; git untouched per request)_
+- **All allowed tasks done:** yes
+- **Incomplete items:** none
+- **Blockers handed to Integration:** None — worker package name is `worker`; sample script at `samples/scripts/sample_script.md`
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter worker start
+  # expect: worker skeleton started
+  test -f samples/scripts/sample_script.md && test -f docs/ai-contracts.md
+  ```
+- **Files I expect others to connect to:**
+  - `samples/scripts/sample_script.md` → Mock AI / golden path (Phase 5/10)
+  - `services/worker` → job consumers (Phase 5+)
+  - `docs/ai-contracts.md` → `packages/ai-provider` (Phase 5)
+- **Notes for next phase me:** Phase 2 C is auth test kits only; real AI code starts Phase 5
+
+## Phase 2 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** _(working on local main; git untouched per request)_
+- **All allowed tasks done:** yes
+- **Incomplete items:** Live curl against real auth API (blocked until Anto Phase 2 B)
+- **Blockers handed to Integration:** Reconcile `docs/proposed-auth-types.ts` with Anto’s shared Zod; adopt SDD nested error shape
+- **Commands to verify my work:**
+  ```bash
+  # collections are static docs — verify files exist:
+  test -f docs/api/auth.http && test -f docs/api/auth.postman.json
+  test -f docs/testing/phase-2-auth.md && test -f docs/proposed-auth-types.ts
+  # after API: follow docs/testing/phase-2-auth.md checklists
+  ```
+- **Files I expect others to connect to:**
+  - `docs/api/auth.http` / `auth.postman.json` → Integration verification
+  - `docs/proposed-auth-types.ts` → merge into `packages/shared` if Anto did not publish types
+- **Notes for next phase me:** Phase 3 C = asset metadata worker stub + types
+
 ---
 
 ## 7. Integration Records (paste after each Integration Mini-Phase)
@@ -330,7 +413,7 @@ _(No integrations yet.)_
 
 | Date | Author | Contract name | Temporary location | Final home (after Integration) | Status |
 |------|--------|---------------|--------------------|--------------------------------|--------|
-| — | — | — | — | — | — |
+| 2026-10-03 | Arvin | Auth DTOs + ApiErrorBody | `docs/proposed-auth-types.ts` | `packages/shared` (prefer Anto’s Zod if present) | Proposed |
 
 ---
 
@@ -338,7 +421,7 @@ _(No integrations yet.)_
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Sample script | Planned Phase 1 (Arvin) | `samples/scripts/sample_script.md` |
+| Sample script | Done Phase 1 (Arvin) | `samples/scripts/sample_script.md` |
 | Dummy video | Planned Phase 1 (Cyrus) | generate via script, don’t commit huge binaries |
 | Mock AI stable | Planned Phase 5/10 (Arvin) | |
 | Golden path judge script | Planned Phase 10 (Arvin) | `docs/demo/judge-script.md` |
