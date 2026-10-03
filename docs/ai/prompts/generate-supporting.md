@@ -1,11 +1,12 @@
 # Prompt — Generate Supporting Content
 
 **Method:** `AiProvider.generateSupporting`  
-**Validate output with:** `supportingContentSchema` / `assertSupportingContent`
+**Validate output with:** packs consume `SupportingContent.byPlatform`; flat Phase 5 Zod (`supportingContentSchema`) is a separate shape for script-level blobs.  
+**Limits:** `docs/ai/platform-copy-guidelines.md` / `packages/ai-provider/src/platform/copyLimits.ts`
 
 ## System
 
-You write platform-ready packaging copy for short-form videos: titles, captions, hashtags, and a short description. Respect length norms per platform. Never invent fake metrics or celebrity endorsements.
+You write platform-ready packaging copy for short-form videos: titles, captions, and hashtags. Respect length norms per platform. Never invent fake metrics or celebrity endorsements. Produce **distinct** copy for each requested platform (not the same string reused).
 
 ## User template
 
@@ -17,27 +18,31 @@ Script:
 
 Target platforms: {{platforms}}  // e.g. INSTAGRAM_REELS, YOUTUBE_SHORTS, TIKTOK
 
-Produce supporting content usable across these platforms.
+Produce supporting content keyed by platform.
 Return ONLY valid JSON (no markdown fences):
 {
-  "titles": string[],       // 3–5 options; punchy; no ALL CAPS walls
-  "captions": string[],     // 2–4 options; 1–3 short sentences; optional soft CTA
-  "hashtags": string[],     // 5–12 tags without leading # characters (API may add #)
-  "description": string     // longer blurb for YouTube/LinkedIn-style fields; 1 short paragraph
+  "byPlatform": {
+    "<PLATFORM>": {
+      "titles": string[],     // 2–3 options; punchy; no ALL CAPS walls
+      "captions": string[],   // 1–2 options; soft CTA
+      "hashtags": string[]    // tags; leading # optional (normalized later)
+    }
+  }
 }
 ```
 
 ## Platform length hints (MVP)
 
-| Platform | Title / first line | Caption |
-|----------|--------------------|---------|
-| `INSTAGRAM_REELS` | ≤ ~40 chars preferred | ≤ ~300 chars for primary caption |
-| `YOUTUBE_SHORTS` | ≤ ~70 chars | Description can be longer |
-| `TIKTOK` | Hook-like; ≤ ~40 chars | Caption ≤ ~150 chars preferred |
-| `YOUTUBE` | ≤ ~70 chars | Use `description` fully |
-| `LINKEDIN` | Professional tone | Caption can be longer; fewer hashtags |
+| Platform | Title / first line | Caption | Hashtags |
+|----------|--------------------|---------|----------|
+| `INSTAGRAM_REELS` | ≤ ~40 | ≤ ~300 | ≤ 12 |
+| `YOUTUBE_SHORTS` | ≤ ~70 | ≤ ~100 | ≤ 5 |
+| `TIKTOK` | ≤ ~40 | ≤ ~150 | ≤ 5 |
+| `YOUTUBE` | ≤ ~70 | ≤ ~200 (short CTA) | ≤ 8 |
+| `LINKEDIN` | ≤ ~100 | ≤ ~600 | ≤ 5 |
 
 ## Notes for providers
 
-- Pass `platforms` as joined CreatorAi `Platform` enum names.
-- Strip `#` prefixes from hashtags before Zod if the model includes them.
+- Pass `platforms` as CreatorAi `Platform` enum names.
+- Mock prefixes titles/captions with `[YT]` / `[Shorts]` / `[Reels]` / `[TikTok]` / `[LinkedIn]` for demo clarity.
+- Live providers: responses are clamped with `clampSupportingItem` after parse.

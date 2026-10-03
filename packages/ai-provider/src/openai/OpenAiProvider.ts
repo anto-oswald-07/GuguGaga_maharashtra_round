@@ -1,6 +1,7 @@
 import type { Platform } from '@creatorai/shared';
 import { fuzzyAlignScriptToTranscript } from '../align/fuzzyAlign';
 import { MockAiProvider } from '../mock/MockAiProvider';
+import { clampSupportingItem } from '../platform/generatePlatformCopy';
 import { whisperTranscribe } from '../stt/whisperTranscribe';
 import { mockTranscribeFromText } from '../stt/mockTranscribe';
 import {
@@ -13,6 +14,7 @@ import {
   type ScriptGenInput,
   type ScriptGenResult,
   type SupportingContent,
+  type SupportingContentItem,
   type TimelineContext,
   type Transcript,
   type TranscriptSegment,
@@ -157,7 +159,7 @@ export class OpenAiProvider implements AiProvider {
       {
         role: 'system',
         content:
-          'Return JSON { "byPlatform": { "<PLATFORM>": { "titles": string[], "captions": string[], "hashtags": string[] } } }.',
+          'Return JSON { "byPlatform": { "<PLATFORM>": { "titles": string[], "captions": string[], "hashtags": string[] } } }. Respect soft limits: Reels/TikTok title≤40 caption≤150–300; Shorts/YT title≤70; LinkedIn caption≤600. Distinct copy per platform.',
       },
       {
         role: 'user',
@@ -170,8 +172,17 @@ export class OpenAiProvider implements AiProvider {
     const parsed = extractJsonObject(content) as {
       byPlatform?: SupportingContent['byPlatform'];
     };
+    const raw = parsed.byPlatform ?? {};
+    const byPlatform: SupportingContent['byPlatform'] = {};
+    for (const [key, item] of Object.entries(raw)) {
+      if (!item) continue;
+      byPlatform[key] = clampSupportingItem(
+        key,
+        item as SupportingContentItem,
+      );
+    }
     return {
-      byPlatform: parsed.byPlatform ?? {},
+      byPlatform,
       provider: this.name,
       model: this.model,
     };
