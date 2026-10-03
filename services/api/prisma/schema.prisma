@@ -6,6 +6,7 @@
 // Phase 6: Transcript + TranscriptSegment + ScriptFootageMap.
 // Phase 7: ClipCandidate (propose / accept / render → Asset).
 // Phase 8: EditTimeline + TimelineVersion (editable JSON + AI proposals).
+// Phase 9: PlatformPack (aspect + copy + publish status).
 
 generator client {
   provider = "prisma-client-js"
@@ -83,6 +84,20 @@ enum TimelineSource {
   AI_PROPOSAL
 }
 
+/// Target frame for platform adaptation (SDD §4.2 / FR-PLT-001).
+enum AspectRatio {
+  R_16_9
+  R_9_16
+  R_1_1
+}
+
+/// Publish tracking per platform pack (FR-PLT-006).
+enum PackStatus {
+  DRAFT
+  READY
+  PUBLISHED
+}
+
 model User {
   id           String     @id @default(uuid()) @db.Uuid
   email        String     @unique
@@ -122,6 +137,8 @@ model Asset {
   clipSources        ClipCandidate[] @relation("ClipSourceAsset")
   clipRenderedFrom   ClipCandidate[] @relation("ClipRenderedAsset")
   timelinePreviews   EditTimeline[]  @relation("TimelinePreviewAsset")
+  packOutputs        PlatformPack[]  @relation("PackOutputAsset")
+  packSources        PlatformPack[]  @relation("PackSourceAsset")
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, type])
@@ -146,6 +163,7 @@ model Project {
   mappings        ScriptFootageMap[]
   clipCandidates  ClipCandidate[]
   timelines       EditTimeline[]
+  packs           PlatformPack[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, stage])
@@ -345,4 +363,31 @@ model TimelineVersion {
 
   @@unique([editTimelineId, version])
   @@index([editTimelineId, createdAt])
+}
+
+/// Per-platform adaptation pack: aspect video + copy + publish status (SDD §5.8).
+model PlatformPack {
+  id            String      @id @default(uuid()) @db.Uuid
+  projectId     String      @db.Uuid
+  platform      Platform
+  aspectRatio   AspectRatio
+  status        PackStatus  @default(DRAFT)
+  title         String?
+  caption       String?
+  hashtags      String[]    @default([])
+  /// Adapted video output (center-crop / pad MVP).
+  outputAssetId String?     @db.Uuid
+  /// Source media adapted from (timeline preview, clip, or project video).
+  sourceAssetId String?     @db.Uuid
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  project       Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  outputAsset   Asset?      @relation("PackOutputAsset", fields: [outputAssetId], references: [id], onDelete: SetNull)
+  sourceAsset   Asset?      @relation("PackSourceAsset", fields: [sourceAssetId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, platform])
+  @@index([projectId, createdAt])
+  @@index([projectId, status])
+  @@index([outputAssetId])
+  @@index([sourceAssetId])
 }
