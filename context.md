@@ -133,6 +133,30 @@ Copy-paste this template every time:
   - Cyrus: prepare ffmpeg check + dummy video scripts
 - **Risks:** If FFmpeg missing on a laptop, Cyrus’s Phase 1 tests fail — install early.
 
+### [2026-10-03 11:48] ROLE=D NAME=Cyrus Selvaraj PHASE=1 TYPE=START
+- **Summary:** Started Phase 1 Dev D on branch `phase-01-cyrus` — storage folder, FFmpeg scripts, timeline notes.
+- **Files touched:** (branch created; work in progress)
+- **APIs / types added:** None
+- **How to run / test what I did:** `git checkout phase-01-cyrus`
+- **Depends on:** FFmpeg on PATH (installed via `apt` on this WSL machine for verification)
+- **Needs from others:** Anto should gitignore `storage/**` contents (keep `.gitkeep`) in root `.gitignore` during Phase 1
+- **Risks:** Dummy MP4 must never be committed
+
+### [2026-10-03 11:50] ROLE=D NAME=Cyrus Selvaraj PHASE=1 TYPE=DONE
+- **Summary:** Phase 1 Dev D complete — storage keepfile, FFmpeg check + dummy video scripts, ffmpeg/timeline docs.
+- **Files touched:** `storage/.gitkeep`, `scripts/media/check-ffmpeg.sh`, `scripts/media/make-dummy-video.sh`, `docs/ffmpeg-notes.md`, `docs/timeline-notes.md`, `context.md`
+- **APIs / types added:** None (timeline JSON documented only; schema package is Phase 8)
+- **How to run / test what I did:**
+  ```bash
+  ./scripts/media/check-ffmpeg.sh
+  ./scripts/media/make-dummy-video.sh
+  # → storage/samples/dummy.mp4 (~87KB, 5s color bars + sine). Do NOT git add.
+  ffprobe -hide_banner storage/samples/dummy.mp4
+  ```
+- **Depends on:** `ffmpeg` + `ffprobe` on PATH
+- **Needs from others:** Integration: `chmod +x scripts/media/*.sh` after merge; Anto ignore `storage/samples/` binaries
+- **Risks:** None remaining for Phase 1 D scope
+
 ### [2026-10-03 16:57] ROLE=A NAME=Brendan Rodrigues PHASE=1 TYPE=START
 - **Summary:** Started Phase 1 Dev A — Frontend Shell Only on branch `phase-01-brendan`.
 - **Files touched:** _(none yet)_
@@ -218,6 +242,26 @@ Copy-paste this template every time:
 - **Files I expect others to connect to:** 
 - **Notes for next phase me:** 
 ```
+
+_(Earlier phases: none.)_
+
+## Phase 1 Completion — Cyrus Selvaraj (Dev D)
+- **Date:** 2026-10-03
+- **Branch:** phase-01-cyrus
+- **All allowed tasks done:** yes
+- **Incomplete items:** none
+- **Blockers handed to Integration:** Ensure root `.gitignore` excludes `storage/samples/**` (and ideally all of `storage/**` except `.gitkeep`); make scripts executable on merge
+- **Commands to verify my work:**
+  ```bash
+  ./scripts/media/check-ffmpeg.sh
+  ./scripts/media/make-dummy-video.sh
+  ```
+- **Files I expect others to connect to:**
+  - `storage/` → Anto `STORAGE_ROOT` / assets API (Phase 3)
+  - `scripts/media/*` → worker media pipeline (Phases 3, 6–9)
+  - `docs/timeline-notes.md` → `packages/timeline-schema` (Phase 8)
+  - `docs/ffmpeg-notes.md` → team media setup
+- **Notes for next phase me:** Phase 2 is docs/security only; real media code resumes Phase 3 (thumbnails)
 
 ## Phase 1 Completion — Anto Oswald (Dev B)
 - **Date:** 2026-10-03
