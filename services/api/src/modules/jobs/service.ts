@@ -31,6 +31,13 @@ import {
   persistClipCandidates,
   persistRenderedClip,
 } from '../clips/service';
+import {
+  loadTimelineGenerateContext,
+  mockTimelineJson,
+  normalizeProviderTimeline,
+  persistTimelinePreview,
+  persistTimelineProposal,
+} from '../timelines/service';
 import { appendAiScriptVersion } from '../scripts/service';
 import { enqueueJob } from './queue';
 
@@ -726,6 +733,144 @@ export async function completeJobWithAi(
         endMs: cutResult.endMs,
         durationMs: cutResult.durationMs,
         mode: renderMode,
+      };
+    } else if (job.type === 'GENERATE_TIMELINE') {
+      if (!job.projectId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'GENERATE_TIMELINE job missing projectId',
+        );
+      }
+      const scriptId = strField(input, 'scriptId', '');
+      const timelineId = strField(input, 'timelineId', '');
+      if (!scriptId || !timelineId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'GENERATE_TIMELINE job missing scriptId or timelineId',
+        );
+      }
+
+      const ctx = await loadTimelineGenerateContext(
+        job.workspaceId,
+        job.projectId,
+        scriptId,
+      );
+
+      const fallback = mockTimelineJson({
+        assetId: ctx.assetId,
+        hookText: ctx.hook,
+        clipWindows: ctx.clipWindows,
+      });
+
+      let timelineJson = fallback;
+      let timelineProvider = 'mock-fallback';
+
+      try {
+        const proposed = await provider.proposeTimeline({
+          script: {
+            hook: ctx.hook,
+            body: ctx.body,
+            cta: ctx.cta,
+          },
+          alignments: ctx.alignments,
+          clipIdeas: ctx.clipWindows.map((w) => ({
+            startMs: w.startMs,
+            endMs: w.endMs,
+            score: 0.8,
+            titleSuggestion: w.title ?? 'Clip',
+            rationale: 'from accepted clips / mappings',
+          })),
+        });
+        timelineJson = normalizeProviderTimeline(proposed, fallback);
+        timelineProvider = provider.name;
+      } catch {
+        timelineJson = fallback;
+      }
+
+      const persisted = await persistTimelineProposal({
+        workspaceId: job.workspaceId,
+        projectId: job.projectId,
+        timelineId,
+        content: timelineJson,
+      });
+
+      output = {
+        ...output,
+        timelineId,
+        versionId: persisted.versionId,
+        version: persisted.version,
+        source: 'ai_proposal',
+        provider: timelineProvider,
+        // Proposal only — currentVersionId unchanged until user PUT (Apply).
+        applied: false,
+      };
+    } else if (job.type === 'RENDER_TIMELINE') {
+      if (!job.projectId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'RENDER_TIMELINE job missing projectId',
+        );
+      }
+      const timelineId = strField(input, 'timelineId', '');
+      if (!timelineId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'RENDER_TIMELINE job missing timelineId',
+        );
+      }
+
+      const sourceAssetId = strField(input, 'sourceAssetId', '');
+      const inputPath = strField(input, 'inputPath', '');
+      if (!sourceAssetId || !inputPath) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'RENDER_TIMELINE job missing sourceAssetId or inputPath',
+        );
+      }
+
+      const absInput = storage.absoluteFromRelative(inputPath);
+      const absOutput = `${storage.getRoot().replace(/\/+$/, '')}/workspaces/${job.workspaceId}/renders/${jobId}/timeline-preview.mp4`;
+
+      let renderMode = 'mock-copy';
+      try {
+        // Cyrus Phase 8 D will replace this with renderTimeline().
+        // Until then: copy first source clip so preview Asset exists for demos.
+        const { copyFile, mkdir } = await import('node:fs/promises');
+        const { dirname } = await import('node:path');
+        await mkdir(dirname(absOutput), { recursive: true });
+        await copyFile(absInput, absOutput);
+        renderMode = 'mock-copy';
+      } catch (err) {
+        throw new JobHttpError(
+          500,
+          'internal_error',
+          `RENDER_TIMELINE failed to stage preview: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+
+      const persisted = await persistTimelinePreview({
+        workspaceId: job.workspaceId,
+        projectId: job.projectId,
+        timelineId,
+        outputPath: absOutput,
+        jobId,
+      });
+
+      output = {
+        ...output,
+        timelineId,
+        versionId: strField(input, 'versionId', ''),
+        assetId: persisted.assetId,
+        outputPath: persisted.relativePath,
+        mode: renderMode,
+        note: 'Full FFmpeg timeline render lands with Cyrus Phase 8 D',
       };
     } else {
       output = {

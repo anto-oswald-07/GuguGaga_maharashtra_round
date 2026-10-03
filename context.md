@@ -1813,3 +1813,66 @@ _(Template above kept for other developers.)_
 - **Files touched:** `apps/web/src/components/clips/ClipsTab.tsx`, `apps/web/src/lib/api.ts`, `context.md`
 - **Needs from others:** None for Phase 7; Phase 8 Lead = Cyrus
 - **Risks:** ffmpeg missing → mock/copy render; Next.dev hang on :3002
+
+### [2026-10-03 22:21] ROLE=B NAME=Anto Oswald PHASE=8 TYPE=START
+- **Summary:** Starting Phase 8 Dev B — Timelines API + versioning (EditTimeline / TimelineVersion + GENERATE_TIMELINE / RENDER_TIMELINE per SDD §5.7).
+- **Files touched:** (branch `phase-08-anto` from `main` @ Phase 7 integration)
+- **APIs / types added:** (pending)
+- **How to run / test what I did:** n/a yet
+- **Depends on:** Phase 7 clips/mappings/script on project; Arvin `proposeTimeline`; Cyrus `timeline-schema` + render (both may still be landing)
+- **Needs from others:** Brendan Editor UI against DTOs below
+- **Risks:** none yet
+
+### [2026-10-03 22:25] ROLE=B NAME=Anto Oswald PHASE=8 TYPE=DONE
+- **Summary:** Timelines API live — generate/list/get/put/render; AI proposals never overwrite current; Apply = PUT; invalid JSON rejected.
+- **Files touched:**
+  - `packages/shared/src/timelines.ts` (+ exports in `index.ts`, `GENERATE_TIMELINE` in `jobs.ts`)
+  - `services/api/prisma/schema.prisma` + migration `20261003164500_phase8_timelines`
+  - `services/api/src/modules/timelines/{routes,service}.ts`
+  - `services/api/src/modules/jobs/service.ts` (GENERATE_TIMELINE + RENDER_TIMELINE handlers)
+  - `services/api/src/index.ts`
+  - `docs/jobs/queue.md` (Phase 8 apply semantics)
+  - `context.md`
+- **APIs / types added:**
+  - `POST /api/v1/projects/:id/timelines/generate` → `{ jobId }` (`GENERATE_TIMELINE`)
+  - `GET /api/v1/projects/:id/timelines` → `{ items: EditTimelineDto[] }`
+  - `GET /api/v1/timelines/:id` → detail + `versions[]`
+  - `PUT /api/v1/timelines/:id` `{ timeline, title? }` → new USER version + sets `currentVersionId` (**Apply**)
+  - `POST /api/v1/timelines/:id/render` → `{ jobId }` (`RENDER_TIMELINE`; requires applied current)
+  - Shared: `editTimelineJsonSchema`, `EditTimelineDto`, `generateTimelineRequestSchema`, `putTimelineRequestSchema`
+  - Persist helpers: `persistTimelineProposal`, `persistTimelinePreview`
+- **Apply semantics (FR-ED-006):**
+  1. Generate appends `TimelineVersion` with `source=AI_PROPOSAL` only — **does not** set `currentVersionId`
+  2. UI Suggest panel reads `pendingProposal` / `pendingProposalVersionId`
+  3. **Apply** = `PUT` with proposal JSON (optionally edited) → new `USER` version becomes current
+  4. Prior versions never overwritten; list grows
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  cd services/api && pnpm run prisma:deploy && pnpm run prisma:generate
+  AI_PROVIDER=mock pnpm --filter api dev
+  # register → project → script + attach VIDEO →
+  # POST .../timelines/generate → poll job → GET .../timelines (pendingProposal set, current=null)
+  # PUT /timelines/:id {"timeline": <pendingProposal>} → current set, versions=[ai_proposal,user]
+  # PUT invalid clips (srcEnd<=srcStart) → 400
+  # POST /timelines/:id/render → poll → previewAssetId set
+  ```
+- **Depends on:** Script + attached VIDEO on project (accepted clips / mappings optional for richer mock)
+- **Needs from others:**
+  - Brendan: Editor — load timeline, Suggest Apply/Dismiss, PUT save, render + preview player
+  - Arvin: real `proposeTimeline` returning schemaVersion 1.0 JSON (API normalizes stub + mock-fallback today)
+  - Cyrus: `packages/timeline-schema` + `renderTimeline` (API uses shared zod + mock-copy preview until then)
+- **Risks:** RENDER_TIMELINE is mock-copy of first video clip until Cyrus renderer lands
+
+## Phase 8 Completion — Anto Oswald (Dev B)
+- **Date:** 2026-10-03
+- **Branch:** phase-08-anto
+- **All allowed tasks done:** yes
+- **Incomplete items:** none for Dev B scope (UI = Brendan; AI propose = Arvin; FFmpeg render / timeline-schema = Cyrus; Integration Lead = Cyrus)
+- **Blockers handed to Integration:** Apply migration on all machines; rebuild `@creatorai/shared`
+- **Commands to verify my work:** see DONE entry above
+- **Files I expect others to connect to:**
+  - `services/api/src/modules/timelines/service.ts` (`persistTimelineProposal`, `persistTimelinePreview`)
+  - `@creatorai/shared` timeline types / `editTimelineJsonSchema`
+  - Job types `GENERATE_TIMELINE` / `RENDER_TIMELINE` via `/jobs/:id` poll
+- **Notes for next phase me:** Phase 9 Packs API — same job+persist pattern
