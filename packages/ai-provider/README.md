@@ -1,14 +1,14 @@
 # `@creatorai/ai-provider`
 
-LLM provider package for CreatorAi (Phase 5 — Dev C / Arvin).
+LLM + STT provider package for CreatorAi (Phases 5–6 — Dev C / Arvin).
 
 ## Providers
 
 | `AI_PROVIDER` | Class | Needs |
 |---------------|-------|--------|
-| `mock` (default) | `MockAiProvider` | nothing — deterministic from topic |
-| `openai` | `OpenAiProvider` | `OPENAI_API_KEY` |
-| `gemini` | `GeminiProvider` | `GEMINI_API_KEY` |
+| `mock` (default) | `MockAiProvider` | nothing — deterministic from topic / hintText |
+| `openai` | `OpenAiProvider` | `OPENAI_API_KEY` (Chat + Whisper) |
+| `gemini` | `GeminiProvider` | `GEMINI_API_KEY` (chat; STT falls back to mock segments) |
 
 **Never commit API keys.** Put them in root `.env` (gitignored) only.
 
@@ -19,15 +19,17 @@ LLM provider package for CreatorAi (Phase 5 — Dev C / Arvin).
 AI_PROVIDER=mock
 # AI_PROVIDER=openai
 # OPENAI_API_KEY=sk-...
-# OPENAI_MODEL=gpt-4o-mini          # optional
+# OPENAI_MODEL=gpt-4o-mini
+# OPENAI_WHISPER_MODEL=whisper-1
 # AI_PROVIDER=gemini
 # GEMINI_API_KEY=...
-# GEMINI_MODEL=gemini-2.0-flash     # optional
+# GEMINI_MODEL=gemini-2.0-flash
 ```
 
 ```bash
 pnpm install
 pnpm --filter @creatorai/ai-provider build
+pnpm --filter @creatorai/ai-provider test
 ```
 
 ## Usage
@@ -36,38 +38,47 @@ pnpm --filter @creatorai/ai-provider build
 import { createAiProvider } from '@creatorai/ai-provider';
 
 const ai = createAiProvider(); // reads AI_PROVIDER
+
 const script = await ai.generateScript({
   topic: 'Batch Reels in one afternoon',
   audience: 'solo creators',
   tone: 'practical',
   platform: 'INSTAGRAM_REELS',
 });
-const hooks = await ai.generateHooks(script.fullText, 3);
-const supporting = await ai.generateSupporting(script.fullText, [
-  'INSTAGRAM_REELS',
-  'YOUTUBE_SHORTS',
-]);
+
+// Phase 6 — mock STT from spoken text (or Whisper when file + openai)
+const { segments } = await ai.transcribe({
+  hintText: script.fullText,
+});
+
+const alignments = await ai.alignScriptToTranscript(
+  { hook: script.hook, body: script.body, cta: script.cta },
+  segments,
+);
+// alignments[].confidence ∈ [0, 1]
 ```
 
-## Worker consumer
+## Worker consumers
 
-Job handler: `services/worker/src/consumers/generateScript.ts`
+| Job | CLI |
+|-----|-----|
+| `GENERATE_SCRIPT` | `pnpm --filter worker generate-script` |
+| `TRANSCRIBE` | `pnpm --filter worker transcribe -- --hint-text "..."` |
+| `ALIGN_SCRIPT` | `pnpm --filter worker align -- --fixture` |
 
-```bash
-pnpm --filter worker generate-script
-# or with JSON stdin / CLI args — see consumer file header
-```
+Helpers: `services/worker/src/ai/{provider,transcribe,align}.ts`
 
-Until Anto’s Job / ScriptDocument tables land (Phase 5 B), the consumer:
+## Alignment (MVP)
 
-1. Calls the provider
-2. Returns structured output
-3. Optionally `POST`s to `WORKER_CALLBACK_URL` (Integration wires persistence)
+Pure fuzzy match in `src/align/fuzzyAlign.ts` (token Jaccard + ordered overlap).  
+Used by mock / openai / gemini so confidence scores stay consistent without an embed API.
+
+## Fixtures / tests
+
+- `test/fixtures/sample_script.json`
+- `test/fixtures/sample_spoken.txt`
+- `pnpm --filter @creatorai/ai-provider test`
 
 ## Phase stubs
 
-`alignScriptToTranscript`, `scoreClipWindows`, `proposeTimeline` throw `AiProviderError` (`not_implemented`) until Phases 6–8.
-
-## Prompt templates
-
-Inline prompts live in the OpenAI/Gemini classes for MVP. Cyrus (Dev D) may move templates to `docs/ai/prompts/**` + shared Zod — prefer that over editing provider code when possible.
+`scoreClipWindows` (7), `proposeTimeline` (8) still throw `not_implemented`.

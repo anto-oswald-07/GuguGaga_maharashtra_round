@@ -1,5 +1,7 @@
 import type { Platform } from '@creatorai/shared';
+import { fuzzyAlignScriptToTranscript } from '../align/fuzzyAlign';
 import { MockAiProvider } from '../mock/MockAiProvider';
+import { mockTranscribeFromText } from '../stt/mockTranscribe';
 import {
   AiProviderError,
   type AiProvider,
@@ -13,6 +15,7 @@ import {
   type TimelineContext,
   type Transcript,
   type TranscriptSegment,
+  type TranscribeInput,
 } from '../types';
 
 const DEFAULT_MODEL = 'gemini-2.0-flash';
@@ -151,11 +154,28 @@ script=${script.slice(0, 6000)}`,
     };
   }
 
+  /**
+   * Gemini has no Whisper-equivalent in this MVP — use hintText mock segments,
+   * or fall back to MockAiProvider when only a file path is given.
+   */
+  async transcribe(input: TranscribeInput): Promise<Transcript> {
+    if (input.hintText?.trim()) {
+      return mockTranscribeFromText(input.hintText);
+    }
+    if (input.filePath || input.audio) {
+      return this.mockFallback.transcribe(input);
+    }
+    throw new AiProviderError(
+      'Gemini transcribe needs hintText (or filePath for mock fallback)',
+      'invalid_config',
+    );
+  }
+
   async alignScriptToTranscript(
     script: ScriptDoc,
     segments: TranscriptSegment[],
   ): Promise<Alignment[]> {
-    return this.mockFallback.alignScriptToTranscript(script, segments);
+    return fuzzyAlignScriptToTranscript(script, segments);
   }
 
   async scoreClipWindows(
