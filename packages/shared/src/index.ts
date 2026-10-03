@@ -74,6 +74,7 @@ export {
   type StageHistoryResponse,
 } from './projects';
 export {
+<<<<<<< HEAD
   scriptGenInputSchema,
   generatedScriptMetaSchema,
   generatedScriptSchema,
@@ -90,6 +91,50 @@ export {
   type GeneratedHooks,
   type SupportingContent,
 } from './schemas/scriptSchema';
+=======
+  scriptSourceSchema,
+  SCRIPT_SOURCES,
+  scriptContentSchema,
+  scriptVersionSchema,
+  scriptDocumentSchema,
+  scriptDocumentDetailSchema,
+  scriptListResponseSchema,
+  createScriptRequestSchema,
+  createScriptVersionRequestSchema,
+  generateScriptRequestSchema,
+  generateHooksRequestSchema,
+  generateSupportingRequestSchema,
+  enqueueJobResponseSchema,
+  type ScriptSource,
+  type ScriptContent,
+  type ScriptVersionDto,
+  type ScriptDocumentDto,
+  type ScriptDocumentDetailDto,
+  type ScriptListResponse,
+  type CreateScriptRequest,
+  type CreateScriptVersionRequest,
+  type GenerateScriptRequest,
+  type GenerateHooksRequest,
+  type GenerateSupportingRequest,
+  type EnqueueJobResponse,
+} from './scripts';
+export {
+  jobTypeSchema,
+  JOB_TYPES,
+  jobStatusSchema,
+  JOB_STATUSES,
+  jobSchema,
+  jobListQuerySchema,
+  jobListResponseSchema,
+  mockCompleteJobRequestSchema,
+  type JobType,
+  type JobStatus,
+  type JobDto,
+  type JobListQuery,
+  type JobListResponse,
+  type MockCompleteJobRequest,
+} from './jobs';
+>>>>>>> 2f0c2897b56ca0cc197610560655c0634e0c464c
 
 /** Response shape for `GET /api/v1/health`. */
 export type HealthResponse = {

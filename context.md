@@ -1215,6 +1215,7 @@ _(Template above kept for other developers.)_
 - **Needs from others:** None for Phase 4; Phase 5 Lead = Anto
 - **Risks:** Next sometimes hangs on :3002 (listening, no response) — restart `next dev` if UI spins
 
+<<<<<<< HEAD
 ### [2026-10-03 14:42] ROLE=D NAME=Cyrus Selvaraj PHASE=5 TYPE=START
 - **Summary:** Prior Dev D phases verified on `main` (P1–P4 deliverables present; Phase 4 Integration complete). Starting Phase 5 Dev D — prompt templates + GeneratedScript Zod schema (docs path; no Arvin NEED for ai-provider prompts).
 - **Files touched:** branch `phase-05-cyrus` from `origin/main` @ `7eb0e26`
@@ -1237,3 +1238,40 @@ _(Template above kept for other developers.)_
 - **Depends on:** Anto Scripts API / Arvin MockAiProvider will consume these at Integration
 - **Needs from others:** Arvin — load `docs/ai/prompts/*.md` (or copy) into provider; validate model JSON with shared schemas
 - **Risks:** None for Phase 5 D scope
+=======
+### [2026-10-03 20:14] ROLE=B NAME=Anto Oswald PHASE=5 TYPE=START
+- **Summary:** Started Phase 5 Dev B on `phase-05-anto` — Scripts API + Jobs table wiring (DB-polling queue).
+- **Files touched:** (branch `phase-05-anto` created from `main` after Phase 4 Integration @ `7eb0e26`)
+- **APIs / types added:** Planned SDD §5.4 + §5.9 — script CRUD/versions, `POST .../scripts/generate` → Job `GENERATE_SCRIPT`, job status endpoints, mock-complete for UI until worker lands
+- **How to run / test what I did:** `git checkout phase-05-anto`
+- **Depends on:** Phase 4 Projects (`projectId` ownership via workspace); shared Platform enum; queue decision = DB-polling
+- **Needs from others:** Arvin — worker consumer claims QUEUED jobs + writes ScriptVersion; Cyrus — `scriptSchema` should align with Anto content shape `{ hook, body, cta }`; Brendan — Script tab polls `/jobs/:id`
+- **Risks:** Collision with Cyrus `packages/shared/src/schemas/scriptSchema.ts` — Anto will put API DTOs in `scripts.ts` / `jobs.ts`; content shape duplicated intentionally for Integration merge
+## Phase 5 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** `Arvin` (working tree; commit when ready)
+- **All allowed tasks done:** yes
+- **Incomplete items:** none for Phase 5 C scope (Job table / ScriptVersion persistence = Anto Phase 5 B + Integration)
+- **Blockers handed to Integration:**
+  - Anto: wire `GENERATE_SCRIPT` Job → `processGenerateScriptJob` → write `ScriptVersion`; expose `WORKER_CALLBACK_URL` or let worker use Prisma
+  - Cyrus: prefer `docs/ai/prompts/**` + shared `scriptSchema` (do not collide on `packages/ai-provider`)
+  - Brendan: poll `/jobs/:id`; consume `ScriptGenResult` `{ title, hook, body, cta, fullText }`
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/ai-provider build
+  pnpm --filter worker build
+  AI_PROVIDER=mock pnpm --filter worker generate-script -- --topic "Batch Reels" --audience "creators" --tone "practical" --platform INSTAGRAM_REELS
+  node -e "const {createAiProvider}=require('./packages/ai-provider/dist'); createAiProvider().generateScript({topic:'X',audience:'Y',tone:'Z',platform:'TIKTOK'}).then(s=>console.log(s.provider,s.hook.slice(0,40)))"
+  ```
+- **Files I expect others to connect to:**
+  - `@creatorai/ai-provider` → API/worker
+  - `services/worker/src/consumers/generateScript.ts` → Job runner
+  - `packages/ai-provider/README.md` + `.env.example` AI_* vars
+- **Notes for next phase me:** Phase 6 C = STT + alignment algorithms on same AiProvider stubs
+
+### Chronological — 2026-10-03 20:12 (Arvin / Phase 5 Dev C)
+- **Summary:** Implemented `packages/ai-provider` (`MockAiProvider`, `OpenAiProvider`, `GeminiProvider`, `createAiProvider`), worker `ai/provider.ts` + `consumers/generateScript.ts`, README + env docs. Mock smoke + CLI SUCCEEDED; real providers gated on keys (never committed).
+- **Files touched:** `packages/ai-provider/**`, `services/worker/src/ai/**`, `services/worker/src/consumers/generateScript.ts`, `services/worker/package.json`, `docs/ai-contracts.md`, `.env.example`, `context.md`
+- **Needs from others:** Anto Job/Script modules; Integration e2e from UI without key
+- **Risks:** Without Job table, consumer persists only via optional `WORKER_CALLBACK_URL` or returns JSON for local/Integration use
+>>>>>>> 2f0c2897b56ca0cc197610560655c0634e0c464c
