@@ -79,6 +79,31 @@ Lightweight Zod validation lives in `@creatorai/shared` (`editTimelineJsonSchema
 - Builder: `AiProvider.generateSupporting` (Arvin 9 C) — soft length limits in `docs/ai/platform-copy-guidelines.md`
 - CLI smoke: `pnpm --filter worker generate-platform-copy -- --fixture`
 - Aspect adaptation (Cyrus 9 D) is separate (`adaptAspect`); copy + aspect combine in Packs Integration
+## Phase 9 platform packs notes
+
+| Type | Producer | Artifact |
+|------|----------|----------|
+| `ADAPT_PLATFORM` | `POST /projects/:id/packs/generate` | `PlatformPack` rows (upsert per platform) + adapted video `Asset` + title/caption/hashtags |
+
+### Endpoints (SDD §5.8)
+
+| Method | Path | Notes |
+|--------|------|-------|
+| POST | `/projects/:id/packs/generate` | Body `{ platforms?, sourceAssetId?, timelineId? }` → `{ jobId }` (202) |
+| GET | `/projects/:id/packs` | `{ items: PlatformPack[] }` |
+| PATCH | `/packs/:id/status` | Body `{ status: draft\|ready\|published, title?, caption?, hashtags? }` |
+| PATCH | `/packs/:id` | Optional copy/status partial update (UI convenience) |
+| GET | `/packs/:id/download` | `{ files: [{ assetId, name, mime, url }] }` — URLs OK for MVP |
+
+### Semantics
+
+1. Generate upserts one pack per `(projectId, platform)` (unique), resets to `DRAFT`, clears prior output.
+2. Job fills copy via `AiProvider.generateSupporting` (fallback `mockPackCopy`) and adapts aspect via `adaptAspect` when present (Cyrus); otherwise **mock-copy** source → new Asset.
+3. Default aspects: YouTube 16:9; Shorts/Reels/TikTok 9:16; LinkedIn 1:1.
+4. Source resolution: explicit `sourceAssetId` → timeline preview → rendered clip → project VIDEO.
+5. On success, project stage advances to `ADAPTED` if still earlier.
+
+Shared Zod: `@creatorai/shared` → `packages/shared/src/packs.ts`.
 
 ## Script content shape
 
