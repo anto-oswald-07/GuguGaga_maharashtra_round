@@ -1638,3 +1638,31 @@ _(Template above kept for other developers.)_
 - **Depends on:** ffmpeg on PATH; `storage/samples/dummy.mp4`
 - **Needs from others:** Arvin Integration / Anto — enqueue RENDER_CLIP → `processRenderClipJob` → create Asset from `outputPath`
 - **Risks:** None
+## Phase 7 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** `Arvin` (working tree; commit when ready)
+- **All allowed tasks done:** yes
+- **Incomplete items:** none for Phase 7 C scope (Clips API persist = Anto Phase 7 B; Clips UI = Brendan Phase 7 A; FFmpeg cut = Cyrus Phase 7 D)
+- **Blockers handed to Integration:**
+  - Anto: wire `SCORE_CLIPS` Job → `AiProvider.scoreClipWindows` → persist `ClipCandidate`
+  - Brendan: Clips tab consumes `ClipIdea[]` (`startMs`, `endMs`, `score`, `titleSuggestion`, `rationale`)
+  - Cyrus: `cutClip` / `RENDER_CLIP` uses accepted candidate boundaries
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/ai-provider build
+  pnpm --filter @creatorai/ai-provider test
+  AI_PROVIDER=mock pnpm --filter worker score-clips -- --fixture
+  ```
+- **Files I expect others to connect to:**
+  - `@creatorai/ai-provider` `scoreClipWindows` (+ `scoreClipWindowsFromTranscript`)
+  - `services/worker/src/consumers/scoreClips.ts` → Job runner
+  - Fixtures: `packages/ai-provider/test/fixtures/{sample_script.json,sample_spoken.txt}`
+- **Notes for next phase me:** Phase 8 C = timeline proposal AI on same provider stubs
+
+### Chronological — 2026-10-03 21:33 (Arvin / Phase 7 Dev C)
+- **Summary:** Phase 7 C clip scoring complete. Implemented pure `scoreClipWindowsFromTranscript` (15–60s windows, script cue + duration + spoken-cue heuristics, NMS for 3 diverse stable candidates, empty-transcript demo fallback). Wired `MockAiProvider` / openai+gemini mock fallback; 4 new unit tests (11/11 total); worker helper + `score-clips --fixture` CLI. Docs updated.
+- **Files touched:** `packages/ai-provider/src/clips/scoreClipWindows.ts`, `packages/ai-provider/src/{types,index,mock/MockAiProvider}.ts`, `packages/ai-provider/test/score-clips.test.ts`, `packages/ai-provider/README.md`, `services/worker/src/ai/scoreClips.ts`, `services/worker/src/consumers/scoreClips.ts`, `services/worker/{package.json,src/index.ts}`, `docs/ai-contracts.md`, `context.md`
+- **How to run / test what I did:** see commands above — smoke returns 3 ClipIdeas with scores 0–1
+- **Depends on:** Phase 6 transcript fixtures (reuse sample_spoken + sample_script)
+- **Needs from others:** Anto ClipCandidate persistence; Brendan Clips UI; Cyrus render cutter
+- **Risks:** Heuristic only (no LLM ranking yet); openai/gemini clip score uses same mock heuristic

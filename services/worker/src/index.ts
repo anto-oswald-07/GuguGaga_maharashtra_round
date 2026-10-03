@@ -4,4 +4,8 @@
  */
 console.log(
   'worker ready — consumers: generateScript | transcribe | align | renderClip',
+ * Consumers via CLI; API may also poll Job rows.
+ */
+console.log(
+  'worker ready — consumers: generateScript | transcribe | align | scoreClips',
 );
