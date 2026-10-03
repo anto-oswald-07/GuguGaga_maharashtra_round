@@ -14,9 +14,11 @@ out/
 coverage/
 *.tsbuildinfo
 
-# Local media store
+# Local media store (binaries only — keep API storage adapter source)
 storage/
 !storage/.gitkeep
+!services/api/src/storage/
+!services/api/src/storage/**
 
 # Prisma
 services/api/prisma/*.db

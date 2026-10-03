@@ -607,3 +607,89 @@ _(Template above kept for other developers.)_
 ---
 
 **Remember:** If it is not in `context.md`, the rest of the team does not know it exists.
+
+### [2026-10-03 18:30] ROLE=B NAME=Anto Oswald PHASE=3 TYPE=START
+- **Summary:** Started Phase 3 Dev B on `phase-03-anto` — Assets API + local filesystem storage adapter + shared asset DTOs.
+- **Files touched:** (branch created from `main` @ Phase 2 merges)
+- **APIs / types added:** Planned `POST/GET/PATCH/DELETE /assets`, `GET /assets/:id/content`
+- **How to run / test what I did:** `git checkout phase-03-anto`
+- **Depends on:** Phase 2 auth (`requireAuth` + `workspaceId` in JWT); Postgres via `DATABASE_URL`; `STORAGE_ROOT`
+- **Needs from others:** Brendan builds Asset Library UI against these endpoints; Arvin metadata type optional later; Cyrus thumbnails wire at Integration
+- **Risks:** Multipart + large uploads; host path resolution for `STORAGE_ROOT=./storage`
+
+### [2026-10-03 18:34] ROLE=B NAME=Anto Oswald PHASE=3 TYPE=PROGRESS
+- **Summary:** Implemented Asset Prisma model, local FS storage adapter, shared asset Zod DTOs, and full assets REST module (upload/list/get/patch/soft-delete/content) with MIME allowlist + workspace auth.
+- **Files touched:** `services/api/prisma/schema.prisma`, `services/api/prisma/migrations/20261003130341_phase3_assets/**`, `services/api/src/storage/local.ts`, `services/api/src/modules/assets/**`, `services/api/src/index.ts`, `services/api/package.json`, `packages/shared/src/assets.ts`, `packages/shared/src/index.ts`, `pnpm-lock.yaml`, `context.md`
+- **APIs / types added:**
+  - `POST /api/v1/assets` multipart (`file` + optional `name`/`description`/`tags`) → AssetDto 201
+  - `GET /api/v1/assets?type=&q=&tag=` → `{ items: AssetDto[] }`
+  - `GET /api/v1/assets/:id` → AssetDto
+  - `PATCH /api/v1/assets/:id` body `{ name?, description?, tags? }` → AssetDto
+  - `DELETE /api/v1/assets/:id` soft-delete → `{ id, deletedAt }`
+  - `GET /api/v1/assets/:id/content` stream file
+  - Shared: `assetTypeSchema`, `assetSchema`, `assetListQuerySchema`, `updateAssetRequestSchema`, `AssetDto`, …
+  - Storage path: `storage/workspaces/{workspaceId}/originals/{assetId}/{filename}`
+- **How to run / test what I did:**
+  ```bash
+  pnpm install
+  pnpm --filter @creatorai/shared build
+  pnpm --filter api prisma:migrate   # applies phase3_assets
+  pnpm --filter api dev
+  # register/login → TOKEN
+  curl -X POST localhost:4000/api/v1/assets -H "Authorization: Bearer TOKEN" \
+    -F "file=@storage/samples/dummy.mp4;type=video/mp4" -F "name=Dummy" -F "tags=demo,video"
+  curl "localhost:4000/api/v1/assets?type=VIDEO" -H "Authorization: Bearer TOKEN"
+  curl -X PATCH localhost:4000/api/v1/assets/ASSET_ID -H "Authorization: Bearer TOKEN" \
+    -H 'content-type: application/json' -d '{"tags":["demo"],"description":"x"}'
+  curl -X DELETE localhost:4000/api/v1/assets/ASSET_ID -H "Authorization: Bearer TOKEN"
+  ```
+- **Depends on:** Phase 2 `requireAuth` / JWT `workspaceId`; Postgres; `STORAGE_ROOT` (resolved to monorepo root)
+- **Needs from others:** Brendan — wire Asset Library UI; Integration — optional metadata/thumbnail enqueue after video upload
+- **Risks:** Max upload 100 MiB; soft-delete leaves file on disk (intentional MVP)
+
+### [2026-10-03 18:34] ROLE=B NAME=Anto Oswald PHASE=3 TYPE=DONE
+- **Summary:** Phase 3 Dev B complete — Assets API + local storage adapter verified via curl (image + dummy.mp4 upload, filter, patch, content stream, MIME reject, soft-delete).
+- **Files touched:** Same as PROGRESS + this completion block
+- **APIs / types added:** (unchanged from PROGRESS)
+- **How to run / test what I did:** See PROGRESS + Phase Completion block below
+- **Depends on:** Postgres on `DATABASE_URL`; auth token
+- **Needs from others:** Brendan Asset UI; Arvin metadata stub optional at Integration; Cyrus thumbs optional at Integration
+- **Risks:** None remaining for Phase 3 B scope
+
+## Phase 3 Completion — Anto Oswald (Dev B)
+- **Date:** 2026-10-03
+- **Branch:** phase-03-anto
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (metadata enrichment / thumbnails are Arvin/Cyrus + Integration wiring)
+- **Blockers handed to Integration:** Decide sync vs enqueue for EXTRACT_METADATA / thumbnail after video upload
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter api prisma:migrate
+  pnpm --filter api dev
+  curl -X POST localhost:4000/api/v1/auth/register -H 'content-type: application/json' \
+    -d '{"email":"a3@b.com","password":"password123","name":"A3"}'
+  # use TOKEN from response:
+  curl -X POST localhost:4000/api/v1/assets -H "Authorization: Bearer TOKEN" \
+    -F "file=@storage/samples/dummy.mp4;type=video/mp4" -F "name=Dummy" -F "tags=demo"
+  curl "localhost:4000/api/v1/assets?type=VIDEO&tag=demo" -H "Authorization: Bearer TOKEN"
+  curl -X PATCH localhost:4000/api/v1/assets/ASSET_ID -H "Authorization: Bearer TOKEN" \
+    -H 'content-type: application/json' -d '{"description":"phase3"}'
+  curl -X DELETE localhost:4000/api/v1/assets/ASSET_ID -H "Authorization: Bearer TOKEN"
+  ls storage/workspaces/*/originals/*/
+  ```
+- **Files I expect others to connect to:**
+  - `@creatorai/shared` asset Zod schemas / `AssetDto`
+  - `POST/GET/PATCH/DELETE /api/v1/assets*` (Bearer auth)
+  - `services/api/src/storage/local.ts` (`STORAGE_ROOT` layout)
+  - Files under `storage/workspaces/{workspaceId}/originals/...`
+- **Notes for next phase me:** Phase 4 = Projects API + stages; reuse workspace scoping pattern from assets
+
+### [2026-10-03 18:35] ROLE=B NAME=Anto Oswald PHASE=3 TYPE=FIX
+- **Summary:** Root `.gitignore` `storage/` was also ignoring `services/api/src/storage/**`; added negation so the local FS adapter source is tracked (binaries under repo `storage/` still ignored).
+- **Files touched:** `.gitignore`, `context.md`
+- **APIs / types added:** None
+- **How to run / test what I did:** `git check-ignore -v services/api/src/storage/local.ts` → should not match / not ignored
+- **Depends on:** —
+- **Needs from others:** Integration — keep the negation when merging
+- **Risks:** None
