@@ -2342,6 +2342,57 @@ _(Template above kept for other developers.)_
   - Zip download not implemented (URLs OK for MVP)
 - **Ready for Phase 10:** yes (Brendan Integration Lead)
 
+### [2026-10-03 23:45] ROLE=A NAME=Brendan Rodrigues PHASE=10 TYPE=START
+- **Summary:** Synced `origin/main` (`93e25d4` Phase 9 Integration). Created `phase-10-brendan`. Starting Insights UI + Dashboard polish + Job center (SDD §5.9 / FR-INT-*). Integration Lead this phase = me.
+- **Files touched:** (branch created; work in progress)
+- **APIs / types added:** None yet
+- **How to run / test what I did:** `git checkout phase-10-brendan`
+- **Depends on:** Phase 9 complete on main
+- **Needs from others:** Anto Phase 10 B `GET /insights/overview` + `POST /insights/engagement` (retry already on jobs routes)
+- **Risks:** Insights pages will 404/empty until Phase 10 B; dashboard falls back to list aggregations
+
+### [2026-10-03 23:48] ROLE=A NAME=Brendan Rodrigues PHASE=10 TYPE=DONE
+- **Summary:** Phase 10 Dev A complete — Dashboard metric cards; Insights page (stage / clips / platform bar charts + manual engagement form); Jobs center (list + Retry on FAILED); CSS loading spinner + empty-state polish utilities. Overview prefers `GET /insights/overview`, falls back to local list aggregates when API missing.
+- **Files touched:**
+  - `apps/web/src/app/page.tsx` + `DashboardHome.tsx`
+  - `apps/web/src/app/insights/**` (InsightsView, EngagementForm, SimpleBarChart, insights-api, page)
+  - `apps/web/src/app/jobs/**` (JobsCenter, page)
+  - `apps/web/src/app/globals.css` (`.gg-spinner`, `.gg-loading`, `.gg-empty`)
+  - `context.md`
+- **APIs / types added (client assumptions — TODO_SHARED until Anto Zod lands):**
+  - `GET /insights/overview` → `{ counts: { projects, assets, clips, jobsRunning }, stageDistribution[], clipsPerProject[], platformMix[], avgTimeInStageMs? }`
+  - `POST /insights/engagement` body `{ projectId, platform?, views, likes, notes? }`
+  - `POST /jobs/:id/retry` → Job (already on API; UI wired)
+  - Fallback: list projects/assets/jobs when overview 404/5xx — clips=0, platformMix=[]
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web exec eslint 'src/app/page.tsx' src/app/DashboardHome.tsx 'src/app/insights' 'src/app/jobs'
+  pnpm --filter web dev
+  # / → cards; /insights → charts + engagement form; /jobs → list (Retry needs FAILED job)
+  ```
+- **Depends on:** Phase 10 B insights API for full clips/platform numbers (fallback OK for demo shell)
+- **Needs from others:**
+  - Anto: overview shape above; engagement persist; confirm retry returns updated Job
+  - Arvin/Cyrus: demo seed so dashboard shows non-zero counts
+- **Risks:** Without overview API, clips card stays 0; engagement submit 404 until Anto lands
+
+## Phase 10 Completion — Brendan Rodrigues (Dev A)
+- **Date:** 2026-10-03
+- **Branch:** phase-10-brendan
+- **All allowed tasks done:** yes (golden-path empty-state CSS utilities added; deep component edits on projects/assets left to Integration CSS-only / optional)
+- **Incomplete items:** e2e metrics blocked on Anto overview (expected); Integration Lead = me for final gate
+- **Blockers handed to Integration:** Align overview DTO; import `@creatorai/shared` insights when ready
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web dev
+  # Manual: login → / dashboard cards → /insights bars → /jobs list
+  ```
+- **Files I expect others to connect to:**
+  - `apps/web/src/app/insights/insights-api.ts`
+  - `DashboardHome` / `InsightsView` / `JobsCenter`
+- **Notes for next phase me:** Phase 10 Integration Lead = Brendan — wire Anto overview, run golden path gate
 ### Chronological — 2026-10-03 18:12 (Cyrus / Phase 10 Dev D)
 - **Summary:** Phase 10 D complete — media pipeline hardening (`MediaPipelineError` codes for missing/empty/zero-duration/OOB/ffmpeg), demo fallback bake script, judges’ `media-checklist.md`, verify smoke.
 - **Files touched:**

@@ -1,5 +1,5 @@
-import { DashboardGate } from "@/components/auth/DashboardGate";
+import { DashboardHome } from "./DashboardHome";
 
 export default function DashboardPage() {
-  return <DashboardGate />;
+  return <DashboardHome />;
 }
