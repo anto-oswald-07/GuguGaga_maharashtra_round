@@ -68,12 +68,13 @@
 ├── apps/web/
 ├── services/api/          # auth + assets + enrich.ts
 ├── services/worker/       # extractMetadata + thumbnail exports
-├── packages/shared/       # auth + assets Zod, assetMetadata types
+├── packages/shared/       # auth + assets Zod, assetMetadata, workflow stages
 ├── samples/scripts/sample_script.md
 ├── scripts/media/
 ├── storage/
 ├── docs/api/ auth.http + auth.postman.json
 ├── docs/assets/metadata.md
+├── docs/workflow/stages.md
 ├── docs/testing/phase-2-auth.md
 ├── docs/security/
 ├── docker-compose.yml     # POSTGRES_HOST_PORT
@@ -685,6 +686,24 @@ _(Template above kept for other developers.)_
   - `docs/assets/metadata.md` → Integration wiring
 - **Notes for next phase me:** Phase 4 C = workflow stage helpers
 
+## Phase 4 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** `Arvin` (working tree; commit when ready)
+- **All allowed tasks done:** yes
+- **Incomplete items:** none
+- **Blockers handed to Integration:** Anto must use exact `ProjectStage` names (`IDEA`…`PUBLISHED`); Brendan should import `@creatorai/shared` instead of `TODO_SHARED` constants
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  node -e "const s=require('./packages/shared/dist/workflow/stages.js'); console.log(s.defaultStageOrder().join('→'), s.stageIndex('EDITING'), s.isTerminalStage('PUBLISHED'))"
+  test -f docs/workflow/stages.md
+  ```
+- **Files I expect others to connect to:**
+  - `projectStageSchema` / `ProjectStage` → Anto Prisma enum + DTOs
+  - `defaultStageOrder` / `stageIndex` / `isTerminalStage` → Brendan Kanban columns + stage UI
+  - `docs/workflow/stages.md` → UI copy + Integration
+- **Notes for next phase me:** Phase 5 C = `packages/ai-provider` real+mock + worker consumer
+
 ---
 
 ## 7. Integration Records (paste after each Integration Mini-Phase)
@@ -928,6 +947,33 @@ _(Template above kept for other developers.)_
 - **Risks:** Sync enrichment adds latency on large videos — replace with Job queue later
 - **Decision:** Sync MVP enrichment (no Job table); placeholder JPEG when ffmpeg missing
 
+### [2026-10-03 19:37] ROLE=C NAME=Arvin Almeida PHASE=4 TYPE=START
+- **Summary:** Verified Phase 1–3 still green (auth/assets CRUD + CORS DELETE + Phase 3 C files + sync enrich). Starting Phase 4 Dev C — workflow stage Zod enum + pure helpers + stage docs.
+- **Files touched:** (planned) `packages/shared/src/workflow/**`, `docs/workflow/stages.md`, `context.md`
+- **APIs / types added:** none yet
+- **How to run / test what I did:** Phase 1–3 smoke already passed via curl
+- **Depends on:** SDD §4.2 `ProjectStage` names
+- **Needs from others:** Anto Phase 4 B to mirror enum names in Prisma
+- **Risks:** None for Dev C scope
+
+### [2026-10-03 19:37] ROLE=C NAME=Arvin Almeida PHASE=4 TYPE=COMPLETE
+- **Summary:** Phase 4 Dev C complete — `projectStageSchema`, `defaultStageOrder` / `stageIndex` / `isTerminalStage`, stage meaning docs for UI copy.
+- **Files touched:**
+  - `packages/shared/src/workflow/stages.ts`, `packages/shared/src/workflow/index.ts`
+  - `packages/shared/src/index.ts` (re-exports)
+  - `docs/workflow/stages.md`
+  - `context.md`
+- **APIs / types added:**
+  - `ProjectStage` + `projectStageSchema` (`IDEA`…`PUBLISHED`)
+  - Helpers: `defaultStageOrder`, `stageIndex`, `isTerminalStage`, `isProjectStage`
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  node -e "const s=require('./packages/shared/dist/workflow/stages.js'); console.log(s.defaultStageOrder().join('→'))"
+  ```
+- **Depends on:** none (pure shared package)
+- **Needs from others:** Anto — Prisma enum exact names; Brendan — import shared stages for Kanban
+- **Risks:** None for Phase 4 C scope
 ### [2026-10-03 19:37] ROLE=B NAME=Anto Oswald PHASE=4 TYPE=START
 - **Summary:** Started Phase 4 Dev B on `phase-04-anto` — Projects API + StageEvents + shared ProjectStage/Platform DTOs.
 - **Files touched:** (branch `phase-04-anto` created from `main` after Phase 3 Integration)

@@ -40,6 +40,13 @@ export type {
 } from './types/assetMetadata';
 export {
   projectStageSchema,
+  DEFAULT_STAGE_ORDER,
+  defaultStageOrder,
+  stageIndex,
+  isTerminalStage,
+  isProjectStage,
+  type ProjectStage,
+} from './workflow';
   PROJECT_STAGES,
   platformSchema,
   PLATFORMS,
