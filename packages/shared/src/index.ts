@@ -74,6 +74,23 @@ export {
   type StageHistoryResponse,
 } from './projects';
 export {
+  scriptGenInputSchema,
+  generatedScriptMetaSchema,
+  generatedScriptSchema,
+  scriptGenResultSchema,
+  generatedHooksSchema,
+  supportingContentSchema,
+  assertGeneratedScript,
+  assertGeneratedHooks,
+  assertSupportingContent,
+  type ScriptGenInput,
+  type GeneratedScriptMeta,
+  type GeneratedScript,
+  type ScriptGenResult,
+  type GeneratedHooks,
+  type SupportingContent,
+} from './schemas/scriptSchema';
+export {
   scriptSourceSchema,
   SCRIPT_SOURCES,
   scriptContentSchema,
