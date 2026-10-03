@@ -28,53 +28,60 @@
 
 | Field | Value |
 |-------|-------|
-| **Current phase** | Phase 5 Integration complete — Phase 6 next |
-| **Last completed tag** | `phase-1-done` (local only); Phase 2–5 Integration recorded in context — **no git tags this session** |
-| **main status** | Auth + Assets + Projects + Scripts/Jobs/AI end-to-end (mock provider, versions, hooks, supporting) |
+| **Current phase** | Phase 6 Integration complete — Phase 7 next |
+| **Last completed tag** | `phase-1-done` (local only); Phase 2–6 Integration recorded in context — **no git tags this session** |
+| **main status** | Auth + Assets + Projects + Scripts/Jobs + Transcript/Mapping end-to-end (mock STT + fuzzy align) |
 | **Package manager** | **pnpm** workspaces (final) |
 | **Queue decision** | **DB-polling queue for MVP**; API in-process poller (`startJobPoller`) claims `QUEUED` jobs; Redis optional (`--profile redis`) for later BullMQ |
 | **Default AI provider** | `mock` until keys available (`AI_PROVIDER=mock\|openai\|gemini`) |
 | **API base URL (local)** | `http://localhost:4000/api/v1` |
 | **Web app (local)** | `http://localhost:3002` (or `:3000` if free) |
-| **Who is Integration Lead next** | Brendan (Phase 6) |
+| **Who is Integration Lead next** | Brendan (Phase 7) |
 
 ### 2.1 What Already Works
-- `pnpm install` at root (workspace: web, api, worker, shared)
+- `pnpm install` at root (workspace: web, api, worker, shared, ai-provider)
 - `GET /api/v1/health` → `{ status: 'ok', service: 'api' }`
 - Auth: `POST /auth/register`, `POST /auth/login`, `GET /auth/me` (JWT `userId`+`workspaceId`)
 - Assets: multipart upload/list/get/patch/soft-delete + `/content` + `/thumbnail`
 - Video upload sync-enriches `metadata` (ffprobe or mock) + derivative thumb (ffmpeg or placeholder JPEG)
-- **Projects:** CRUD-ish create/list/get/patch, stage transition + history, attach/detach assets
-- Web: login/register, asset library, `/projects` list+detail, `/workflow` Kanban by stage
-- Shared: auth/assets Zod, assetMetadata, `projectStageSchema` + workflow helpers, project DTOs
+- **Projects:** CRUD-ish create/list/get/patch, stage transition + history, attach/detach assets (`assetIds[]`)
+- **Scripts + Jobs:** generate/edit/versions; DB-poller `QUEUED`→`RUNNING`→`SUCCEEDED`/`FAILED`
+- **Transcripts + Mapping (Phase 6):** `POST .../transcribe`, `GET .../transcripts`, `POST .../align`, `GET .../mappings`, `PATCH /mappings/:id`
+  - TRANSCRIBE → optional `extractAudio` + `AiProvider.transcribe` (mock STT / Whisper) → `persistTranscript`
+  - ALIGN_SCRIPT → fuzzy `alignScriptToTranscript` → `persistAlignments`; low-confidence threshold **0.55**
+  - Web Footage & Mapping tab: transcribe → segments → align → table + PATCH edit
+- Web: login/register, asset library, `/projects` list+detail (Script + Footage & Mapping), `/workflow` Kanban
+- Shared: auth/assets/projects/scripts/jobs/mapping Zod + `LOW_CONFIDENCE_THRESHOLD`
 - Seed: `scripts/seed/sample-project.ts` auto login/register `demo@creatorai.local`
 - Postgres via compose (`POSTGRES_HOST_PORT`, default 5432; use 5433 if host busy)
-- Sample script at `samples/scripts/sample_script.md`
+- Sample media: `storage/samples/dummy.mp4`; STT fixtures under `packages/ai-provider/test/fixtures`
 
 ### 2.2 Known Broken / Gaps
 - Host `:5432` often occupied — set `POSTGRES_HOST_PORT=5433` + matching `DATABASE_URL` (see `.env.example`).
-- This laptop has no ffmpeg/ffprobe → metadata `metaSource=mock`, thumbs `thumbnailSource=placeholder` (by design).
-- No Job table yet — enrichment is sync MVP; move to queued jobs in a later phase.
-- Web still has local stage/platform constants (`TODO_SHARED`) — names match shared; web package does not depend on `@creatorai/shared` yet.
-- Git tags `phase-2-done` / `phase-3-done` / `phase-4-done` not created unless requested.
+- This laptop has no ffmpeg/ffprobe → metadata mock / thumbs placeholder; TRANSCRIBE skips extractAudio (mock STT still works).
+- OpenAI Whisper path untested without `OPENAI_API_KEY`.
+- Re-align replaces prior maps for the same script+transcript pair (including USER edits).
+- Next.js `/projects` can hang under load — restart web on `:3002` if needed.
+- Git tags `phase-2-done` … `phase-6-done` not created unless requested.
 
 ### 2.3 Active Blockers
 - None.
 
 ### 2.4 Open NEED Items (from developers)
-- None open for Phase 4.
+- None open for Phase 6.
 
 ### 2.5 Important Paths That Exist
 ```
 /
-├── apps/web/              # /projects, /workflow Kanban
-├── services/api/          # auth + assets + projects + enrich.ts
-├── services/worker/       # extractMetadata + thumbnail exports
-├── packages/shared/       # auth + assets + projects Zod, workflow stages
+├── apps/web/              # /projects (Script + Footage & Mapping), /workflow
+├── services/api/          # auth + assets + projects + scripts + jobs + mapping
+├── services/worker/       # extractMetadata, thumbnail, extractAudio, STT/align CLIs
+├── packages/shared/       # Zod DTOs incl. mapping / LOW_CONFIDENCE_THRESHOLD
+├── packages/ai-provider/  # mock+Whisper STT, fuzzy align
 ├── samples/scripts/sample_script.md
 ├── samples/projects/demo-project.json
 ├── scripts/seed/sample-project.ts
-├── scripts/media/
+├── scripts/media/         # extract-audio.sh, make-dummy-video.sh
 ├── storage/
 ├── docs/api/ auth.http + auth.postman.json
 ├── docs/assets/metadata.md
@@ -89,7 +96,7 @@
 ```
 
 ### 2.6 Env Vars In Use
-Root `.env.example`: `POSTGRES_HOST_PORT`, `DATABASE_URL`, `JWT_SECRET`, `PORT`, `STORAGE_ROOT`. Optional `REDIS_URL`. Web: `NEXT_PUBLIC_API_BASE_URL`.
+Root `.env.example`: `POSTGRES_HOST_PORT`, `DATABASE_URL`, `JWT_SECRET`, `PORT`, `STORAGE_ROOT`, `AI_PROVIDER`. Optional `REDIS_URL`, `OPENAI_API_KEY`. Web: `NEXT_PUBLIC_API_BASE_URL`.
 
 ---
 
@@ -1550,3 +1557,40 @@ _(Template above kept for other developers.)_
 - **Depends on:** ffmpeg on PATH; `storage/samples/dummy.mp4`
 - **Needs from others:** Brendan Integration — call extract before Whisper `filePath`
 - **Risks:** None
+
+## INTEGRATION COMPLETE — Phase 6
+- **Date:** 2026-10-03
+- **Lead:** Arvin (acting; plan Lead=Brendan; work on `Arvin` branch)
+- **Verified:**
+  - [x] Transcribe job succeeds on dummy/sample media (mock STT; ffmpeg optional)
+  - [x] Align produces mappings (fuzzy align via `@creatorai/ai-provider`)
+  - [x] UI edit mapping persists (`PATCH /mappings/:id` → `source=USER`)
+  - [x] Low confidence visible (`LOW_CONFIDENCE_THRESHOLD=0.55` shared + MappingTable highlight)
+- **What was wired:**
+  - Applied migration `20261003153000_phase6_transcript_mapping` (Transcript / TranscriptSegment / ScriptFootageMap)
+  - API `completeJobWithAi` TRANSCRIBE → extractAudio (when ffmpeg) + `AiProvider.transcribe` → `persistTranscript`
+  - ALIGN_SCRIPT → `alignScriptToTranscript` → `persistAlignments`
+  - Mock STT hintText prefers latest project script so align demos yield high-confidence rows
+  - Web client: threshold 0.55; `scriptDocumentId` → `scriptId` normalizer
+- **Commands to re-verify:**
+  ```bash
+  pnpm --filter api dev
+  # register → create project → attach VIDEO assetIds → generate script
+  # POST /projects/:id/transcribe {"assetId"} → poll job → GET .../transcripts
+  # POST /projects/:id/align {"scriptId","transcriptId"} → GET .../mappings
+  # PATCH /mappings/:id {"startMs","endMs","confidence"}
+  # UI: http://localhost:3002/projects → Footage & Mapping tab
+  ```
+- **Known gaps / follow-ups:**
+  - Host ffmpeg not installed — extractAudio skipped; mock STT still works (install ffmpeg for Whisper path)
+  - OpenAI Whisper not smoke-tested without key
+  - Re-align deletes prior maps for script+transcript pair (including USER edits)
+- **Ready for Phase 7:** yes (Brendan Integration Lead)
+
+- **Re-verified 2026-10-03 (continue):** E2E PASS — mock STT 14 segs, align 7 maps (high≥2), PATCH → USER 0.99; web home+projects 200 after Next restart.
+
+### Chronological — 2026-10-03 (Arvin / Phase 6 Integration)
+- **Summary:** Phase 6 A–D code existed but Integration incomplete (migration unapplied; TRANSCRIBE still used hard-coded mock segments; UI threshold/scriptId drift). Applied Phase 6 migration; wired STT + extractAudio + fuzzy align into API poller; fixed web contracts; E2E smoke PASS (transcribe→align→PATCH; high-confidence rows when script-matched mock STT).
+- **Files touched:** `services/api/src/modules/jobs/service.ts`, `services/worker/package.json` (extractAudio export), `apps/web/src/lib/api.ts`, `context.md`
+- **Needs from others:** None for Phase 6; Phase 7 Lead = Brendan
+- **Risks:** Next.dev hang on :3002; ffmpeg missing on this host

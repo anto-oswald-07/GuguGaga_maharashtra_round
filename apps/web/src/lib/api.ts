@@ -533,7 +533,8 @@ export type UpdateMappingPayload = {
   confidence?: number;
 };
 
-const LOW_CONFIDENCE_THRESHOLD = 0.5;
+/** Match `@creatorai/shared` / API MappingListResponse (FR-STV-006). */
+const LOW_CONFIDENCE_THRESHOLD = 0.55;
 
 export function isLowConfidence(confidence: number): boolean {
   return confidence < LOW_CONFIDENCE_THRESHOLD;
@@ -571,10 +572,18 @@ function normalizeMapping(raw: unknown): ScriptFootageMapDto {
     typeof confidenceRaw === "number"
       ? confidenceRaw
       : Number(confidenceRaw) || 0;
+  const normalized =
+    confidence > 1 ? confidence / 100 : confidence;
+  const scriptId =
+    typeof r.scriptId === "string"
+      ? r.scriptId
+      : typeof r.scriptDocumentId === "string"
+        ? r.scriptDocumentId
+        : null;
   return {
     id: String(r.id ?? ""),
     projectId: String(r.projectId ?? ""),
-    scriptId: typeof r.scriptId === "string" ? r.scriptId : null,
+    scriptId,
     transcriptId: typeof r.transcriptId === "string" ? r.transcriptId : null,
     scriptRef:
       typeof r.scriptRef === "string"
@@ -584,7 +593,7 @@ function normalizeMapping(raw: unknown): ScriptFootageMapDto {
           : "",
     startMs: typeof r.startMs === "number" ? r.startMs : Number(r.startMs) || 0,
     endMs: typeof r.endMs === "number" ? r.endMs : Number(r.endMs) || 0,
-    confidence: confidence > 1 ? confidence / 100 : confidence,
+    confidence: normalized,
     createdAt: typeof r.createdAt === "string" ? r.createdAt : undefined,
     updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : undefined,
   };

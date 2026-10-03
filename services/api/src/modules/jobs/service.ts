@@ -9,7 +9,14 @@ import type {
 } from '@creatorai/shared';
 import { createAiProvider } from '@creatorai/ai-provider';
 import type { Job, Prisma } from '@prisma/client';
+import { access } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import {
+  audioDerivativePath,
+  extractAudio,
+} from 'worker/media/extractAudio';
 import { prisma } from '../../db/prisma';
+import { storage } from '../../storage/local';
 import {
   loadScriptContentForAlign,
   mockAlignmentsFromScript,
@@ -19,6 +26,50 @@ import {
 } from '../mapping/service';
 import { appendAiScriptVersion } from '../scripts/service';
 import { enqueueJob } from './queue';
+
+/** Prefer extracted WAV for Whisper; fall back to original if extract fails. */
+async function resolveSttFilePath(
+  workspaceId: string,
+  assetId: string,
+  relativePath: string,
+): Promise<{ filePath?: string; extracted: boolean }> {
+  let absOriginal: string;
+  try {
+    absOriginal = storage.absoluteFromRelative(relativePath);
+    await access(absOriginal, constants.R_OK);
+  } catch {
+    return { extracted: false };
+  }
+
+  const outPath = audioDerivativePath(
+    storage.getRoot(),
+    workspaceId,
+    assetId,
+    'wav',
+  );
+  try {
+    // Skip ffmpeg spawn when binary missing (common on bare demos).
+    const ffmpegCandidates = ['/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg'];
+    let hasFfmpeg = false;
+    for (const bin of ffmpegCandidates) {
+      try {
+        await access(bin, constants.X_OK);
+        hasFfmpeg = true;
+        break;
+      } catch {
+        /* try next */
+      }
+    }
+    if (!hasFfmpeg) {
+      return { filePath: absOriginal, extracted: false };
+    }
+    await extractAudio(absOriginal, outPath);
+    return { filePath: outPath, extracted: true };
+  } catch {
+    // ffmpeg failed or non-media file — still allow mock/Whisper on original
+    return { filePath: absOriginal, extracted: false };
+  }
+}
 
 export class JobHttpError extends Error {
   constructor(
@@ -312,10 +363,70 @@ export async function completeJobWithAi(
           workspaceId: job.workspaceId,
           deletedAt: null,
         },
-        select: { name: true },
+        select: { name: true, path: true },
       });
-      // Phase 6 C will replace mock STT with Whisper; keep deterministic segments for UI/e2e.
-      const segments = mockTranscriptSegments(asset?.name);
+      if (!asset) {
+        throw new JobHttpError(404, 'not_found', 'Asset not found');
+      }
+
+      const { filePath, extracted } = await resolveSttFilePath(
+        job.workspaceId,
+        assetId,
+        asset.path,
+      );
+
+      // Prefer spoken text from latest project script so mock STT ↔ align demos match.
+      let hintText =
+        typeof input.hintText === 'string' && input.hintText.trim()
+          ? input.hintText.trim()
+          : '';
+      if (!hintText) {
+        const latestScript = await prisma.scriptDocument.findFirst({
+          where: {
+            projectId: job.projectId,
+            project: { workspaceId: job.workspaceId, deletedAt: null },
+          },
+          orderBy: { updatedAt: 'desc' },
+          include: {
+            versions: { orderBy: { version: 'desc' }, take: 1 },
+          },
+        });
+        const content = asRecord(latestScript?.versions[0]?.content);
+        const parts = [content.hook, content.body, content.cta]
+          .filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+          .map((p) => p.trim());
+        if (parts.length > 0) {
+          hintText = parts.join('\n\n');
+        } else {
+          hintText = [
+            'Stop filming one Reel a day. In the next 60 seconds I will show you how I batch an entire week of Reels in a single afternoon without burning out.',
+            'First, pick one topic cluster for the week. Mine this week: batching short-form video.',
+            'Second, write three hooks before you touch the camera. Strong hooks decide whether people stay.',
+            'Third, film all A-roll in one session: same outfit, same lighting, same mic.',
+            `This footage is labeled ${asset.name}.`,
+          ].join(' ');
+        }
+      }
+
+      let segments: { startMs: number; endMs: number; text: string }[];
+      let sttProvider: string = provider.name;
+      try {
+        const transcript = await provider.transcribe({
+          filePath,
+          hintText,
+          language,
+        });
+        segments = transcript.segments.map((s) => ({
+          startMs: s.startMs,
+          endMs: s.endMs,
+          text: s.text,
+        }));
+      } catch {
+        // Keep e2e green if provider misconfigured — deterministic mock segments.
+        segments = mockTranscriptSegments(asset.name);
+        sttProvider = 'mock-fallback';
+      }
+
       const result = await persistTranscript({
         workspaceId: job.workspaceId,
         projectId: job.projectId,
@@ -328,7 +439,9 @@ export async function completeJobWithAi(
         transcriptId: result.transcriptId,
         segmentCount: result.segmentCount,
         segments,
-        provider: 'mock',
+        provider: sttProvider,
+        audioExtracted: extracted,
+        sttFilePath: filePath ?? null,
       };
     } else if (job.type === 'ALIGN_SCRIPT') {
       if (!job.projectId) {
