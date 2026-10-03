@@ -711,6 +711,27 @@ _(Template above kept for other developers.)_
   - `docs/ffmpeg-notes.md` §6 sample-rate + path convention
 - **Notes for next phase me:** Phase 7 D = FFmpeg clip cutter (`cutClip.ts` + shell)
 
+## Phase 7 Completion — Cyrus Selvaraj (Dev D)
+- **Date:** 2026-10-03
+- **Branch:** phase-07-cyrus
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (Anto RENDER_CLIP Job + Asset create from `outputPath` is Integration / Phase 7 B)
+- **Blockers handed to Integration:** Wire `processRenderClipJob` / `cutClip` for RENDER_CLIP; use `reencode` mode so UI start/end match file; path `renders/{jobId}/output.mp4`
+- **Commands to verify my work:**
+  ```bash
+  ./scripts/media/make-dummy-video.sh   # if needed
+  ./scripts/media/cut-clip.sh           # 1s→3s ≈ 2.000s MP4
+  ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 storage/samples/dummy-clip.mp4
+  # consumer (from services/worker, with tsx):
+  pnpm --filter worker render-clip -- --input storage/samples/dummy.mp4 --start-ms 1000 --end-ms 3000 --output storage/samples/dummy-clip-ts.mp4
+  ```
+- **Files I expect others to connect to:**
+  - `services/worker/src/media/cutClip.ts` → RENDER_CLIP
+  - `services/worker/src/consumers/renderClip.ts` → job runner (`output.outputPath`)
+  - `scripts/media/cut-clip.sh` → manual smoke
+  - `docs/ffmpeg-notes.md` §7 re-encode decision
+- **Notes for next phase me:** Phase 8 D = `packages/timeline-schema` + FFmpeg timeline renderer
+
 ## Phase 3 Completion — Brendan Rodrigues (Dev A)
 - **Date:** 2026-10-03
 - **Branch:** phase-03-brendan
@@ -884,6 +905,7 @@ _(Template above kept for other developers.)_
 | Mock AI stable | Planned Phase 5/10 (Arvin) | |
 | Script prompts + Zod | Done Phase 5 (Cyrus) | `docs/ai/prompts/**` + `packages/shared/src/schemas/scriptSchema.ts` |
 | STT audio extract | Done Phase 6 (Cyrus) | `extractAudio.ts` + `extract-audio.sh` (16 kHz mono WAV) |
+| Clip cut RENDER | Done Phase 7 (Cyrus) | `cutClip.ts` + `renderClip.ts` + `cut-clip.sh` (re-encode default) |
 | Golden path judge script | Planned Phase 10 (Arvin) | `docs/demo/judge-script.md` |
 | Emergency pre-rendered clip | Planned Phase 10 (Cyrus) | |
 
@@ -1595,6 +1617,27 @@ _(Template above kept for other developers.)_
 - **Needs from others:** None for Phase 6; Phase 7 Lead = Brendan
 - **Risks:** Next.dev hang on :3002; ffmpeg missing on this host
 
+### [2026-10-03 16:02] ROLE=D NAME=Cyrus Selvaraj PHASE=7 TYPE=START
+- **Summary:** Prior Dev D phases verified on `main` (P1–P6 including extractAudio). Starting Phase 7 D — FFmpeg clip cutter + RENDER_CLIP consumer.
+- **Files touched:** branch `phase-07-cyrus` from `origin/main` @ `50c6fd4`
+- **APIs / types added:** None yet
+- **How to run / test what I did:** `git checkout phase-07-cyrus`
+- **Depends on:** Phase 1 dummy.mp4; SDD renders path; Anto RENDER_CLIP job type (Phase 7 B)
+- **Needs from others:** Anto Asset create from job `output.outputPath`; Brendan Clips UI render button
+- **Risks:** None for Phase 7 D scope
+
+### [2026-10-03 16:04] ROLE=D NAME=Cyrus Selvaraj PHASE=7 TYPE=DONE
+- **Summary:** Added `cutClip.ts` (default **reencode** for accurate boundaries; optional `copy`), `renderClip.ts` consumer returning `outputPath` in job JSON, and `cut-clip.sh`. Documented choice + `renders/{jobId}/output.mp4` in `docs/ffmpeg-notes.md` §7. Smoke: `dummy.mp4` 1s→3s → **2.000s** MP4; consumer SUCCEEDED with same window.
+- **Files touched:** `services/worker/src/media/cutClip.ts`, `services/worker/src/consumers/renderClip.ts`, `scripts/media/cut-clip.sh`, `services/worker/package.json`, `services/worker/src/index.ts`, `docs/ffmpeg-notes.md`, `context.md`
+- **APIs / types added:** `cutClip`, `renderClipPath`, `processRenderClipJob` / `RenderClipJobOutput`
+- **How to run / test what I did:**
+  ```bash
+  ./scripts/media/cut-clip.sh
+  ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 storage/samples/dummy-clip.mp4
+  ```
+- **Depends on:** ffmpeg on PATH; `storage/samples/dummy.mp4`
+- **Needs from others:** Arvin Integration / Anto — enqueue RENDER_CLIP → `processRenderClipJob` → create Asset from `outputPath`
+- **Risks:** None
 ## Phase 7 Completion — Arvin Almeida (Dev C)
 - **Date:** 2026-10-03
 - **Branch:** `Arvin` (working tree; commit when ready)
