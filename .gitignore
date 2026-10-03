@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build / output
+dist/
+build/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# Local media store
+storage/
+!storage/.gitkeep
+
+# Prisma
+services/api/prisma/*.db
+services/api/prisma/*.db-journal
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Test / cache
+.turbo/
+.cache/
+.tmp/

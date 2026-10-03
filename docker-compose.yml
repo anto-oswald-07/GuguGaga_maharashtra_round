@@ -1,0 +1,47 @@
+# CreatorAi local infrastructure
+# Postgres: required for API (Prisma)
+# Redis: optional (job queue decision TBD in Phase 1 Integration)
+#
+# Ports:
+#   PostgreSQL → host 5432
+#   Redis      → host 6379
+#
+# Start:  docker compose up -d
+#         (or: podman compose up -d)
+# Stop:   docker compose down
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: creatorai-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: creatorai
+      POSTGRES_PASSWORD: creatorai
+      POSTGRES_DB: creatorai
+    volumes:
+      - creatorai_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U creatorai -d creatorai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: creatorai-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    profiles:
+      - redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  creatorai_pgdata:
