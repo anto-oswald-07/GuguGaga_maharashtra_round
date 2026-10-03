@@ -12,6 +12,7 @@ import { registerAssetRoutes } from './modules/assets/routes';
 import { registerProjectRoutes } from './modules/projects/routes';
 import { registerScriptRoutes } from './modules/scripts/routes';
 import { registerJobRoutes } from './modules/jobs/routes';
+import { registerMappingRoutes } from './modules/mapping/routes';
 import { startJobPoller } from './modules/jobs/processor';
 
 loadEnv({ path: path.resolve(__dirname, '../../../.env') });
@@ -44,6 +45,7 @@ async function main() {
   await registerAssetRoutes(app);
   await registerProjectRoutes(app);
   await registerScriptRoutes(app);
+  await registerMappingRoutes(app);
   await registerJobRoutes(app);
 
   await app.listen({ port, host });

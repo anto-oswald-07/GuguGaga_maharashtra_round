@@ -10,6 +10,13 @@ import type {
 import { createAiProvider } from '@creatorai/ai-provider';
 import type { Job, Prisma } from '@prisma/client';
 import { prisma } from '../../db/prisma';
+import {
+  loadScriptContentForAlign,
+  mockAlignmentsFromScript,
+  mockTranscriptSegments,
+  persistAlignments,
+  persistTranscript,
+} from '../mapping/service';
 import { appendAiScriptVersion } from '../scripts/service';
 import { enqueueJob } from './queue';
 
@@ -282,10 +289,140 @@ export async function completeJobWithAi(
         provider: supportingRaw.provider,
         model: supportingRaw.model,
       };
+    } else if (job.type === 'TRANSCRIBE') {
+      if (!job.projectId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'TRANSCRIBE job missing projectId',
+        );
+      }
+      const assetId = strField(input, 'assetId', '');
+      if (!assetId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'TRANSCRIBE job missing assetId',
+        );
+      }
+      const language = strField(input, 'language', 'en');
+      const asset = await prisma.asset.findFirst({
+        where: {
+          id: assetId,
+          workspaceId: job.workspaceId,
+          deletedAt: null,
+        },
+        select: { name: true },
+      });
+      // Phase 6 C will replace mock STT with Whisper; keep deterministic segments for UI/e2e.
+      const segments = mockTranscriptSegments(asset?.name);
+      const result = await persistTranscript({
+        workspaceId: job.workspaceId,
+        projectId: job.projectId,
+        assetId,
+        language,
+        segments,
+      });
+      output = {
+        ...output,
+        transcriptId: result.transcriptId,
+        segmentCount: result.segmentCount,
+        segments,
+        provider: 'mock',
+      };
+    } else if (job.type === 'ALIGN_SCRIPT') {
+      if (!job.projectId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'ALIGN_SCRIPT job missing projectId',
+        );
+      }
+      const scriptId = strField(input, 'scriptId', '');
+      const transcriptId = strField(input, 'transcriptId', '');
+      if (!scriptId || !transcriptId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'ALIGN_SCRIPT job missing scriptId or transcriptId',
+        );
+      }
+
+      const { content } = await loadScriptContentForAlign(
+        job.workspaceId,
+        scriptId,
+      );
+      const transcript = await prisma.transcript.findFirst({
+        where: {
+          id: transcriptId,
+          projectId: job.projectId,
+          project: { workspaceId: job.workspaceId, deletedAt: null },
+        },
+        include: { segments: { orderBy: { ordinal: 'asc' } } },
+      });
+      if (!transcript) {
+        throw new JobHttpError(404, 'not_found', 'Transcript not found');
+      }
+
+      const segmentInputs = transcript.segments.map((s) => ({
+        startMs: s.startMs,
+        endMs: s.endMs,
+        text: s.text,
+      }));
+
+      let alignments: {
+        scriptRef: string;
+        startMs: number;
+        endMs: number;
+        confidence: number;
+      }[];
+      let alignProvider = 'mock-fallback';
+
+      try {
+        const aiAlignments = await provider.alignScriptToTranscript(
+          {
+            hook: content.hook,
+            body: content.body,
+            cta: content.cta,
+          },
+          segmentInputs,
+        );
+        alignments = aiAlignments.map((a: {
+          scriptExcerpt: string;
+          startMs: number;
+          endMs: number;
+          confidence: number;
+        }) => ({
+          scriptRef: a.scriptExcerpt,
+          startMs: a.startMs,
+          endMs: a.endMs,
+          confidence: a.confidence,
+        }));
+        alignProvider = provider.name;
+      } catch {
+        // Phase 6 C implements real fuzzy align; until then use deterministic mock.
+        alignments = mockAlignmentsFromScript(content, segmentInputs);
+      }
+
+      const result = await persistAlignments({
+        workspaceId: job.workspaceId,
+        projectId: job.projectId,
+        scriptDocumentId: scriptId,
+        transcriptId,
+        alignments,
+      });
+
+      output = {
+        ...output,
+        mappingIds: result.mappingIds,
+        count: result.count,
+        alignments,
+        provider: alignProvider,
+      };
     } else {
       output = {
         ...output,
-        message: `No Phase 5 handler for ${job.type}`,
+        message: `No handler for ${job.type}`,
       };
     }
 

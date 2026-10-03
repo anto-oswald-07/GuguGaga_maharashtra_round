@@ -30,7 +30,15 @@ Phase 1 Integration chose DB-polling over BullMQ for the hackathon MVP. Redis re
 | `GENERATE_SCRIPT` | `POST /projects/:id/scripts/generate` | `ScriptDocument` + `ScriptVersion` (`source=AI` or `REFINE`) |
 | `GENERATE_HOOKS` | `POST /scripts/:id/hooks` | Job `output.hooks: string[]` |
 | `GENERATE_SUPPORTING` | `POST /scripts/:id/supporting` | Job `output.supporting` |
-| Others (transcribe, render, …) | Later phases | — |
+| `TRANSCRIBE` | `POST /projects/:id/transcribe` | `Transcript` + `TranscriptSegment[]` |
+| `ALIGN_SCRIPT` | `POST /projects/:id/align` | `ScriptFootageMap[]` (replaces prior AI maps for script+transcript) |
+| Others (render, packs, …) | Later phases | — |
+
+## Phase 6 mapping notes
+
+- Manual correction: `PATCH /api/v1/mappings/:id` sets `source=USER`.
+- Low confidence: `confidence < 0.55` → DTO `lowConfidence: true` (`LOW_CONFIDENCE_THRESHOLD` in `@creatorai/shared`).
+- Until Arvin Phase 6 C lands Whisper + fuzzy align, the API poller uses deterministic mock STT/align so Brendan’s Mapping UI can e2e.
 
 ## Script content shape
 

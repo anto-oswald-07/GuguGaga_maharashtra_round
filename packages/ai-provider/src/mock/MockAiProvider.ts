@@ -1,4 +1,6 @@
 import type { Platform } from '@creatorai/shared';
+import { fuzzyAlignScriptToTranscript } from '../align/fuzzyAlign';
+import { mockTranscribeFromText } from '../stt/mockTranscribe';
 import {
   AiProviderError,
   type AiProvider,
@@ -12,6 +14,7 @@ import {
   type TimelineContext,
   type Transcript,
   type TranscriptSegment,
+  type TranscribeInput,
 } from '../types';
 
 /** Stable hash → positive int for deterministic variation. */
@@ -126,14 +129,34 @@ export class MockAiProvider implements AiProvider {
     return { byPlatform, provider: this.name, model: 'mock' };
   }
 
+  /**
+   * Mock STT: prefer `hintText`; otherwise invent spoken text from file basename.
+   * Never calls the network.
+   */
+  async transcribe(input: TranscribeInput): Promise<Transcript> {
+    let text = input.hintText?.trim() ?? '';
+    if (!text && input.filePath) {
+      const base = input.filePath.split(/[/\\]/).pop() ?? 'footage';
+      text = `This is mock speech for ${base}. First pick one topic cluster. Second write three hooks. Third film all A-roll in one session.`;
+    }
+    if (!text && input.audio) {
+      text =
+        'Mock speech from in-memory audio. Batch your Reels in one afternoon without burning out.';
+    }
+    if (!text) {
+      throw new AiProviderError(
+        'Mock transcribe needs hintText, filePath, or audio',
+        'invalid_config',
+      );
+    }
+    return mockTranscribeFromText(text);
+  }
+
   async alignScriptToTranscript(
-    _script: ScriptDoc,
-    _segments: TranscriptSegment[],
+    script: ScriptDoc,
+    segments: TranscriptSegment[],
   ): Promise<Alignment[]> {
-    throw new AiProviderError(
-      'alignScriptToTranscript is Phase 6 — not implemented in Phase 5',
-      'not_implemented',
-    );
+    return fuzzyAlignScriptToTranscript(script, segments);
   }
 
   async scoreClipWindows(
@@ -141,14 +164,14 @@ export class MockAiProvider implements AiProvider {
     _script: ScriptDoc,
   ): Promise<ClipIdea[]> {
     throw new AiProviderError(
-      'scoreClipWindows is Phase 7 — not implemented in Phase 5',
+      'scoreClipWindows is Phase 7 — not implemented in Phase 6',
       'not_implemented',
     );
   }
 
   async proposeTimeline(_ctx: TimelineContext): Promise<EditTimeline> {
     throw new AiProviderError(
-      'proposeTimeline is Phase 8 — not implemented in Phase 5',
+      'proposeTimeline is Phase 8 — not implemented in Phase 6',
       'not_implemented',
     );
   }

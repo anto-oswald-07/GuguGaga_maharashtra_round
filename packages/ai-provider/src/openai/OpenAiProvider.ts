@@ -1,5 +1,8 @@
 import type { Platform } from '@creatorai/shared';
+import { fuzzyAlignScriptToTranscript } from '../align/fuzzyAlign';
 import { MockAiProvider } from '../mock/MockAiProvider';
+import { whisperTranscribe } from '../stt/whisperTranscribe';
+import { mockTranscribeFromText } from '../stt/mockTranscribe';
 import {
   AiProviderError,
   type AiProvider,
@@ -13,6 +16,7 @@ import {
   type TimelineContext,
   type Transcript,
   type TranscriptSegment,
+  type TranscribeInput,
 } from '../types';
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -173,11 +177,30 @@ export class OpenAiProvider implements AiProvider {
     };
   }
 
+  async transcribe(input: TranscribeInput): Promise<Transcript> {
+    if (input.filePath || input.audio) {
+      return whisperTranscribe({
+        apiKey: this.apiKey,
+        language: input.language,
+        filePath: input.filePath,
+        audio: input.audio,
+      });
+    }
+    if (input.hintText?.trim()) {
+      // No audio — deterministic mock segments from hint (useful in CI)
+      return mockTranscribeFromText(input.hintText);
+    }
+    throw new AiProviderError(
+      'OpenAI transcribe needs filePath, audio, or hintText',
+      'invalid_config',
+    );
+  }
+
   async alignScriptToTranscript(
     script: ScriptDoc,
     segments: TranscriptSegment[],
   ): Promise<Alignment[]> {
-    return this.mockFallback.alignScriptToTranscript(script, segments);
+    return fuzzyAlignScriptToTranscript(script, segments);
   }
 
   async scoreClipWindows(

@@ -3,6 +3,7 @@
 // Phase 3: Asset + local storage paths.
 // Phase 4: Project + ProjectAsset + StageEvent.
 // Phase 5: ScriptDocument + ScriptVersion + Job (DB-polling queue).
+// Phase 6: Transcript + TranscriptSegment + ScriptFootageMap.
 
 generator client {
   provider = "prisma-client-js"
@@ -100,26 +101,29 @@ model Asset {
   updatedAt   DateTime       @updatedAt
   workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   projects    ProjectAsset[]
+  transcripts Transcript[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, type])
 }
 
 model Project {
-  id              String           @id @default(uuid()) @db.Uuid
-  workspaceId     String           @db.Uuid
+  id              String             @id @default(uuid()) @db.Uuid
+  workspaceId     String             @db.Uuid
   title           String
   description     String?
-  stage           ProjectStage     @default(IDEA)
-  targetPlatforms Platform[]       @default([])
+  stage           ProjectStage       @default(IDEA)
+  targetPlatforms Platform[]         @default([])
   deletedAt       DateTime?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   assets          ProjectAsset[]
   stageEvents     StageEvent[]
   scripts         ScriptDocument[]
   jobs            Job[]
+  transcripts     Transcript[]
+  mappings        ScriptFootageMap[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, stage])
@@ -149,13 +153,14 @@ model StageEvent {
 
 /// One script document per logical draft inside a project (versioned content).
 model ScriptDocument {
-  id        String          @id @default(uuid()) @db.Uuid
-  projectId String          @db.Uuid
+  id        String             @id @default(uuid()) @db.Uuid
+  projectId String             @db.Uuid
   title     String?
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  project   Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   versions  ScriptVersion[]
+  mappings  ScriptFootageMap[]
 
   @@index([projectId, createdAt])
 }
@@ -193,4 +198,60 @@ model Job {
   @@index([workspaceId, status])
   @@index([workspaceId, createdAt])
   @@index([status, createdAt])
+}
+
+/// Transcription of a project footage asset (SDD §4.1 / Phase 6).
+model Transcript {
+  id        String               @id @default(uuid()) @db.Uuid
+  projectId String               @db.Uuid
+  assetId   String               @db.Uuid
+  language  String               @default("en")
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  project   Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  asset     Asset                @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  segments  TranscriptSegment[]
+  mappings  ScriptFootageMap[]
+
+  @@index([projectId, createdAt])
+  @@index([projectId, assetId])
+  @@index([assetId])
+}
+
+model TranscriptSegment {
+  id           String     @id @default(uuid()) @db.Uuid
+  transcriptId String     @db.Uuid
+  /// Display / playback order within the transcript.
+  ordinal      Int
+  startMs      Int
+  endMs        Int
+  text         String
+  transcript   Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+
+  @@index([transcriptId, ordinal])
+}
+
+/// Script section ↔ footage time range (AI align or user correction).
+model ScriptFootageMap {
+  id               String          @id @default(uuid()) @db.Uuid
+  projectId        String          @db.Uuid
+  transcriptId     String?         @db.Uuid
+  scriptDocumentId String?         @db.Uuid
+  /// Script section label / excerpt shown in Mapping UI.
+  scriptRef        String
+  startMs          Int
+  endMs            Int
+  /// 0–1; UI highlights low confidence (see shared LOW_CONFIDENCE_THRESHOLD).
+  confidence       Float
+  /// AI = align job; USER = manual PATCH.
+  source           String          @default("AI")
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  transcript       Transcript?     @relation(fields: [transcriptId], references: [id], onDelete: SetNull)
+  scriptDocument   ScriptDocument? @relation(fields: [scriptDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([transcriptId])
+  @@index([scriptDocumentId])
 }
