@@ -21,6 +21,19 @@ export {
   checkPasswordStrength,
 } from './validation/password';
 export type { PasswordStrengthResult } from './validation/password';
+export {
+  assetTypeSchema,
+  ASSET_TYPES,
+  assetSchema,
+  assetListQuerySchema,
+  updateAssetRequestSchema,
+  assetListResponseSchema,
+  type AssetType,
+  type AssetDto,
+  type AssetListQuery,
+  type UpdateAssetRequest,
+  type AssetListResponse,
+} from './assets';
 export type {
   VideoAssetMetadata,
   ExtractedAssetMetadata,
