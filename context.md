@@ -2342,6 +2342,50 @@ _(Template above kept for other developers.)_
   - Zip download not implemented (URLs OK for MVP)
 - **Ready for Phase 10:** yes (Brendan Integration Lead)
 
+### [2026-10-03 23:39] ROLE=C NAME=Arvin Almeida PHASE=10 TYPE=START
+- **Summary:** Starting Phase 10 Dev C — demo AI reliability + seed content: MockAiProvider seed-stable (no free RNG), `docs/demo/judge-script.md` click-by-click golden path (SRS §8), `scripts/demo` seed, offline fallback docs.
+- **Files touched:** (in progress) `packages/ai-provider/**`, `scripts/demo/**`, `docs/demo/judge-script.md`, `docs/demo/offline-fallbacks.md`, `samples/**`, `context.md`
+- **Depends on:** Phase 9 Integration COMPLETE; API + web + dummy.mp4 for seed smoke
+- **Needs from others:** Anto Insights API / Brendan Insights UI for judge steps 8–9 when they land; Cyrus media checklist
+- **Risks:** Seed script must stay within allowed paths (no apps/web or services/api edits)
+
+### [2026-10-03 23:42] ROLE=C NAME=Arvin Almeida PHASE=10 TYPE=DONE
+- **Summary:** Phase 10 Dev C complete — MockAiProvider seed-stable (`AI_MOCK_SEED` / `demoHash`, no free RNG), judge click-script (SRS §8), demo seed (user+project+asset+sample script), offline fallback docs.
+- **Files touched:**
+  - `packages/ai-provider/src/mock/{demoSeed.ts,MockAiProvider.ts}`, `createProvider.ts`, `index.ts`, `README.md`
+  - `packages/ai-provider/test/demo-stability.test.ts` (new)
+  - `docs/demo/judge-script.md`, `docs/demo/offline-fallbacks.md` (new)
+  - `docs/demo/golden-path-prep.md`, `samples/README.md`, `scripts/demo/**`, `.env.example` (`AI_MOCK_SEED` comment)
+  - `context.md`
+- **APIs / types added:** none (docs + mock seed helpers only)
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter @creatorai/ai-provider build && pnpm --filter @creatorai/ai-provider test
+  pnpm --filter @creatorai/ai-provider exec tsx ../../scripts/demo/seed-demo.ts --dry-run
+  pnpm --filter @creatorai/ai-provider exec tsx ../../scripts/demo/seed-demo.ts
+  # login demo@creatorai.local / password123 → walk docs/demo/judge-script.md
+  ```
+- **Depends on:** API + Postgres + `storage/samples/dummy.mp4` for seed; web `:3002` for UI walk
+- **Needs from others:** Brendan/Anto Insights UI/API for judge step 9; Cyrus `docs/demo/media-checklist.md`
+- **Risks:** None for Dev C scope; Insights may still be empty until 10 A/B
+
+## Phase 10 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** Arvin
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (Insights walkthrough documented as optional until A/B)
+- **Blockers handed to Integration:** Wire judge script into final README demo; confirm Insights step when A/B land
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/ai-provider test
+  pnpm --filter @creatorai/ai-provider exec tsx ../../scripts/demo/seed-demo.ts
+  # open docs/demo/judge-script.md + docs/demo/offline-fallbacks.md
+  ```
+- **Files I expect others to connect to:**
+  - `docs/demo/judge-script.md` → Brendan Integration golden-path gate
+  - `scripts/demo/seed-demo.ts` → cold-start / README demo bootstrap
+  - `AI_PROVIDER=mock` + `AI_MOCK_SEED` → offline judging
+- **Notes for next phase me:** Integration Lead = Brendan; MVP COMPLETE after final gate
 ### [2026-10-03 23:45] ROLE=A NAME=Brendan Rodrigues PHASE=10 TYPE=START
 - **Summary:** Synced `origin/main` (`93e25d4` Phase 9 Integration). Created `phase-10-brendan`. Starting Insights UI + Dashboard polish + Job center (SDD §5.9 / FR-INT-*). Integration Lead this phase = me.
 - **Files touched:** (branch created; work in progress)

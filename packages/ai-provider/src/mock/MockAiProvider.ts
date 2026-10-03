@@ -19,15 +19,7 @@ import {
   type TranscriptSegment,
   type TranscribeInput,
 } from '../types';
-
-/** Stable hash → positive int for deterministic variation. */
-function hashTopic(topic: string): number {
-  let h = 0;
-  for (let i = 0; i < topic.length; i += 1) {
-    h = (h * 31 + topic.charCodeAt(i)) >>> 0;
-  }
-  return h;
-}
+import { demoHash, resolveMockSeed } from './demoSeed';
 
 function titleCase(s: string): string {
   return s
@@ -38,19 +30,33 @@ function titleCase(s: string): string {
     .join(' ');
 }
 
+export type MockAiProviderOptions = {
+  /**
+   * Demo seed for deterministic variation lanes.
+   * Defaults to `AI_MOCK_SEED` or `creatorai-demo`.
+   * Never uses Math.random.
+   */
+  seed?: string;
+};
+
 /**
- * Deterministic mock — no network, no keys.
- * Content is derived from topic/audience/tone so demos are stable.
+ * Deterministic mock — no network, no keys, no free randomness.
+ * Content is derived from topic/audience/tone + optional seed so demos are stable.
  */
 export class MockAiProvider implements AiProvider {
   readonly name = 'mock' as const;
+  readonly seed: string;
+
+  constructor(opts: MockAiProviderOptions = {}) {
+    this.seed = resolveMockSeed(opts.seed);
+  }
 
   async generateScript(input: ScriptGenInput): Promise<ScriptGenResult> {
     const topic = input.topic.trim() || 'your topic';
     const audience = input.audience.trim() || 'creators';
     const tone = input.tone.trim() || 'practical';
     const platform = String(input.platform || 'YOUTUBE_SHORTS');
-    const n = hashTopic(topic.toLowerCase()) % 3;
+    const n = demoHash(topic.toLowerCase(), this.seed) % 3;
 
     const hooks = [
       `Stop guessing. In the next 60 seconds I’ll show you ${topic} — built for ${audience}.`,
@@ -88,7 +94,7 @@ export class MockAiProvider implements AiProvider {
   async generateHooks(script: string, n: number): Promise<string[]> {
     const count = Math.max(1, Math.min(n || 3, 10));
     const snippet = script.replace(/\s+/g, ' ').trim().slice(0, 80) || 'your script';
-    const base = hashTopic(snippet);
+    const base = demoHash(snippet, this.seed);
     const out: string[] = [];
     for (let i = 0; i < count; i += 1) {
       const variant = (base + i) % 3;

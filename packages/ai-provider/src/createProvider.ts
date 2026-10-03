@@ -10,6 +10,11 @@ import {
 export type CreateAiProviderOptions = {
   /** Overrides `AI_PROVIDER` env (`mock` | `openai` | `gemini`). */
   provider?: string;
+  /**
+   * Mock-only demo seed (`AI_MOCK_SEED`). Changes deterministic variation lanes;
+   * never enables free randomness. Ignored for openai/gemini.
+   */
+  mockSeed?: string;
   openaiApiKey?: string;
   geminiApiKey?: string;
   openaiModel?: string;
@@ -35,7 +40,7 @@ export function createAiProvider(
   const name = normalizeName(opts.provider ?? process.env.AI_PROVIDER);
   switch (name) {
     case 'mock':
-      return new MockAiProvider();
+      return new MockAiProvider({ seed: opts.mockSeed });
     case 'openai':
       return new OpenAiProvider({
         apiKey: opts.openaiApiKey,

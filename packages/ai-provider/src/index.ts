@@ -15,7 +15,15 @@ export type {
   TranscribeInput,
 } from './types';
 export { AiProviderError } from './types';
-export { MockAiProvider } from './mock/MockAiProvider';
+export {
+  MockAiProvider,
+  type MockAiProviderOptions,
+} from './mock/MockAiProvider';
+export {
+  DEFAULT_AI_MOCK_SEED,
+  demoHash,
+  resolveMockSeed,
+} from './mock/demoSeed';
 export { OpenAiProvider } from './openai/OpenAiProvider';
 export { GeminiProvider } from './gemini/GeminiProvider';
 export { createAiProvider, type CreateAiProviderOptions } from './createProvider';
