@@ -2341,3 +2341,60 @@ _(Template above kept for other developers.)_
   - Face-aware reframe skipped (FR-PLT-004 P1)
   - Zip download not implemented (URLs OK for MVP)
 - **Ready for Phase 10:** yes (Brendan Integration Lead)
+
+### [2026-10-03 23:41] ROLE=B NAME=Anto Oswald PHASE=10 TYPE=START
+- **Summary:** Phase 10 Dev B — Insights API (`GET /insights/overview`, `POST /insights/engagement`), harden `POST /jobs/:id/retry`, indexes for counts, health polish (DB check). Branch `phase-10-anto` from `main` @ `93e25d4` (Phase 9 integration complete).
+- **Files touched:** (planned) `services/api/src/modules/insights/**`, `services/api/src/modules/jobs/{routes,service}.ts`, `services/api/prisma/schema.prisma` + migration, `packages/shared/src/insights.ts`, `services/api/src/index.ts`, `context.md`
+- **Depends on:** Phase 9 Integration COMPLETE on `main`
+- **Needs from others:** Brendan UI consumes overview/engagement + retry; no shared Zod yet until I land contracts
+- **Risks:** InsightMetric is new table — need migrate before E2E; overview aggregations must stay fast on demo data
+
+### [2026-10-03 23:44] ROLE=B NAME=Anto Oswald PHASE=10 TYPE=INFO
+- **Summary:** Landed Insights API + InsightMetric migration + health DB probe + retry harden.
+- **Files touched:**
+  - `packages/shared/src/insights.ts` (+ export in `index.ts`; HealthResponse now `ok|degraded` + `db`/`checkedAt`)
+  - `services/api/prisma/schema.prisma` + migration `20261003190000_phase10_insight_metrics`
+  - `services/api/src/modules/insights/{routes,service}.ts`
+  - `services/api/src/index.ts` (register insights + health polish)
+  - `services/api/src/modules/jobs/{routes,service}.ts` (clearer errors; retry stamps `retriedFromJobId`/`priorError`)
+  - `docs/jobs/queue.md` (Phase 10 section)
+  - `context.md`
+- **APIs / types added:**
+  - `GET /api/v1/insights/overview` → counts, stageDistribution, clipsPerProject, platformMix, avgClipLengthMs, avgTimeInStageMs, engagementTotals
+  - `POST /api/v1/insights/engagement` → InsightMetric (201)
+  - `POST /api/v1/jobs/:id/retry` (existing; hardened messages; requeues FAILED only)
+  - `GET /api/v1/health` → `{ status, service, db, checkedAt }` (503 if DB down)
+- **Depends on:** Postgres migrate deploy for InsightMetric
+- **Needs from others:** Brendan — wire Insights UI + dashboard cards + Job Center retry button to these endpoints
+- **Risks:** none for demo scale; clip length avg capped at 5000 rows read
+- **Commands to verify:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter api prisma:deploy
+  pnpm --filter api dev
+  curl -s http://localhost:4000/api/v1/health
+  # auth → GET /insights/overview ; POST /insights/engagement ; fail a job → POST /jobs/:id/retry
+  ```
+
+## Phase 10 Completion — Anto Oswald (Dev B)
+- **Date:** 2026-10-03
+- **Branch:** phase-10-anto
+- **All allowed tasks done:** yes
+- **Incomplete items:** none
+- **Blockers handed to Integration:** none
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter api prisma:deploy
+  JOB_POLLER=0 AI_PROVIDER=mock pnpm --filter api dev
+  curl -s http://localhost:4000/api/v1/health
+  # register → create project →
+  #   GET /insights/overview
+  #   POST /insights/engagement { projectId, views, likes }
+  #   POST /projects/:id/scripts/generate → mock-complete fail → POST /jobs/:id/retry
+  ```
+- **Files I expect others to connect to:**
+  - `GET /insights/overview` / `POST /insights/engagement` → Brendan Insights UI + dashboard
+  - `POST /jobs/:id/retry` → Brendan Job Center retry button
+  - `@creatorai/shared` insights Zod → web client types
+- **Notes for next phase me:** Integration Lead is Brendan; merge order Anto → Arvin → Cyrus → Brendan

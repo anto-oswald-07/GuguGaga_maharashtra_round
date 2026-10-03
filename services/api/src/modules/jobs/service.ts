@@ -140,7 +140,11 @@ async function findOwnedJob(
     where: { id: jobId, workspaceId },
   });
   if (!row) {
-    throw new JobHttpError(404, 'not_found', 'Job not found');
+    throw new JobHttpError(
+      404,
+      'not_found',
+      `Job ${jobId} not found in this workspace`,
+    );
   }
   return row;
 }
@@ -180,15 +184,21 @@ export async function retryJob(
     throw new JobHttpError(
       400,
       'validation_error',
-      'Only FAILED jobs can be retried',
+      `Only FAILED jobs can be retried (job ${jobId} is ${existing.status})`,
     );
   }
 
+  const priorInput = asRecord(existing.input);
   const created = await enqueueJob({
     workspaceId,
     projectId: existing.projectId,
     type: existing.type,
-    input: asRecord(existing.input),
+    input: {
+      ...priorInput,
+      /** Traceability for Job Center / debugging. */
+      retriedFromJobId: existing.id,
+      priorError: existing.error,
+    },
   });
 
   return toJobDto(created);
