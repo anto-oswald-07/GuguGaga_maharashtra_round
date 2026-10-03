@@ -21,6 +21,7 @@ import {
 } from "@/components/projects/project-api";
 import { ClipsTab } from "@/components/clips/ClipsTab";
 import { MappingTab } from "@/components/mapping/MappingTab";
+import { PacksTab } from "@/components/packs/PacksTab";
 import { ScriptTab } from "@/components/scripts/ScriptTab";
 import type { ScriptPlatform } from "@/lib/api";
 
@@ -28,7 +29,7 @@ type ProjectDetailProps = {
   projectId: string;
 };
 
-type HubTab = "overview" | "script" | "mapping" | "clips";
+type HubTab = "overview" | "script" | "mapping" | "clips" | "packs";
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -218,6 +219,17 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
               >
                 Editor
               </Link>
+              <button
+                type="button"
+                onClick={() => setTab("packs")}
+                className={
+                  tab === "packs"
+                    ? "border-b-2 border-[var(--brand)] px-1 py-2 font-medium text-[var(--brand)]"
+                    : "px-1 py-2 text-[var(--muted)] hover:text-[var(--foreground)]"
+                }
+              >
+                Platform Packs
+              </button>
             </nav>
           </div>
 
@@ -278,8 +290,13 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
               projectId={project.id}
               assetIds={project.assetIds}
             />
-          ) : (
+          ) : tab === "clips" ? (
             <ClipsTab projectId={project.id} assetIds={project.assetIds} />
+          ) : (
+            <PacksTab
+              projectId={project.id}
+              targetPlatforms={project.targetPlatforms}
+            />
           )}
         </>
       ) : null}
