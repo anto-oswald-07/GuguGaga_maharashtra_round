@@ -18,6 +18,7 @@ import { registerClipsRoutes } from './modules/clips/routes';
 import { registerTimelinesRoutes } from './modules/timelines/routes';
 import { registerPacksRoutes } from './modules/packs/routes';
 import { registerInsightsRoutes } from './modules/insights/routes';
+import { registerSceneRoutes } from './modules/scenes/routes';
 import { startJobPoller } from './modules/jobs/processor';
 
 loadEnv({ path: path.resolve(__dirname, '../../../.env') });
@@ -77,6 +78,7 @@ async function main() {
   await registerProjectRoutes(app);
   await registerScriptRoutes(app);
   await registerMappingRoutes(app);
+  await registerSceneRoutes(app);
   await registerClipsRoutes(app);
   await registerTimelinesRoutes(app);
   await registerPacksRoutes(app);

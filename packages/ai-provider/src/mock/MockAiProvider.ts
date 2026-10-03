@@ -20,6 +20,7 @@ import {
   type TranscribeInput,
 } from '../types';
 import { demoHash, resolveMockSeed } from './demoSeed';
+import { buildScenesFromScript } from '../scripts/buildScenes';
 
 function titleCase(s: string): string {
   return s
@@ -79,12 +80,14 @@ export class MockAiProvider implements AiProvider {
     const cta = `Save this and comment “READY” if you want the checklist for ${topic}. Then ship one piece this week.`;
     const title = `${titleCase(topic)} — ${tone} guide for ${audience}`;
     const fullText = `## Hook\n\n${hook}\n\n## Body\n\n${body}\n\n## CTA\n\n${cta}`;
+    const scenes = buildScenesFromScript({ hook, body, cta, title }, { deterministic: true });
 
     return {
       title,
       hook,
       body,
       cta,
+      scenes,
       fullText,
       provider: this.name,
       model: 'mock',
@@ -140,7 +143,7 @@ export class MockAiProvider implements AiProvider {
         'invalid_config',
       );
     }
-    return mockTranscribeFromText(text);
+    return mockTranscribeFromText(text, { durationMs: input.durationMs });
   }
 
   async alignScriptToTranscript(

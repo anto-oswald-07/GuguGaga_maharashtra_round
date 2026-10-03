@@ -7,8 +7,18 @@ LLM + STT + clip scoring + timeline + platform-copy provider package for Creator
 | `AI_PROVIDER` | Class | Needs |
 |---------------|-------|--------|
 | `mock` (default) | `MockAiProvider` | nothing — **deterministic** from topic / hintText + optional `AI_MOCK_SEED` |
+| `auto` | `FallbackAiProvider` | first available key in fallback order |
 | `openai` | `OpenAiProvider` | `OPENAI_API_KEY` (Chat + Whisper) |
 | `gemini` | `GeminiProvider` | `GEMINI_API_KEY` (chat; STT falls back to mock segments) |
+| `grok` | `GrokProvider` | `XAI_API_KEY` (scripts + asset-aware timeline; STT → mock) |
+| `openrouter` | `OpenRouterProvider` | `OPENROUTER_API_KEY` (default model `qwen/qwen3.8-27b:free`) |
+| `groq` | `GroqProvider` | `GROQ_API_KEY` |
+| `mistral` | `MistralProvider` | `MISTRAL_API_KEY` |
+
+**Automatic backups:** for any live primary (`gemini`, `grok`, …) or `auto`, other providers that have keys are chained. On `429` / quota / credit errors the next backend is tried. Ends with `mock` so the app never hard-fails. Disable with `AI_FALLBACK=0`.
+
+Default order: `gemini → openrouter → groq → mistral → openai → grok → mock`  
+Override with `AI_FALLBACK_PROVIDERS=…`.
 
 **Never commit API keys.** Put them in root `.env` (gitignored) only.
 
@@ -25,13 +35,22 @@ LLM + STT + clip scoring + timeline + platform-copy provider package for Creator
 # root .env
 AI_PROVIDER=mock
 # AI_MOCK_SEED=creatorai-demo
-# AI_PROVIDER=openai
+# AI_PROVIDER=auto
+# AI_FALLBACK=1
+# AI_FALLBACK_PROVIDERS=gemini,openrouter,groq,mistral,openai,grok,mock
+# GEMINI_API_KEY=...
+# GEMINI_MODEL=gemini-3.8-flash
+# OPENROUTER_API_KEY=...
+# OPENROUTER_MODEL=qwen/qwen3.8-27b:free
+# GROQ_API_KEY=...
+# GROQ_MODEL=openai/gpt-oss-20b
+# MISTRAL_API_KEY=...
+# MISTRAL_MODEL=mistral-small-latest
 # OPENAI_API_KEY=sk-...
 # OPENAI_MODEL=gpt-4o-mini
 # OPENAI_WHISPER_MODEL=whisper-1
-# AI_PROVIDER=gemini
-# GEMINI_API_KEY=...
-# GEMINI_MODEL=gemini-2.0-flash
+# XAI_API_KEY=xai-...   # console.x.ai
+# XAI_MODEL=grok-4.3
 ```
 
 ```bash
@@ -45,7 +64,7 @@ pnpm --filter @creatorai/ai-provider test
 ```ts
 import { createAiProvider } from '@creatorai/ai-provider';
 
-const ai = createAiProvider(); // reads AI_PROVIDER
+const ai = createAiProvider(); // reads AI_PROVIDER (+ fallbacks)
 
 const script = await ai.generateScript({
   topic: 'Batch Reels in one afternoon',

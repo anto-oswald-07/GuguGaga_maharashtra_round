@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { platformSchema } from '../projects';
+import { scriptSceneSchema } from '../scenes';
 
 const nonEmptyText = z.string().trim().min(1);
 
@@ -29,13 +30,14 @@ export const generatedScriptMetaSchema = z.object({
 export type GeneratedScriptMeta = z.infer<typeof generatedScriptMetaSchema>;
 
 /**
- * Structured script output — Hook / Body / CTA.
- * This is the primary `GeneratedScript` contract for Phase 5.
+ * Structured script output — Hook / Body / CTA (+ optional production scenes).
+ * This is the primary `GeneratedScript` contract for Phase 5+.
  */
 export const generatedScriptSchema = z.object({
   hook: nonEmptyText.max(2000),
   body: nonEmptyText.max(20000),
   cta: nonEmptyText.max(2000),
+  scenes: z.array(scriptSceneSchema).max(40).optional(),
   meta: generatedScriptMetaSchema.optional(),
 });
 export type GeneratedScript = z.infer<typeof generatedScriptSchema>;

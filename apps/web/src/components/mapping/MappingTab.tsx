@@ -23,14 +23,20 @@ import { JobStatusBanner } from "@/components/scripts/JobStatusBanner";
 import { useJobPoll } from "@/components/scripts/useJobPoll";
 import { MappingEditForm } from "@/components/mapping/MappingEditForm";
 import { MappingTable } from "@/components/mapping/MappingTable";
+import { SceneFulfillmentPanel } from "@/components/mapping/SceneFulfillmentPanel";
 import { TranscriptSegmentList } from "@/components/mapping/TranscriptSegmentList";
 
 type MappingTabProps = {
   projectId: string;
   assetIds: string[];
+  onAssetsChanged?: () => void;
 };
 
-export function MappingTab({ projectId, assetIds }: MappingTabProps) {
+export function MappingTab({
+  projectId,
+  assetIds,
+  onAssetsChanged,
+}: MappingTabProps) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [scripts, setScripts] = useState<ScriptDocument[]>([]);
   const [transcripts, setTranscripts] = useState<TranscriptDto[]>([]);
@@ -237,15 +243,20 @@ export function MappingTab({ projectId, assetIds }: MappingTabProps) {
 
   const busy = actionPending || polling || savePending;
 
+  const activeScript = useMemo(
+    () => scripts.find((s) => s.id === selectedScriptId) ?? scripts[0] ?? null,
+    [scripts, selectedScriptId],
+  );
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold tracking-tight">
-          Footage &amp; Mapping
+          Scenes &amp; Footage
         </h2>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Transcribe attached footage, align script sections to timestamps, and
-          correct weak matches.
+          Fill each script scene (upload or AI), review coverage, auto-trim to
+          the plan, then use advanced mapping below if needed.
         </p>
       </div>
 
@@ -265,6 +276,44 @@ export function MappingTab({ projectId, assetIds }: MappingTabProps) {
       {loading ? (
         <p className="text-sm text-[var(--muted)]">Loading mapping data…</p>
       ) : null}
+
+      {scripts.length > 1 ? (
+        <label className="block max-w-md space-y-1 text-sm">
+          <span className="font-medium">Script</span>
+          <select
+            value={selectedScriptId}
+            onChange={(e) => setSelectedScriptId(e.target.value)}
+            disabled={busy}
+            className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm"
+          >
+            {scripts.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.topic || s.id.slice(0, 8)}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      <SceneFulfillmentPanel
+        projectId={projectId}
+        script={activeScript}
+        assets={assets}
+        busy={busy}
+        onBusyChange={setActionPending}
+        onStartJob={startJob}
+        onError={setError}
+        onRefreshed={refresh}
+        onAssetsAttached={onAssetsChanged}
+      />
+
+      <div className="border-t border-[var(--border)] pt-4">
+        <h3 className="text-sm font-semibold">Advanced mapping</h3>
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          Line-level transcript align (optional). Prefer scene fill + auto-trim
+          above for the main demo path.
+        </p>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">

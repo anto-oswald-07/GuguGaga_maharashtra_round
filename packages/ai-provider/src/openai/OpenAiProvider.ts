@@ -1,5 +1,6 @@
 import type { Platform } from '@creatorai/shared';
 import { fuzzyAlignScriptToTranscript } from '../align/fuzzyAlign';
+import { httpErrorFromResponse } from '../httpErrors';
 import { MockAiProvider } from '../mock/MockAiProvider';
 import { clampSupportingItem } from '../platform/generatePlatformCopy';
 import { whisperTranscribe } from '../stt/whisperTranscribe';
@@ -78,10 +79,7 @@ export class OpenAiProvider implements AiProvider {
     });
     if (!res.ok) {
       const body = await res.text();
-      throw new AiProviderError(
-        `OpenAI HTTP ${res.status}: ${body.slice(0, 300)}`,
-        'http_error',
-      );
+      throw httpErrorFromResponse('OpenAI', res.status, body);
     }
     const data = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
@@ -199,7 +197,9 @@ export class OpenAiProvider implements AiProvider {
     }
     if (input.hintText?.trim()) {
       // No audio — deterministic mock segments from hint (useful in CI)
-      return mockTranscribeFromText(input.hintText);
+      return mockTranscribeFromText(input.hintText, {
+        durationMs: input.durationMs,
+      });
     }
     throw new AiProviderError(
       'OpenAI transcribe needs filePath, audio, or hintText',

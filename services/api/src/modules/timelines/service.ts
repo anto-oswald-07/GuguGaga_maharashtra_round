@@ -649,6 +649,69 @@ export async function persistTimelinePreview(params: {
   return { assetId, relativePath };
 }
 
+function durationMsFromMetadata(metadata: unknown): number | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return null;
+  }
+  const m = metadata as Record<string, unknown>;
+  if (typeof m.durationMs === 'number' && Number.isFinite(m.durationMs)) {
+    return Math.max(0, Math.floor(m.durationMs));
+  }
+  if (typeof m.durationSec === 'number' && Number.isFinite(m.durationSec)) {
+    return Math.max(0, Math.floor(m.durationSec * 1000));
+  }
+  return null;
+}
+
+/** Project VIDEO / IMAGE / AUDIO attached for AI script + timeline suggestions. */
+export async function loadProjectMediaAssets(
+  workspaceId: string,
+  projectId: string,
+): Promise<
+  Array<{
+    id: string;
+    type: string;
+    name: string;
+    description: string | null;
+    tags: string[];
+    durationMs: number | null;
+  }>
+> {
+  const projectAssets = await prisma.projectAsset.findMany({
+    where: {
+      projectId,
+      asset: {
+        workspaceId,
+        deletedAt: null,
+        type: { in: ['VIDEO', 'IMAGE', 'AUDIO'] },
+      },
+    },
+    include: {
+      asset: {
+        select: {
+          id: true,
+          type: true,
+          name: true,
+          description: true,
+          tags: true,
+          metadata: true,
+        },
+      },
+    },
+    orderBy: { attachedAt: 'desc' },
+    take: 40,
+  });
+
+  return projectAssets.map((pa) => ({
+    id: pa.asset.id,
+    type: pa.asset.type,
+    name: pa.asset.name,
+    description: pa.asset.description,
+    tags: pa.asset.tags,
+    durationMs: durationMsFromMetadata(pa.asset.metadata),
+  }));
+}
+
 /** Load context for GENERATE_TIMELINE job handler. */
 export async function loadTimelineGenerateContext(
   workspaceId: string,
@@ -660,12 +723,26 @@ export async function loadTimelineGenerateContext(
   cta: string;
   title?: string;
   assetId: string;
-  clipWindows: Array<{ startMs: number; endMs: number; title?: string }>;
+  clipWindows: Array<{
+    startMs: number;
+    endMs: number;
+    title?: string;
+    assetId?: string;
+  }>;
   alignments: Array<{
     scriptExcerpt: string;
     startMs: number;
     endMs: number;
     confidence: number;
+  }>;
+  /** Project VIDEO / IMAGE / AUDIO for Grok asset-aware suggestions. */
+  assets: Array<{
+    id: string;
+    type: string;
+    name: string;
+    description: string | null;
+    tags: string[];
+    durationMs: number | null;
   }>;
 }> {
   const script = await prisma.scriptDocument.findFirst({
@@ -701,24 +778,18 @@ export async function loadTimelineGenerateContext(
     take: 20,
   });
 
+  const assets = await loadProjectMediaAssets(workspaceId, projectId);
+
   let assetId =
     accepted[0]?.sourceAssetId ??
-    (
-      await prisma.projectAsset.findFirst({
-        where: {
-          projectId,
-          asset: { workspaceId, deletedAt: null, type: 'VIDEO' },
-        },
-        select: { assetId: true },
-        orderBy: { attachedAt: 'desc' },
-      })
-    )?.assetId;
+    assets.find((a) => a.type === 'VIDEO')?.id ??
+    assets.find((a) => a.type === 'IMAGE')?.id;
 
   if (!assetId) {
     throw new TimelinesHttpError(
       400,
       'validation_error',
-      'No video asset on project — attach footage before generating timeline',
+      'No video/image asset on project — attach footage or stills before generating timeline',
     );
   }
 
@@ -728,14 +799,26 @@ export async function loadTimelineGenerateContext(
           startMs: c.startMs,
           endMs: c.endMs,
           title: c.title,
+          assetId: c.sourceAssetId,
         }))
       : mappings.length > 0
         ? mappings.map((m) => ({
             startMs: m.startMs,
             endMs: m.endMs,
             title: m.scriptRef.slice(0, 80),
+            assetId,
           }))
-        : [{ startMs: 0, endMs: 5_000, title: 'Intro' }];
+        : assets.some((a) => a.type === 'IMAGE')
+          ? assets
+              .filter((a) => a.type === 'IMAGE')
+              .slice(0, 5)
+              .map((a, i) => ({
+                startMs: 0,
+                endMs: 3000,
+                title: a.name || `Still ${i + 1}`,
+                assetId: a.id,
+              }))
+          : [{ startMs: 0, endMs: 5_000, title: 'Intro', assetId }];
 
   return {
     hook,
@@ -750,6 +833,7 @@ export async function loadTimelineGenerateContext(
       endMs: m.endMs,
       confidence: m.confidence,
     })),
+    assets,
   };
 }
 

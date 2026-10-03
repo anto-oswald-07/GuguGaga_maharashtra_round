@@ -419,10 +419,13 @@ export async function persistAlignments(params: {
   };
 }
 
-/** Deterministic mock STT until Arvin Phase 6 C wires Whisper. */
-export function mockTranscriptSegments(assetName?: string): PersistSegmentInput[] {
+/** Deterministic mock STT until Whisper is wired — timings fit media length. */
+export function mockTranscriptSegments(
+  assetName?: string,
+  durationMs?: number,
+): PersistSegmentInput[] {
   const label = assetName?.trim() || 'footage';
-  return [
+  const base: PersistSegmentInput[] = [
     {
       startMs: 0,
       endMs: 4000,
@@ -454,6 +457,26 @@ export function mockTranscriptSegments(assetName?: string): PersistSegmentInput[
       text: 'If you want the checklist, save this Reel and comment BATCH.',
     },
   ];
+
+  const target =
+    typeof durationMs === 'number' &&
+    Number.isFinite(durationMs) &&
+    durationMs > 0
+      ? Math.floor(durationMs)
+      : null;
+  if (target == null) return base;
+
+  const sourceEnd = base[base.length - 1]!.endMs;
+  if (sourceEnd <= 0) return base;
+
+  return base.map((seg, i) => {
+    const startMs = Math.round((seg.startMs / sourceEnd) * target);
+    const endMs =
+      i === base.length - 1
+        ? target
+        : Math.max(startMs + 1, Math.round((seg.endMs / sourceEnd) * target));
+    return { ...seg, startMs, endMs };
+  });
 }
 
 function parseScriptContent(raw: unknown): ScriptContent {
@@ -461,10 +484,14 @@ function parseScriptContent(raw: unknown): ScriptContent {
     return { hook: '', body: '', cta: '' };
   }
   const o = raw as Record<string, unknown>;
+  const scenes = Array.isArray(o.scenes) ? (o.scenes as ScriptContent['scenes']) : undefined;
   return {
     hook: typeof o.hook === 'string' ? o.hook : '',
     body: typeof o.body === 'string' ? o.body : '',
     cta: typeof o.cta === 'string' ? o.cta : '',
+    title: typeof o.title === 'string' ? o.title : undefined,
+    rawText: typeof o.rawText === 'string' ? o.rawText : undefined,
+    ...(scenes && scenes.length > 0 ? { scenes } : {}),
   };
 }
 

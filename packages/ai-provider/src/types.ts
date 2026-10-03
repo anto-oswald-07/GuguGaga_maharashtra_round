@@ -1,4 +1,15 @@
-import type { Platform } from '@creatorai/shared';
+import type { Platform, ScriptScene } from '@creatorai/shared';
+
+/** Lightweight asset catalog for AI timeline / edit suggestions. */
+export type TimelineAssetSummary = {
+  id: string;
+  type: 'VIDEO' | 'IMAGE' | 'AUDIO' | string;
+  name: string;
+  description?: string | null;
+  tags?: string[];
+  /** From asset.metadata.durationMs / durationSec when known. */
+  durationMs?: number | null;
+};
 
 /** Input for Phase 5 script generation (SDD §7.1 / FR script gen). */
 export type ScriptGenInput = {
@@ -9,6 +20,8 @@ export type ScriptGenInput = {
   platform: Platform | string;
   /** Optional refine instruction (UI “Refine”). */
   refineInstruction?: string;
+  /** Optional project media catalog so scripts match available footage/stills/audio. */
+  assets?: TimelineAssetSummary[];
 };
 
 /** Structured script returned by providers. */
@@ -17,9 +30,11 @@ export type ScriptGenResult = {
   hook: string;
   body: string;
   cta: string;
+  /** Production beats for Footage fulfillment (optional; derived if missing). */
+  scenes?: ScriptScene[];
   /** Convenience join of hook + body + CTA for editors. */
   fullText: string;
-  /** Which provider produced this (mock|openai|gemini). */
+  /** Which provider produced this (mock|openai|gemini|grok|openrouter|groq|mistral|…). */
   provider: string;
   /** Model id or `mock` when deterministic. */
   model: string;
@@ -44,6 +59,7 @@ export type ScriptDoc = {
   hook: string;
   body: string;
   cta: string;
+  scenes?: ScriptScene[];
 };
 
 export type TranscriptSegment = {
@@ -69,6 +85,11 @@ export type TranscribeInput = {
   hintText?: string;
   /** BCP-47 / ISO language hint (e.g. `en`). */
   language?: string;
+  /**
+   * Real media duration from asset metadata. When set, mock STT fits
+   * segment timings into this window so mapping matches the video length.
+   */
+  durationMs?: number;
 };
 
 export type Alignment = {
@@ -107,6 +128,11 @@ export type TimelineContext = {
   acceptedClips?: TimelineAcceptedClip[];
   /** Default footage assetId for video clips missing their own. */
   sourceAssetId?: string;
+  /**
+   * Project media attached for analysis (images, videos, audio beds).
+   * Used by Grok (and optionally others) to suggest holds / order / mix.
+   */
+  assets?: TimelineAssetSummary[];
 };
 
 export type TimelineTextStyle = {
@@ -115,6 +141,17 @@ export type TimelineTextStyle = {
 };
 
 export type TimelineVideoClip = {
+  id: string;
+  assetId: string;
+  srcStartMs: number;
+  srcEndMs: number;
+  timelineStartMs: number;
+  label?: string;
+  /** Images hold stills for (srcEndMs - srcStartMs). */
+  mediaKind?: 'video' | 'image';
+};
+
+export type TimelineAudioClip = {
   id: string;
   assetId: string;
   srcStartMs: number;
@@ -144,6 +181,12 @@ export type TimelineVideoTrack = {
   clips: TimelineVideoClip[];
 };
 
+export type TimelineAudioTrack = {
+  id: string;
+  type: 'audio';
+  clips: TimelineAudioClip[];
+};
+
 export type TimelineTextTrack = {
   id: string;
   type: 'text';
@@ -158,6 +201,7 @@ export type TimelineCaptionsTrack = {
 
 export type TimelineTrack =
   | TimelineVideoTrack
+  | TimelineAudioTrack
   | TimelineTextTrack
   | TimelineCaptionsTrack;
 
@@ -178,7 +222,15 @@ export type EditTimeline = {
   };
 };
 
-export type AiProviderName = 'mock' | 'openai' | 'gemini';
+export type AiProviderName =
+  | 'mock'
+  | 'openai'
+  | 'gemini'
+  | 'grok'
+  | 'openrouter'
+  | 'groq'
+  | 'mistral'
+  | 'auto';
 
 export interface AiProvider {
   readonly name: AiProviderName;
@@ -215,9 +267,12 @@ export class AiProviderError extends Error {
     readonly code:
       | 'missing_api_key'
       | 'http_error'
+      | 'rate_limited'
+      | 'quota_exceeded'
       | 'parse_error'
       | 'not_implemented'
       | 'invalid_config',
+    readonly httpStatus?: number,
   ) {
     super(message);
     this.name = 'AiProviderError';

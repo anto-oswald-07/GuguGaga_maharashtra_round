@@ -223,6 +223,40 @@ export type ScriptContent = {
   cta: string;
   title?: string;
   rawText?: string;
+  scenes?: ScriptScene[];
+};
+
+export type ScriptBeatType =
+  | "HOOK"
+  | "POINT"
+  | "BROLL"
+  | "CTA"
+  | "TRANSITION";
+
+export type SceneFulfillmentMode =
+  | "EMPTY"
+  | "UPLOAD"
+  | "AI_GENERATED"
+  | "TRIMMED";
+
+export type SceneFulfillment = {
+  mode: SceneFulfillmentMode;
+  assetId?: string;
+  clipCandidateId?: string;
+  transcriptId?: string;
+  opinion?: string;
+  matchConfidence?: number;
+};
+
+export type ScriptScene = {
+  id: string;
+  ordinal: number;
+  title: string;
+  spokenText: string;
+  beatType: ScriptBeatType;
+  targetDurationMs: number;
+  visualBrief: string;
+  fulfillment: SceneFulfillment;
 };
 
 export type ScriptVersion = {
@@ -310,24 +344,84 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
+function normalizeScene(raw: unknown, index: number): ScriptScene | null {
+  const r = asRecord(raw);
+  if (!r) return null;
+  const fulfillmentRaw = asRecord(r.fulfillment) ?? {};
+  const modeRaw = typeof fulfillmentRaw.mode === "string" ? fulfillmentRaw.mode : "EMPTY";
+  const mode: SceneFulfillmentMode =
+    modeRaw === "UPLOAD" ||
+    modeRaw === "AI_GENERATED" ||
+    modeRaw === "TRIMMED" ||
+    modeRaw === "EMPTY"
+      ? modeRaw
+      : "EMPTY";
+  const beatRaw = typeof r.beatType === "string" ? r.beatType : "POINT";
+  const beatType: ScriptBeatType =
+    beatRaw === "HOOK" ||
+    beatRaw === "POINT" ||
+    beatRaw === "BROLL" ||
+    beatRaw === "CTA" ||
+    beatRaw === "TRANSITION"
+      ? beatRaw
+      : "POINT";
+  return {
+    id: typeof r.id === "string" ? r.id : `scene-${index}`,
+    ordinal: typeof r.ordinal === "number" ? r.ordinal : index,
+    title: typeof r.title === "string" ? r.title : `Scene ${index + 1}`,
+    spokenText: typeof r.spokenText === "string" ? r.spokenText : "",
+    beatType,
+    targetDurationMs:
+      typeof r.targetDurationMs === "number" && r.targetDurationMs > 0
+        ? r.targetDurationMs
+        : 8_000,
+    visualBrief: typeof r.visualBrief === "string" ? r.visualBrief : "",
+    fulfillment: {
+      mode,
+      ...(typeof fulfillmentRaw.assetId === "string"
+        ? { assetId: fulfillmentRaw.assetId }
+        : {}),
+      ...(typeof fulfillmentRaw.clipCandidateId === "string"
+        ? { clipCandidateId: fulfillmentRaw.clipCandidateId }
+        : {}),
+      ...(typeof fulfillmentRaw.transcriptId === "string"
+        ? { transcriptId: fulfillmentRaw.transcriptId }
+        : {}),
+      ...(typeof fulfillmentRaw.opinion === "string"
+        ? { opinion: fulfillmentRaw.opinion }
+        : {}),
+      ...(typeof fulfillmentRaw.matchConfidence === "number"
+        ? { matchConfidence: fulfillmentRaw.matchConfidence }
+        : {}),
+    },
+  };
+}
+
+function normalizeScriptContent(raw: unknown): ScriptContent {
+  const contentRaw = asRecord(raw) ?? {};
+  const scenesRaw = Array.isArray(contentRaw.scenes) ? contentRaw.scenes : [];
+  const scenes = scenesRaw
+    .map((s, i) => normalizeScene(s, i))
+    .filter((s): s is ScriptScene => s != null);
+  return {
+    hook: typeof contentRaw.hook === "string" ? contentRaw.hook : "",
+    body: typeof contentRaw.body === "string" ? contentRaw.body : "",
+    cta: typeof contentRaw.cta === "string" ? contentRaw.cta : "",
+    ...(typeof contentRaw.title === "string" ? { title: contentRaw.title } : {}),
+    ...(typeof contentRaw.rawText === "string"
+      ? { rawText: contentRaw.rawText }
+      : {}),
+    ...(scenes.length > 0 ? { scenes } : {}),
+  };
+}
+
 function normalizeVersion(raw: unknown): ScriptVersion {
   const r = asRecord(raw) ?? {};
-  const contentRaw = asRecord(r.content) ?? {};
   return {
     id: String(r.id ?? ""),
     scriptId: String(r.scriptId ?? r.scriptDocumentId ?? ""),
     version: typeof r.version === "number" ? r.version : 0,
-    content: {
-      hook: typeof contentRaw.hook === "string" ? contentRaw.hook : "",
-      body: typeof contentRaw.body === "string" ? contentRaw.body : "",
-      cta: typeof contentRaw.cta === "string" ? contentRaw.cta : "",
-      ...(typeof contentRaw.title === "string"
-        ? { title: contentRaw.title }
-        : {}),
-      ...(typeof contentRaw.rawText === "string"
-        ? { rawText: contentRaw.rawText }
-        : {}),
-    },
+    content: normalizeScriptContent(r.content),
     source: typeof r.source === "string" ? r.source : null,
     createdAt: String(r.createdAt ?? ""),
   };
@@ -346,11 +440,7 @@ function normalizeScript(raw: unknown): ScriptDocument {
         : [];
   const contentFromField = asRecord(r.content);
   const content: ScriptContent | null = contentFromField
-    ? {
-        hook: typeof contentFromField.hook === "string" ? contentFromField.hook : "",
-        body: typeof contentFromField.body === "string" ? contentFromField.body : "",
-        cta: typeof contentFromField.cta === "string" ? contentFromField.cta : "",
-      }
+    ? normalizeScriptContent(contentFromField)
     : latest?.content ?? versions[0]?.content ?? null;
   const title =
     typeof r.title === "string"
@@ -629,6 +719,60 @@ export async function listProjectTranscripts(projectId: string) {
 
 export function alignProjectScript(projectId: string, payload: AlignRequest) {
   return apiFetch<EnqueueJobResponse>(`/projects/${projectId}/align`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Scene pipeline (Phases A–C) — fulfill / generate / review / match          */
+/* -------------------------------------------------------------------------- */
+
+export type FulfillScenePayload = {
+  scriptId: string;
+  sceneId: string;
+  assetId: string;
+};
+
+export type GenerateScenePayload = {
+  scriptId: string;
+  sceneId: string;
+};
+
+export type ScenePipelinePayload = {
+  scriptId: string;
+  sceneId?: string;
+};
+
+export type FulfillSceneResponse = {
+  scriptId: string;
+  versionId: string;
+  scene: ScriptScene;
+};
+
+export function fulfillScene(projectId: string, payload: FulfillScenePayload) {
+  return apiFetch<FulfillSceneResponse>(`/projects/${projectId}/scenes/fulfill`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function generateScene(projectId: string, payload: GenerateScenePayload) {
+  return apiFetch<EnqueueJobResponse>(`/projects/${projectId}/scenes/generate`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function reviewFootage(projectId: string, payload: ScenePipelinePayload) {
+  return apiFetch<EnqueueJobResponse>(`/projects/${projectId}/scenes/review`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function matchScenes(projectId: string, payload: ScenePipelinePayload) {
+  return apiFetch<EnqueueJobResponse>(`/projects/${projectId}/scenes/match`, {
     method: "POST",
     body: payload,
   });

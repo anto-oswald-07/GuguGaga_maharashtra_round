@@ -31,7 +31,8 @@ export function AiSuggestPanel({
         <div>
           <h2 className="text-sm font-semibold">AI Suggest</h2>
           <p className="mt-0.5 text-xs text-[var(--muted)]">
-            Proposals never overwrite your draft until you Apply (FR-ED-006).
+            Analyses project video / image / audio assets, then proposes edits.
+            Never overwrites your draft until you Apply (FR-ED-006).
           </p>
         </div>
         <button
@@ -53,6 +54,11 @@ export function AiSuggestPanel({
             <p className="text-xs text-amber-900/80">
               Prompt: {String(proposal.meta.prompt)}
             </p>
+          ) : null}
+          {proposal.meta?.notes ? (
+            <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-xs text-amber-950/90">
+              {String(proposal.meta.notes)}
+            </pre>
           ) : null}
           <div className="flex flex-wrap gap-2">
             <button
