@@ -19,6 +19,7 @@ import {
   type Project,
   type StageEvent,
 } from "@/components/projects/project-api";
+import { ClipsTab } from "@/components/clips/ClipsTab";
 import { MappingTab } from "@/components/mapping/MappingTab";
 import { ScriptTab } from "@/components/scripts/ScriptTab";
 import type { ScriptPlatform } from "@/lib/api";
@@ -27,7 +28,7 @@ type ProjectDetailProps = {
   projectId: string;
 };
 
-type HubTab = "overview" | "script" | "mapping";
+type HubTab = "overview" | "script" | "mapping" | "clips";
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -200,6 +201,17 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
               >
                 Footage &amp; Mapping
               </button>
+              <button
+                type="button"
+                onClick={() => setTab("clips")}
+                className={
+                  tab === "clips"
+                    ? "border-b-2 border-[var(--brand)] px-1 py-2 font-medium text-[var(--brand)]"
+                    : "px-1 py-2 text-[var(--muted)] hover:text-[var(--foreground)]"
+                }
+              >
+                Clips
+              </button>
               <Link
                 href={`/projects/${project.id}/editor`}
                 className="px-1 py-2 text-[var(--muted)] hover:text-[var(--foreground)]"
@@ -261,11 +273,13 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
                 null
               }
             />
-          ) : (
+          ) : tab === "mapping" ? (
             <MappingTab
               projectId={project.id}
               assetIds={project.assetIds}
             />
+          ) : (
+            <ClipsTab projectId={project.id} assetIds={project.assetIds} />
           )}
         </>
       ) : null}

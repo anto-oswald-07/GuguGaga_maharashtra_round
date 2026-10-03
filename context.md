@@ -1617,6 +1617,59 @@ _(Template above kept for other developers.)_
 - **Needs from others:** None for Phase 6; Phase 7 Lead = Brendan
 - **Risks:** Next.dev hang on :3002; ffmpeg missing on this host
 
+### [2026-10-03 21:31] ROLE=A NAME=Brendan Rodrigues PHASE=7 TYPE=START
+- **Summary:** Synced `main` (`50c6fd4` Phase 6 Integration). Created `phase-07-brendan`. Starting Clips Tab UI against SDD §5.6 / FR-CLP-* (Phase 7 B clips API not on main yet).
+- **Files touched:** (branch created; work in progress)
+- **APIs / types added:** None yet
+- **How to run / test what I did:** `git checkout phase-07-brendan`
+- **Depends on:** Phase 6 complete on main
+- **Needs from others:** Anto Phase 7 B endpoints; Arvin SCORE_CLIPS; Cyrus RENDER_CLIP
+- **Risks:** UI will 404 until Phase 7 B lands
+
+### [2026-10-03 21:41] ROLE=A NAME=Brendan Rodrigues PHASE=7 TYPE=DONE
+- **Summary:** Phase 7 Dev A complete — Clips tab on project hub: Propose (job poll) → candidates table (title/start/end/score/status) → Edit boundaries + Accept/Reject + optional Batch accept → Render (job poll) → rendered asset preview/link.
+- **Files touched:**
+  - `apps/web/src/lib/api.ts` (propose/list/patch/render clip client + normalizers)
+  - `apps/web/src/components/clips/**` (ClipsTab, ClipCandidateTable, ClipEditForm, ClipRenderPreview)
+  - `apps/web/src/components/projects/ProjectDetail.tsx` (Overview | Script | Footage & Mapping | Clips | Editor)
+  - `context.md`
+- **APIs / types added (client assumptions — TODO_SHARED until Anto Zod lands):**
+  - `POST /projects/:id/clips/propose` body `{ assetId?, scriptId? }` → `{ jobId }`
+  - `GET /projects/:id/clips/candidates` → `{ items: ClipCandidateDto[] }`
+  - `PATCH /clips/candidates/:id` body `{ title?, startMs?, endMs?, status? }` → ClipCandidateDto
+  - `POST /clips/candidates/:id/render` → `{ jobId }`
+  - Status enum (lowercase, also accepts UPPER): `proposed` | `accepted` | `rejected` | `rendered`
+  - Fields: `title` (alias `titleSuggestion`), `score` (alias `confidence`; >1 treated as %), `renderedAssetId` (alias `outputAssetId`)
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web exec eslint src/components/clips src/lib/api.ts src/components/projects/ProjectDetail.tsx
+  pnpm --filter web dev
+  # After Anto API: /projects/:id → Clips → Propose → Accept → Render → preview
+  ```
+- **Depends on:** Phase 7 B clips API + SCORE_CLIPS/RENDER_CLIP jobs (mock OK)
+- **Needs from others:**
+  - Anto: confirm list envelope `{ items }`; status strings; `renderedAssetId` after render; PATCH accepts status + times
+  - Arvin: mock SCORE_CLIPS writes ≥3 stable candidates
+  - Cyrus: RENDER_CLIP creates Asset + sets candidate rendered
+- **Risks:** Until API exists, Propose/Render show API errors (expected)
+
+## Phase 7 Completion — Brendan Rodrigues (Dev A)
+- **Date:** 2026-10-03
+- **Branch:** phase-07-brendan
+- **All allowed tasks done:** yes
+- **Incomplete items:** e2e blocked on Anto/Arvin/Cyrus (expected mid-phase)
+- **Blockers handed to Integration:** Align client contracts above; import `@creatorai/shared` clip DTOs when Anto lands them
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web dev
+  # Manual UI smoke without API: Clips tab renders; Propose fails with network/API error
+  ```
+- **Files I expect others to connect to:**
+  - `apps/web/src/lib/api.ts` clip helpers
+  - `components/clips/ClipsTab.tsx`
+- **Notes for next phase me:** Phase 8 Editor UI — same project-tab pattern; Integration Lead for Phase 7 is Arvin
 ### [2026-10-03 16:02] ROLE=D NAME=Cyrus Selvaraj PHASE=7 TYPE=START
 - **Summary:** Prior Dev D phases verified on `main` (P1–P6 including extractAudio). Starting Phase 7 D — FFmpeg clip cutter + RENDER_CLIP consumer.
 - **Files touched:** branch `phase-07-cyrus` from `origin/main` @ `50c6fd4`

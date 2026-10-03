@@ -659,3 +659,139 @@ export function formatTimecode(ms: number): string {
   const millis = safe % 1000;
   return `${minutes}:${String(seconds).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Clips (Phase 7) — SDD §5.6                                                 */
+/* TODO_SHARED: replace with `@creatorai/shared` once Anto lands Zod DTOs     */
+/* -------------------------------------------------------------------------- */
+
+export type ClipCandidateStatus =
+  | "proposed"
+  | "accepted"
+  | "rejected"
+  | "rendered";
+
+export type ClipCandidateDto = {
+  id: string;
+  projectId: string;
+  /** Source footage asset (optional until API wires it). */
+  assetId?: string | null;
+  title: string;
+  startMs: number;
+  endMs: number;
+  /** 0–1 score / confidence. */
+  score: number;
+  status: ClipCandidateStatus;
+  /** Asset created by RENDER_CLIP job. */
+  renderedAssetId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ClipCandidateListResponse = {
+  items: ClipCandidateDto[];
+};
+
+export type ProposeClipsRequest = {
+  assetId?: string;
+  scriptId?: string;
+};
+
+export type UpdateClipCandidatePayload = {
+  title?: string;
+  startMs?: number;
+  endMs?: number;
+  status?: ClipCandidateStatus;
+};
+
+const CLIP_STATUSES: ClipCandidateStatus[] = [
+  "proposed",
+  "accepted",
+  "rejected",
+  "rendered",
+];
+
+function normalizeClipStatus(raw: unknown): ClipCandidateStatus {
+  if (typeof raw === "string") {
+    const lower = raw.toLowerCase() as ClipCandidateStatus;
+    if (CLIP_STATUSES.includes(lower)) return lower;
+    const upper = raw.toUpperCase();
+    if (upper === "PROPOSED") return "proposed";
+    if (upper === "ACCEPTED") return "accepted";
+    if (upper === "REJECTED") return "rejected";
+    if (upper === "RENDERED") return "rendered";
+  }
+  return "proposed";
+}
+
+function normalizeClipCandidate(raw: unknown): ClipCandidateDto {
+  const r = asRecord(raw) ?? {};
+  const scoreRaw = r.score ?? r.confidence;
+  const score =
+    typeof scoreRaw === "number" ? scoreRaw : Number(scoreRaw) || 0;
+  return {
+    id: String(r.id ?? ""),
+    projectId: String(r.projectId ?? ""),
+    assetId: typeof r.assetId === "string" ? r.assetId : null,
+    title:
+      typeof r.title === "string"
+        ? r.title
+        : typeof r.titleSuggestion === "string"
+          ? r.titleSuggestion
+          : "",
+    startMs: typeof r.startMs === "number" ? r.startMs : Number(r.startMs) || 0,
+    endMs: typeof r.endMs === "number" ? r.endMs : Number(r.endMs) || 0,
+    score: score > 1 ? score / 100 : score,
+    status: normalizeClipStatus(r.status),
+    renderedAssetId:
+      typeof r.renderedAssetId === "string"
+        ? r.renderedAssetId
+        : typeof r.outputAssetId === "string"
+          ? r.outputAssetId
+          : null,
+    createdAt: typeof r.createdAt === "string" ? r.createdAt : undefined,
+    updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : undefined,
+  };
+}
+
+export function proposeProjectClips(
+  projectId: string,
+  payload: ProposeClipsRequest = {},
+) {
+  return apiFetch<EnqueueJobResponse>(`/projects/${projectId}/clips/propose`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listClipCandidates(projectId: string) {
+  const raw = await apiFetch<{ items?: unknown[] } | unknown[]>(
+    `/projects/${projectId}/clips/candidates`,
+  );
+  const items = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw.items)
+      ? raw.items
+      : [];
+  return {
+    items: items.map(normalizeClipCandidate),
+  } satisfies ClipCandidateListResponse;
+}
+
+export async function updateClipCandidate(
+  candidateId: string,
+  payload: UpdateClipCandidatePayload,
+) {
+  const raw = await apiFetch<unknown>(`/clips/candidates/${candidateId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+  return normalizeClipCandidate(raw);
+}
+
+export function renderClipCandidate(candidateId: string) {
+  return apiFetch<EnqueueJobResponse>(
+    `/clips/candidates/${candidateId}/render`,
+    { method: "POST" },
+  );
+}
