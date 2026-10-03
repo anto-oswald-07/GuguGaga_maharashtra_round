@@ -79,8 +79,8 @@ Use this file for upload / cut / thumbnail smoke tests. Do **not** git-add it.
 | Thumbnail (mid-frame JPEG) | 3 | `services/worker/src/media/thumbnail.ts` + `scripts/media/generate-thumb.sh` |
 | Audio extract for STT | 6 | `extractAudio.ts` + `extract-audio.sh` — 16 kHz mono WAV default |
 | Clip cut (`-ss` / `-t`) | 7 | `cutClip.ts` + `cut-clip.sh` — **re-encode default** (accurate) |
-| Timeline render (`filter_complex`) | 8 | from timeline JSON |
-| Aspect adapt (16:9 / 9:16 / 1:1) | 9 | crop/pad center MVP |
+| Timeline render (`filter_complex`) | 8 | `renderTimeline.ts` — concat + drawtext + softsubs |
+| Aspect adapt (16:9 / 9:16 / 1:1) | 9 | `adaptAspect.ts` + `adapt-aspect.sh` — **center crop** default |
 
 Design rule (SDD): pure function `timelineToFfmpegPlan(timeline) -> commands` in worker; unit-testable without GPU.
 
@@ -242,7 +242,60 @@ Do **not** commit generated clip MP4s.
 
 ---
 
-## 8. Smoke commands
+## 8. Aspect adapt / ADAPT_PLATFORM (Phase 9)
+
+Convert a preview/clip to platform ratios. Helper: `services/worker/src/media/adaptAspect.ts`.  
+Consumer: `services/worker/src/consumers/adaptPlatform.ts`.
+
+### 8.1 Ratios + resolutions (MVP)
+
+| Enum | Label | Size | Typical platforms |
+|------|-------|------|-------------------|
+| `R_16_9` | 16:9 | 1280×720 | YouTube |
+| `R_9_16` | 9:16 | 720×1280 | Shorts / Reels / TikTok |
+| `R_1_1` | 1:1 | 1080×1080 | LinkedIn |
+
+### 8.2 Fit mode
+
+| Mode | Filter idea | When |
+|------|-------------|------|
+| **`crop` (default)** | `scale=…:increase` + center `crop` | Fill frame; no black bars (demo default) |
+| `pad` | `scale=…:decrease` + center `pad` | Letterbox/pillarbox; keep full source |
+
+Face-aware reframe is **out of scope** (FR-PLT-004 P1).
+
+### 8.3 Output path
+
+Packs API path (Anto):
+
+```
+storage/workspaces/{workspaceId}/renders/{jobId}/pack-{platform}.mp4
+```
+
+Helper: `adaptPackOutputPath(...)`. Integration should call:
+
+```ts
+await adaptAspect(sourcePath, absOutput, { aspectRatio: pack.aspectRatio });
+// replace mock-copy in ADAPT_PLATFORM
+```
+
+### 8.4 Shell smoke — all three ratios
+
+```bash
+./scripts/media/make-dummy-video.sh   # if needed
+./scripts/media/adapt-aspect.sh storage/samples/dummy.mp4 all
+# → dummy-adapt-r-16-9.mp4 (1280x720)
+# → dummy-adapt-r-9-16.mp4 (720x1280)
+# → dummy-adapt-r-1-1.mp4  (1080x1080)
+
+FIT=pad ./scripts/media/adapt-aspect.sh storage/samples/dummy.mp4 R_1_1
+```
+
+Do **not** commit generated adapt MP4s.
+
+---
+
+## 9. Smoke commands
 
 ```bash
 ./scripts/media/check-ffmpeg.sh
@@ -250,6 +303,7 @@ Do **not** commit generated clip MP4s.
 ./scripts/media/generate-thumb.sh
 ./scripts/media/extract-audio.sh
 ./scripts/media/cut-clip.sh
+./scripts/media/adapt-aspect.sh storage/samples/dummy.mp4 all
 ffprobe -hide_banner storage/samples/dummy.mp4
-ls -lh storage/samples/dummy-thumb.jpg storage/samples/dummy-audio.wav storage/samples/dummy-clip.mp4
+ls -lh storage/samples/dummy-thumb.jpg storage/samples/dummy-audio.wav storage/samples/dummy-clip.mp4 storage/samples/dummy-adapt-*.mp4
 ```

@@ -9,6 +9,7 @@
     "./media/extractAudio": "./src/media/extractAudio.ts",
     "./media/cutClip": "./src/media/cutClip.ts",
     "./media/renderTimeline": "./src/media/renderTimeline.ts",
+    "./media/adaptAspect": "./src/media/adaptAspect.ts",
     "./consumers/generateScript": "./src/consumers/generateScript.ts",
     "./consumers/transcribe": "./src/consumers/transcribe.ts",
     "./consumers/align": "./src/consumers/align.ts",
@@ -17,6 +18,7 @@
     "./consumers/generateTimeline": "./src/consumers/generateTimeline.ts",
     "./consumers/renderTimeline": "./src/consumers/renderTimeline.ts",
     "./consumers/generatePlatformCopy": "./src/consumers/generatePlatformCopy.ts",
+    "./consumers/adaptPlatform": "./src/consumers/adaptPlatform.ts",
     "./ai/provider": "./src/ai/provider.ts",
     "./ai/transcribe": "./src/ai/transcribe.ts",
     "./ai/align": "./src/ai/align.ts",
@@ -36,7 +38,8 @@
     "score-clips": "tsx src/consumers/scoreClips.ts",
     "generate-timeline": "tsx src/consumers/generateTimeline.ts",
     "render-timeline": "tsx src/consumers/renderTimeline.ts",
-    "generate-platform-copy": "tsx src/consumers/generatePlatformCopy.ts"
+    "generate-platform-copy": "tsx src/consumers/generatePlatformCopy.ts",
+    "adapt-platform": "tsx src/consumers/adaptPlatform.ts"
   },
   "dependencies": {
     "@creatorai/ai-provider": "workspace:*",
