@@ -1,10 +1,9 @@
-# CreatorAi — AI Contracts (Phase 1 notes)
+# CreatorAi — AI Contracts
 
 > **Owner:** Dev C (Arvin)  
-> **Status:** Interface notes only — **do not implement** providers here until Phase 5+.  
-> **Source of truth:** `SDD.md` §7 (AI Subsystem Design).
-
-This document lists the intended `AiProvider` surface so API, worker, and frontend can align before code lands in `packages/ai-provider`.
+> **Status:** Phase 5 — `packages/ai-provider` implemented (mock + openai + gemini).  
+> **Source of truth:** `SDD.md` §7 (AI Subsystem Design).  
+> **Package README:** `packages/ai-provider/README.md`
 
 ---
 
@@ -23,26 +22,24 @@ interface AiProvider {
 
 ### Method summary
 
-| Method | Phase (target) | Purpose |
-|--------|----------------|---------|
-| `generateScript` | 5 | Topic/audience/tone/platform → structured script (hook/body/CTA) |
-| `generateHooks` | 5 | Alternate hooks from an existing script |
-| `generateSupporting` | 5 / 9 | Titles, captions, hashtags (platform-aware) |
-| `alignScriptToTranscript` | 6 | Map script sections to transcript time ranges + confidence |
-| `scoreClipWindows` | 7 | Rank 15–60s clip candidates |
-| `proposeTimeline` | 8 | Build editable timeline JSON from mappings + clips |
+| Method | Phase | Status |
+|--------|-------|--------|
+| `generateScript` | 5 | **Done** — mock + openai + gemini |
+| `generateHooks` | 5 | **Done** |
+| `generateSupporting` | 5 / 9 | **Done** (basic) |
+| `alignScriptToTranscript` | 6 | Stub (`not_implemented`) |
+| `scoreClipWindows` | 7 | Stub (`not_implemented`) |
+| `proposeTimeline` | 8 | Stub (`not_implemented`) |
 
 ---
 
-## Planned implementations
+## Implementations
 
 | Class | Role |
 |-------|------|
-| `MockAiProvider` | Deterministic fixtures for demos/tests (default via `AI_PROVIDER=mock`) |
-| `OpenAiProvider` | Real calls when `OPENAI_API_KEY` set |
-| `GeminiProvider` | Real calls when `GEMINI_API_KEY` set |
-
-Env (final target — see Development Plan Appendix B):
+| `MockAiProvider` | Deterministic fixtures (default `AI_PROVIDER=mock`) |
+| `OpenAiProvider` | Chat Completions when `OPENAI_API_KEY` set |
+| `GeminiProvider` | generateContent when `GEMINI_API_KEY` set |
 
 ```bash
 AI_PROVIDER=mock
@@ -50,27 +47,21 @@ OPENAI_API_KEY=
 GEMINI_API_KEY=
 ```
 
----
-
-## Transcription (related, not on `AiProvider` in SDD §7.1)
-
-- Prefer Whisper API or local whisper.cpp.
-- Normalize to `TranscriptSegment[]` for alignment input.
-- Worker entry points planned under `services/worker/src/ai/transcribe.ts` (Phase 6).
+Factory: `createAiProvider()` from `@creatorai/ai-provider`.
 
 ---
 
-## Alignment strategy (MVP notes)
+## Worker consumer
 
-1. Fuzzy-match (or embed) script sentences to transcript windows.
-2. Emit `startMs` / `endMs` / `confidence` (0–1).
-3. Flag low confidence for UI (FR-STV-006).
+- `services/worker/src/consumers/generateScript.ts` — `processGenerateScriptJob`
+- CLI: `pnpm --filter worker generate-script`
+- Persistence: optional `WORKER_CALLBACK_URL` until Anto Job/ScriptVersion tables exist
 
 ---
 
-## Clip scoring (MVP notes)
+## Prompt templates
 
-Rank windows by hook keywords, energy proxies, sentence completeness, and duration fitness (15–60s). Return top N candidates with title suggestions.
+Inline in OpenAI/Gemini classes for MVP. Dev D may add `docs/ai/prompts/**` + shared Zod (`scriptSchema`) without owning `packages/ai-provider` code.
 
 ---
 
@@ -78,11 +69,3 @@ Rank windows by hook keywords, energy proxies, sentence completeness, and durati
 
 - Demo script: `samples/scripts/sample_script.md`
 - Demo pack notes: `samples/README.md`
-
----
-
-## Non-goals for Phase 1
-
-- No real LLM/STT calls.
-- No `packages/ai-provider` package yet (Phase 5).
-- No worker consumers yet (Phase 5–8).

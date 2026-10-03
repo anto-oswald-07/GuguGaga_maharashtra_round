@@ -2,6 +2,7 @@
 // Phase 2: User + Workspace for auth.
 // Phase 3: Asset + local storage paths.
 // Phase 4: Project + ProjectAsset + StageEvent.
+// Phase 5: ScriptDocument + ScriptVersion + Job (DB-polling queue).
 
 generator client {
   provider = "prisma-client-js"
@@ -39,6 +40,31 @@ enum Platform {
   LINKEDIN
 }
 
+enum JobType {
+  TRANSCRIBE
+  ALIGN_SCRIPT
+  SCORE_CLIPS
+  RENDER_CLIP
+  RENDER_TIMELINE
+  ADAPT_PLATFORM
+  GENERATE_SCRIPT
+  GENERATE_HOOKS
+  GENERATE_SUPPORTING
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum ScriptSource {
+  USER
+  AI
+  REFINE
+}
+
 model User {
   id           String     @id @default(uuid()) @db.Uuid
   email        String     @unique
@@ -55,6 +81,7 @@ model Workspace {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   assets    Asset[]
   projects  Project[]
+  jobs      Job[]
 }
 
 model Asset {
@@ -79,18 +106,20 @@ model Asset {
 }
 
 model Project {
-  id              String         @id @default(uuid()) @db.Uuid
-  workspaceId     String         @db.Uuid
+  id              String           @id @default(uuid()) @db.Uuid
+  workspaceId     String           @db.Uuid
   title           String
   description     String?
-  stage           ProjectStage   @default(IDEA)
-  targetPlatforms Platform[]     @default([])
+  stage           ProjectStage     @default(IDEA)
+  targetPlatforms Platform[]       @default([])
   deletedAt       DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   assets          ProjectAsset[]
   stageEvents     StageEvent[]
+  scripts         ScriptDocument[]
+  jobs            Job[]
 
   @@index([workspaceId, deletedAt])
   @@index([workspaceId, stage])
@@ -116,4 +145,52 @@ model StageEvent {
   project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt])
+}
+
+/// One script document per logical draft inside a project (versioned content).
+model ScriptDocument {
+  id        String          @id @default(uuid()) @db.Uuid
+  projectId String          @db.Uuid
+  title     String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions  ScriptVersion[]
+
+  @@index([projectId, createdAt])
+}
+
+model ScriptVersion {
+  id               String         @id @default(uuid()) @db.Uuid
+  scriptDocumentId String         @db.Uuid
+  version          Int
+  /// Structured content: `{ hook, body, cta, title?, rawText? }`
+  content          Json
+  source           ScriptSource   @default(USER)
+  createdAt        DateTime       @default(now())
+  scriptDocument   ScriptDocument @relation(fields: [scriptDocumentId], references: [id], onDelete: Cascade)
+
+  @@unique([scriptDocumentId, version])
+  @@index([scriptDocumentId, createdAt])
+}
+
+/// Background work unit. MVP queue = DB polling (status=QUEUED); Redis/BullMQ optional later.
+model Job {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @db.Uuid
+  projectId   String?    @db.Uuid
+  type        JobType
+  status      JobStatus  @default(QUEUED)
+  input       Json       @default("{}")
+  output      Json?
+  error       String?
+  progress    Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
+  @@index([status, createdAt])
 }
