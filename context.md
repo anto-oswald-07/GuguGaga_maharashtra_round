@@ -2254,3 +2254,49 @@ _(Template above kept for other developers.)_
   - Brendan: `POST/GET .../packs`, `PATCH /packs/:id/status`, `GET /packs/:id/download`
   - Arvin: `generateSupporting` already used by ADAPT_PLATFORM
   - Cyrus: replace mock-copy in jobs ADAPT_PLATFORM with `worker/media/adaptAspect`
+
+### Chronological — 2026-10-03 17:48 (Cyrus / Phase 9 Dev D)
+- **Summary:** Phase 9 D complete — aspect adaptation FFmpeg (`adaptAspect` center-crop MVP + optional pad; `adaptPlatform` consumer; shell smoke). Rebased on `origin/main` (includes Anto packs + Arvin copy + Brendan UI).
+- **Files touched:**
+  - `services/worker/src/media/adaptAspect.ts` (new)
+  - `services/worker/src/consumers/adaptPlatform.ts` (new)
+  - `scripts/media/adapt-aspect.sh` (new)
+  - `services/worker/package.json` / `src/index.ts` (exports + CLI)
+  - `docs/ffmpeg-notes.md` §8
+  - `context.md`
+- **APIs / types added:**
+  - `adaptAspect(input, output, { aspectRatio, fit? })` → `{ width, height, label, ... }`
+  - `adaptPackOutputPath(...)` → `renders/{jobId}/pack-{platform}.mp4` (Anto path)
+  - `processAdaptPlatformJob({ inputPath, aspectRatio | packs[] })` → `{ packs: [...] }`
+  - Ratios: `R_16_9` 1280×720, `R_9_16` 720×1280, `R_1_1` 1080×1080
+- **How to run / test what I did:**
+  ```bash
+  ./scripts/media/make-dummy-video.sh   # if needed
+  ./scripts/media/adapt-aspect.sh storage/samples/dummy.mp4 all
+  # → 1280x720 / 720x1280 / 1080x1080
+  FIT=pad ./scripts/media/adapt-aspect.sh storage/samples/dummy.mp4 R_1_1
+  pnpm --filter worker adapt-platform -- --input storage/samples/dummy.mp4 --all-aspects
+  pnpm --filter worker adapt-platform -- --input storage/samples/dummy.mp4 --aspect R_9_16
+  ```
+- **E2E smoke:** PASS — shell all ratios + TS consumer all ratios (crop) + pad 1:1; ffprobe dims match
+- **Needs from others:** Anto Integration — replace mock-copy in `ADAPT_PLATFORM` with `adaptAspect(source, out, { aspectRatio })`
+- **Notes for next phase me:** Phase 10 D = media pipeline hardening + demo checklist
+
+## Phase 9 Completion — Cyrus Selvaraj (Dev D)
+- **Date:** 2026-10-03
+- **Branch:** phase-09-cyrus
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (jobs ADAPT_PLATFORM wire-up is Integration / Anto — outside allowed paths)
+- **Blockers handed to Integration:** Swap mock-copy for `worker/media/adaptAspect`; use `adaptPackOutputPath` / `renders/{jobId}/pack-{platform}.mp4`; consume `output.packs[].outputPath`
+- **Commands to verify my work:**
+  ```bash
+  ./scripts/media/adapt-aspect.sh storage/samples/dummy.mp4 all
+  pnpm --filter worker adapt-platform -- --input storage/samples/dummy.mp4 --all-aspects
+  ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0:s=x storage/samples/dummy-adapt-r-9-16.mp4
+  ```
+- **Files I expect others to connect to:**
+  - `services/worker/src/media/adaptAspect.ts` → ADAPT_PLATFORM job
+  - `services/worker/src/consumers/adaptPlatform.ts` → CLI / worker path
+  - `scripts/media/adapt-aspect.sh` → manual smoke
+  - `docs/ffmpeg-notes.md` §8
+- **Notes for next phase me:** Phase 10 D = media hardening + `docs/demo/media-checklist.md`
