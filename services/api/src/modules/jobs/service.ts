@@ -1,4 +1,5 @@
 import type {
+  AspectRatio,
   JobDto,
   JobListQuery,
   JobListResponse,
@@ -20,6 +21,7 @@ import {
   renderTimeline,
   renderTimelinePath,
 } from 'worker/media/renderTimeline';
+import { adaptAspect } from 'worker/media/adaptAspect';
 import { prisma } from '../../db/prisma';
 import { storage } from '../../storage/local';
 import {
@@ -995,15 +997,25 @@ export async function completeJobWithAi(
           platform,
         );
 
-        // Cyrus Phase 9 D (`worker/media/adaptAspect`) not on main yet —
-        // mock-copy so packs still get an output Asset for demos.
-        // Integration: swap in adaptAspect(source, out, { aspectRatio }).
-        const adaptMode = 'mock-copy';
-        {
+        const aspectRatio = pack.aspectRatio as AspectRatio;
+        let adaptMode = 'ffmpeg';
+        let adaptWidth: number | undefined;
+        let adaptHeight: number | undefined;
+        try {
+          const adapted = await adaptAspect(ctx.sourcePath, absOutput, {
+            aspectRatio,
+            fit: 'crop',
+          });
+          adaptWidth = adapted.width;
+          adaptHeight = adapted.height;
+          adaptMode = 'ffmpeg';
+        } catch {
+          // No ffmpeg / adapt failed — copy source so Asset still exists for demos.
           const { copyFile, mkdir } = await import('node:fs/promises');
           const { dirname } = await import('node:path');
           await mkdir(dirname(absOutput), { recursive: true });
           await copyFile(ctx.sourcePath, absOutput);
+          adaptMode = 'mock-copy';
         }
 
         const persisted = await persistAdaptedPack({
@@ -1015,19 +1027,21 @@ export async function completeJobWithAi(
           title,
           caption,
           hashtags,
-          aspectRatio: pack.aspectRatio,
+          aspectRatio,
         });
 
         packResults.push({
           packId: pack.id,
           platform,
-          aspectRatio: pack.aspectRatio,
+          aspectRatio,
           assetId: persisted.assetId,
           outputPath: persisted.relativePath,
           title,
           caption,
           hashtags,
           mode: adaptMode,
+          width: adaptWidth,
+          height: adaptHeight,
         });
       }
 
