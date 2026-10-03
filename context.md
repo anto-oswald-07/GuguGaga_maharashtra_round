@@ -254,6 +254,41 @@ Copy-paste this template every time:
 - **Needs from others:** None for Phase 1 close
 - **Risks:** Local host Postgres may occupy `:5432`; use `:5433` mapping
 
+### [2026-10-03 17:56] ROLE=B NAME=Anto Oswald PHASE=2 TYPE=START
+- **Summary:** Started Phase 2 Dev B on `phase-02-anto` — Auth API + Prisma User/Workspace + shared Zod auth DTOs.
+- **Files touched:** (branch created from `main` @ `phase-1-done`)
+- **APIs / types added:** Planned `POST /auth/register`, `POST /auth/login`, `GET /auth/me`
+- **How to run / test what I did:** `git checkout phase-02-anto`
+- **Depends on:** Phase 1 integration complete; Postgres reachable via `DATABASE_URL`
+- **Needs from others:** None to start (Brendan builds UI against these shapes)
+- **Risks:** Host `:5432` conflict — this machine uses `:5433`
+
+### [2026-10-03 18:00] ROLE=B NAME=Anto Oswald PHASE=2 TYPE=DONE
+- **Summary:** Phase 2 Dev B complete — User/Workspace Prisma models, bcrypt+JWT auth routes, `requireAuth`, shared Zod auth schemas.
+- **Files touched:** `services/api/prisma/**`, `services/api/src/**`, `packages/shared/src/auth.ts`, `packages/shared/src/index.ts`, `packages/shared/package.json`, `services/api/package.json`, `README.md`, `context.md`, `pnpm-lock.yaml`
+- **APIs / types added:**
+  - `POST /api/v1/auth/register` → `{ token, user, workspace }` (201)
+  - `POST /api/v1/auth/login` → `{ token, user, workspace }` (200)
+  - `GET /api/v1/auth/me` → `{ user, workspace }` (Bearer JWT)
+  - Shared: `registerRequestSchema`, `loginRequestSchema`, `authTokenResponseSchema`, `meResponseSchema`, `JwtPayload`
+  - JWT claims: `{ userId, workspaceId }` (7d TTL)
+  - Password min length: 8
+- **How to run / test what I did:**
+  ```bash
+  pnpm install
+  pnpm --filter @creatorai/shared build
+  pnpm --filter api prisma:migrate   # or prisma migrate deploy
+  pnpm --filter api dev
+  curl -X POST localhost:4000/api/v1/auth/register -H 'content-type: application/json' \
+    -d '{"email":"a@b.com","password":"password123","name":"Test"}'
+  curl -X POST localhost:4000/api/v1/auth/login -H 'content-type: application/json' \
+    -d '{"email":"a@b.com","password":"password123"}'
+  curl localhost:4000/api/v1/auth/me -H "Authorization: Bearer TOKEN"
+  ```
+- **Depends on:** Postgres (`DATABASE_URL`); `JWT_SECRET` in `.env`
+- **Needs from others:** Brendan — wire Auth UI to these JSON shapes; Arvin — HTTP collection can mirror these paths
+- **Risks:** None remaining for Phase 2 B scope
+
 ---
 
 ## 6. Phase Completion Blocks (paste at end of your phase)
@@ -329,6 +364,26 @@ _(Template above kept for other developers.)_
   ```
 - **Files I expect others to connect to:** `apps/web` package name `web`; `NEXT_PUBLIC_API_BASE_URL` points at Anto’s API
 - **Notes for next phase me:** Phase 2 is Auth UI — build against documented `/auth/login` and `/auth/register` shapes even before API merge
+
+## Phase 2 Completion — Anto Oswald (Dev B)
+- **Date:** 2026-10-03
+- **Branch:** phase-02-anto
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (logout is client-side discard per MVP; no blacklist)
+- **Blockers handed to Integration:** Brendan must match `AuthTokenResponse` / `MeResponse` shapes; run `prisma migrate` before testing
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter api prisma:migrate
+  pnpm --filter api dev
+  curl -X POST localhost:4000/api/v1/auth/register -H 'content-type: application/json' -d '{"email":"a@b.com","password":"password123","name":"Test"}'
+  curl -X POST localhost:4000/api/v1/auth/login -H 'content-type: application/json' -d '{"email":"a@b.com","password":"password123"}'
+  curl localhost:4000/api/v1/auth/me -H "Authorization: Bearer TOKEN"
+  ```
+- **Files I expect others to connect to:**
+  - `@creatorai/shared` auth Zod schemas + types
+  - `services/api/src/auth/jwt.ts` (`requireAuth`)
+  - `POST/GET /api/v1/auth/*`
+- **Notes for next phase me:** Phase 3 = Assets API + storage adapter; reuse `request.auth.workspaceId`
 
 ---
 

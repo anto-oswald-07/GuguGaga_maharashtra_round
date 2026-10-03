@@ -1,4 +1,20 @@
 export { API_PREFIX } from './constants';
+export {
+  PASSWORD_MIN_LENGTH,
+  registerRequestSchema,
+  loginRequestSchema,
+  publicUserSchema,
+  workspaceSchema,
+  authTokenResponseSchema,
+  meResponseSchema,
+  type RegisterRequest,
+  type LoginRequest,
+  type PublicUser,
+  type WorkspaceDto,
+  type AuthTokenResponse,
+  type MeResponse,
+  type JwtPayload,
+} from './auth';
 
 /** Response shape for `GET /api/v1/health`. */
 export type HealthResponse = {
@@ -6,7 +22,7 @@ export type HealthResponse = {
   service: 'api';
 };
 
-/** Standard API error payload (placeholder for later phases). */
+/** Standard API error payload. */
 export type ApiError = {
   error: string;
   message: string;
