@@ -1,10 +1,5 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { DashboardGate } from "@/components/auth/DashboardGate";
 
 export default function DashboardPage() {
-  return (
-    <ComingSoon
-      title="Dashboard"
-      description="Coming soon — overview of projects, jobs, and insights."
-    />
-  );
+  return <DashboardGate />;
 }
