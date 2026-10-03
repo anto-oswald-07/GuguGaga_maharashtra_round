@@ -1,0 +1,52 @@
+{
+  "sourceAssetId": "11111111-1111-4111-8111-111111111111",
+  "script": {
+    "title": "How I Batch-Create Reels in One Afternoon",
+    "hook": "Stop filming one Reel a day. Batch a week in one afternoon.",
+    "body": "Pick one topic. Film all A-roll. Edit decisions, not hunting.",
+    "cta": "Comment BATCH for the checklist."
+  },
+  "acceptedClips": [
+    {
+      "id": "clip-a",
+      "startMs": 0,
+      "endMs": 12000,
+      "label": "Open",
+      "titleSuggestion": "Stop filming one Reel a day"
+    },
+    {
+      "id": "clip-b",
+      "startMs": 12000,
+      "endMs": 28000,
+      "label": "Body",
+      "titleSuggestion": "Film all A-roll back-to-back"
+    },
+    {
+      "id": "clip-c",
+      "startMs": 28000,
+      "endMs": 40000,
+      "label": "CTA",
+      "titleSuggestion": "Comment BATCH"
+    }
+  ],
+  "alignments": [
+    {
+      "scriptExcerpt": "Stop filming one Reel a day",
+      "startMs": 0,
+      "endMs": 2200,
+      "confidence": 0.92
+    },
+    {
+      "scriptExcerpt": "Film all A-roll",
+      "startMs": 14000,
+      "endMs": 16500,
+      "confidence": 0.81
+    },
+    {
+      "scriptExcerpt": "low conf noise",
+      "startMs": 30000,
+      "endMs": 31000,
+      "confidence": 0.2
+    }
+  ]
+}
