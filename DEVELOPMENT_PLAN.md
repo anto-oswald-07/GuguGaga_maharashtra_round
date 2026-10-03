@@ -902,9 +902,9 @@ Use curl multipart upload + list + patch + delete.
 **Lead:** Cyrus  
 
 ### Verify
-- [ ] AI propose → Apply → edit text → save → render preview plays
-- [ ] Timeline versions list grows
-- [ ] Invalid timeline rejected by API validation
+- [x] AI propose → Apply → edit text → save → render preview plays
+- [x] Timeline versions list grows
+- [x] Invalid timeline rejected by API validation
 
 ---
 

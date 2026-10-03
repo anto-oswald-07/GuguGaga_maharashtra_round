@@ -153,6 +153,8 @@ function TimelineEditorInner({ projectId }: TimelineEditorProps) {
                 .sort((a, b) => b.version - a.version)[0];
               if (proposalVersion) {
                 setProposal(proposalVersion.content);
+              } else if (doc.pendingProposal) {
+                setProposal(doc.pendingProposal);
               } else if (doc.content) {
                 setProposal(doc.content);
               } else {

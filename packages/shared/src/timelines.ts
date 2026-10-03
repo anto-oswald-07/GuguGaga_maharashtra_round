@@ -23,6 +23,7 @@ export const timelineVideoClipSchema = z.object({
   srcStartMs: z.number().int().nonnegative(),
   srcEndMs: z.number().int().nonnegative(),
   timelineStartMs: z.number().int().nonnegative(),
+  label: z.string().max(200).optional(),
 });
 
 export const timelineTextItemSchema = z.object({
