@@ -4,6 +4,9 @@
  *
  * Supports:
  * - Video track clips (trim + concat, contiguous order by timelineStartMs)
+ * - Image stills on the video track (`mediaKind: "image"`) held for
+ *   (srcEndMs - srcStartMs)
+ * - Audio track clips mixed in parallel (adelay + amix by timelineStartMs)
  * - Text track drawtext overlays (minimum required)
  * - Captions as softsubs (.srt muxed as mov_text) when present
  *
@@ -15,6 +18,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   assertValidTimeline,
+  type AudioClip,
   type CaptionItem,
   type EditTimeline,
   type TextItem,
@@ -29,6 +33,8 @@ import {
   normalizeCutRangeMs,
   runFfmpeg,
 } from './mediaGuard';
+
+const MIX_SAMPLE_RATE = 44100;
 
 export type RenderTimelineOptions = {
   /** Map assetId → readable media path on disk. */
@@ -86,6 +92,14 @@ function msToSec(ms: number): string {
   return (ms / 1000).toFixed(3);
 }
 
+function isImageClip(clip: VideoClip): boolean {
+  return clip.mediaKind === 'image';
+}
+
+function clipHoldMs(clip: { srcStartMs: number; srcEndMs: number }): number {
+  return Math.max(0, clip.srcEndMs - clip.srcStartMs);
+}
+
 /** Escape text for ffmpeg drawtext `text=` (single-quoted style). */
 export function escapeDrawtext(text: string): string {
   return text
@@ -118,6 +132,16 @@ function collectVideoClips(tl: EditTimeline): VideoClip[] {
   return clips.slice().sort((a, b) => a.timelineStartMs - b.timelineStartMs);
 }
 
+function collectAudioClips(tl: EditTimeline): AudioClip[] {
+  const clips: AudioClip[] = [];
+  for (const track of tl.tracks) {
+    if (track.type === 'audio') {
+      clips.push(...track.clips);
+    }
+  }
+  return clips.slice().sort((a, b) => a.timelineStartMs - b.timelineStartMs);
+}
+
 function collectTextItems(tl: EditTimeline): TextItem[] {
   const items: TextItem[] = [];
   for (const track of tl.tracks) {
@@ -138,8 +162,13 @@ function collectCaptions(tl: EditTimeline): CaptionItem[] {
   return items;
 }
 
+function aformatStereo(): string {
+  return `aformat=sample_fmts=fltp:sample_rates=${MIX_SAMPLE_RATE}:channel_layouts=stereo`;
+}
+
 /**
- * Clamp each video clip's [srcStartMs, srcEndMs] to the probed source duration.
+ * Clamp each timed media clip's [srcStartMs, srcEndMs] to the probed source
+ * duration. Image stills are skipped (hold window is authored, not source trim).
  * Matches cutClip / prior ffmpeg trim behavior so mock SCORE windows that
  * overshoot short demo media (e.g. 5s dummy.mp4) still render.
  */
@@ -150,30 +179,58 @@ export function clampTimelineToSourceDurations(
   return {
     ...timeline,
     tracks: timeline.tracks.map((track) => {
-      if (track.type !== 'video') return track;
-      return {
-        ...track,
-        clips: track.clips.map((clip) => {
-          const dur = durationSecByAssetId.get(clip.assetId);
-          if (dur == null) return clip;
-          const range = normalizeCutRangeMs(
-            clip.srcStartMs,
-            clip.srcEndMs,
-            dur,
-          );
-          if (
-            range.startMs === clip.srcStartMs &&
-            range.endMs === clip.srcEndMs
-          ) {
-            return clip;
-          }
-          return {
-            ...clip,
-            srcStartMs: range.startMs,
-            srcEndMs: range.endMs,
-          };
-        }),
-      };
+      if (track.type === 'video') {
+        return {
+          ...track,
+          clips: track.clips.map((clip) => {
+            if (isImageClip(clip)) return clip;
+            const dur = durationSecByAssetId.get(clip.assetId);
+            if (dur == null) return clip;
+            const range = normalizeCutRangeMs(
+              clip.srcStartMs,
+              clip.srcEndMs,
+              dur,
+            );
+            if (
+              range.startMs === clip.srcStartMs &&
+              range.endMs === clip.srcEndMs
+            ) {
+              return clip;
+            }
+            return {
+              ...clip,
+              srcStartMs: range.startMs,
+              srcEndMs: range.endMs,
+            };
+          }),
+        };
+      }
+      if (track.type === 'audio') {
+        return {
+          ...track,
+          clips: track.clips.map((clip) => {
+            const dur = durationSecByAssetId.get(clip.assetId);
+            if (dur == null) return clip;
+            const range = normalizeCutRangeMs(
+              clip.srcStartMs,
+              clip.srcEndMs,
+              dur,
+            );
+            if (
+              range.startMs === clip.srcStartMs &&
+              range.endMs === clip.srcEndMs
+            ) {
+              return clip;
+            }
+            return {
+              ...clip,
+              srcStartMs: range.startMs,
+              srcEndMs: range.endMs,
+            };
+          }),
+        };
+      }
+      return track;
     }),
   };
 }
@@ -214,7 +271,7 @@ export function buildFfmpegPlan(
   if (clips.length < 1) {
     throw new MediaPipelineError(
       'RANGE_INVALID',
-      'timeline has no video clips — cannot render preview',
+      'timeline has no video/image clips — cannot render preview',
     );
   }
   if (!(timeline.durationMs > 0)) {
@@ -233,8 +290,20 @@ export function buildFfmpegPlan(
     }
   }
 
+  const audioClips = collectAudioClips(timeline);
+  for (const clip of audioClips) {
+    if (!(clip.srcEndMs > clip.srcStartMs)) {
+      throw new MediaPipelineError(
+        'RANGE_INVALID',
+        `Audio clip "${clip.id}" has zero/negative source window ` +
+          `(srcStartMs=${clip.srcStartMs}, srcEndMs=${clip.srcEndMs})`,
+      );
+    }
+  }
+
   const width = options.width ?? 1280;
   const height = options.height ?? 720;
+  const fps = timeline.fps > 0 ? timeline.fps : 30;
   const inputs: string[] = [];
   const inputIndexByPath = new Map<string, number>();
 
@@ -257,24 +326,39 @@ export function buildFfmpegPlan(
 
   const filterParts: string[] = [];
   const concatLabels: string[] = [];
+  const scalePad =
+    `scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
+    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
 
   clips.forEach((clip, i) => {
     const inIdx = inputIndexFor(clip.assetId);
-    const start = msToSec(clip.srcStartMs);
-    const end = msToSec(clip.srcEndMs);
     const vLabel = `v${i}`;
     const aLabel = `a${i}`;
-    filterParts.push(
-      `[${inIdx}:v]trim=start=${start}:end=${end},setpts=PTS-STARTPTS,` +
-        `scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
-        `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1[${vLabel}]`,
-    );
-    // Audio may be missing on some demos — anullsrc fallback via optional stream.
-    // Prefer atrim; if no audio, ffmpeg fails — callers should use media with audio
-    // (dummy.mp4 has audio). Documented in timeline-notes.
-    filterParts.push(
-      `[${inIdx}:a]atrim=start=${start}:end=${end},asetpts=PTS-STARTPTS[${aLabel}]`,
-    );
+
+    if (isImageClip(clip)) {
+      const holdSec = msToSec(clipHoldMs(clip));
+      // Still image → loop one frame for the authored hold duration.
+      filterParts.push(
+        `[${inIdx}:v]loop=loop=-1:size=1:start=0,trim=duration=${holdSec},` +
+          `setpts=PTS-STARTPTS,fps=${fps},${scalePad}[${vLabel}]`,
+      );
+      filterParts.push(
+        `anullsrc=channel_layout=stereo:sample_rate=${MIX_SAMPLE_RATE},` +
+          `atrim=duration=${holdSec},asetpts=PTS-STARTPTS,${aformatStereo()}[${aLabel}]`,
+      );
+    } else {
+      const start = msToSec(clip.srcStartMs);
+      const end = msToSec(clip.srcEndMs);
+      filterParts.push(
+        `[${inIdx}:v]trim=start=${start}:end=${end},setpts=PTS-STARTPTS,` +
+          `${scalePad}[${vLabel}]`,
+      );
+      // Prefer source audio; normalize for concat/amix with stills + aux tracks.
+      filterParts.push(
+        `[${inIdx}:a]atrim=start=${start}:end=${end},asetpts=PTS-STARTPTS,` +
+          `${aformatStereo()}[${aLabel}]`,
+      );
+    }
     concatLabels.push(`[${vLabel}][${aLabel}]`);
   });
 
@@ -287,7 +371,14 @@ export function buildFfmpegPlan(
   const captionItems = collectCaptions(timeline);
   const burnCaptions = options.burnCaptions === true;
 
-  const overlays: Array<{ text: string; startMs: number; endMs: number; fontSize: number; position?: 'top' | 'center' | 'bottom'; fontColor?: string }> = [
+  const overlays: Array<{
+    text: string;
+    startMs: number;
+    endMs: number;
+    fontSize: number;
+    position?: 'top' | 'center' | 'bottom';
+    fontColor?: string;
+  }> = [
     ...textItems.map((t) => ({
       text: t.text,
       startMs: t.startMs,
@@ -329,6 +420,28 @@ export function buildFfmpegPlan(
     videoLabel = 'vout';
   }
 
+  let mapAudio = '[acat]';
+  if (audioClips.length > 0) {
+    const mixLabels = ['[acat]'];
+    audioClips.forEach((clip, i) => {
+      const inIdx = inputIndexFor(clip.assetId);
+      const start = msToSec(clip.srcStartMs);
+      const end = msToSec(clip.srcEndMs);
+      const delayMs = Math.max(0, Math.floor(clip.timelineStartMs));
+      const label = `aux${i}`;
+      filterParts.push(
+        `[${inIdx}:a]atrim=start=${start}:end=${end},asetpts=PTS-STARTPTS,` +
+          `adelay=${delayMs}|${delayMs},${aformatStereo()}[${label}]`,
+      );
+      mixLabels.push(`[${label}]`);
+    });
+    filterParts.push(
+      `${mixLabels.join('')}amix=inputs=${mixLabels.length}:duration=longest:` +
+        `dropout_transition=0:normalize=0[amixed]`,
+    );
+    mapAudio = '[amixed]';
+  }
+
   let softsubsPath: string | undefined;
   let softsubsContent: string | undefined;
   if (captionItems.length > 0) {
@@ -342,7 +455,7 @@ export function buildFfmpegPlan(
     softsubsPath,
     softsubsContent,
     mapVideo: '[vout]',
-    mapAudio: '[acat]',
+    mapAudio,
     durationSec: msToSec(timeline.durationMs),
   };
 }
@@ -356,10 +469,12 @@ export async function renderTimeline(
 ): Promise<RenderTimelineResult> {
   const timeline = assertValidTimeline(timelineInput);
   const clips = collectVideoClips(timeline);
+  const audioClips = collectAudioClips(timeline);
   const textItems = collectTextItems(timeline);
   const captionItems = collectCaptions(timeline);
 
   const durationSecByAssetId = new Map<string, number>();
+
   for (const clip of clips) {
     const path = options.assetPaths[clip.assetId];
     if (!path) {
@@ -369,14 +484,35 @@ export async function renderTimeline(
       );
     }
     await assertInputReadable(path, `asset ${clip.assetId}`);
+    if (isImageClip(clip)) {
+      // Stills have no usable media duration — hold window is authored.
+      continue;
+    }
     const durationSec = await assertPositiveDuration(path, {
       kind: `asset ${clip.assetId}`,
     });
     durationSecByAssetId.set(clip.assetId, durationSec);
   }
 
+  for (const clip of audioClips) {
+    const path = options.assetPaths[clip.assetId];
+    if (!path) {
+      throw new MediaPipelineError(
+        'ASSET_UNMAPPED',
+        `No media path mapped for audio assetId "${clip.assetId}"`,
+      );
+    }
+    await assertInputReadable(path, `audio asset ${clip.assetId}`);
+    if (!durationSecByAssetId.has(clip.assetId)) {
+      const durationSec = await assertPositiveDuration(path, {
+        kind: `audio asset ${clip.assetId}`,
+      });
+      durationSecByAssetId.set(clip.assetId, durationSec);
+    }
+  }
+
   // Clamp overshooting SCORE/mock windows to source EOF (hard-fail only when
-  // start is past EOF or the window collapses).
+  // start is past EOF or the window collapses). Image stills are left as-is.
   const clampedTimeline = clampTimelineToSourceDurations(
     timeline,
     durationSecByAssetId,

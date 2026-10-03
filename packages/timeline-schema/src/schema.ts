@@ -27,6 +27,8 @@ export const videoClipSchema = z
     timelineStartMs: nonNegMs,
     /** Optional UI / AI label (Arvin proposeTimeline). */
     label: z.string().max(200).optional(),
+    /** Images hold stills for (srcEndMs - srcStartMs); default video. */
+    mediaKind: z.enum(['video', 'image']).optional(),
   })
   .strict()
   .superRefine((clip, ctx) => {
@@ -39,6 +41,27 @@ export const videoClipSchema = z
     }
   });
 export type VideoClip = z.infer<typeof videoClipSchema>;
+
+export const audioClipSchema = z
+  .object({
+    id: nonEmptyId,
+    assetId: nonEmptyId,
+    srcStartMs: nonNegMs,
+    srcEndMs: positiveMs,
+    timelineStartMs: nonNegMs,
+    label: z.string().max(200).optional(),
+  })
+  .strict()
+  .superRefine((clip, ctx) => {
+    if (clip.srcEndMs <= clip.srcStartMs) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `srcEndMs must be > srcStartMs (audio clip ${clip.id})`,
+        path: ['srcEndMs'],
+      });
+    }
+  });
+export type AudioClip = z.infer<typeof audioClipSchema>;
 
 export const textItemSchema = z
   .object({
@@ -88,6 +111,15 @@ export const videoTrackSchema = z
   .strict();
 export type VideoTrack = z.infer<typeof videoTrackSchema>;
 
+export const audioTrackSchema = z
+  .object({
+    id: nonEmptyId,
+    type: z.literal('audio'),
+    clips: z.array(audioClipSchema).default([]),
+  })
+  .strict();
+export type AudioTrack = z.infer<typeof audioTrackSchema>;
+
 export const textTrackSchema = z
   .object({
     id: nonEmptyId,
@@ -108,6 +140,7 @@ export type CaptionsTrack = z.infer<typeof captionsTrackSchema>;
 
 export const trackSchema = z.discriminatedUnion('type', [
   videoTrackSchema,
+  audioTrackSchema,
   textTrackSchema,
   captionsTrackSchema,
 ]);

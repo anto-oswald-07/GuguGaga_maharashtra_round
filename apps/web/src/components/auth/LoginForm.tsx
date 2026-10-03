@@ -21,7 +21,7 @@ export function LoginForm() {
     try {
       const result = await login({ email, password });
       setToken(result.token);
-      router.push("/");
+      router.push("/dashboard");
     } catch (err) {
       const message =
         err instanceof ApiError

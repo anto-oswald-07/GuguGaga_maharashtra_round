@@ -22,7 +22,7 @@ export function RegisterForm() {
     try {
       const result = await register({ name, email, password });
       setToken(result.token);
-      router.push("/");
+      router.push("/dashboard");
     } catch (err) {
       const message =
         err instanceof ApiError

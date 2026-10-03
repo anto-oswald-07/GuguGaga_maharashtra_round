@@ -281,6 +281,15 @@ export async function patchClipCandidate(
   return toClipDto(updated);
 }
 
+export async function deleteClipCandidate(
+  workspaceId: string,
+  candidateId: string,
+): Promise<{ id: string; deleted: true }> {
+  await findOwnedCandidate(workspaceId, candidateId);
+  await prisma.clipCandidate.delete({ where: { id: candidateId } });
+  return { id: candidateId, deleted: true };
+}
+
 /**
  * Enqueue RENDER_CLIP for an accepted (or proposed→auto-accept) candidate.
  */

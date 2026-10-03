@@ -17,6 +17,7 @@ import {
   getProject,
   getStageHistory,
   listProjects,
+  softDeleteProject,
   transitionStage,
   updateProject,
 } from './service';
@@ -213,6 +214,23 @@ export async function registerProjectRoutes(
           parsed.data,
         );
         return reply.status(200).send(project);
+      } catch (err) {
+        if (err instanceof ProjectHttpError) {
+          return sendProjectError(reply, err);
+        }
+        throw err;
+      }
+    },
+  );
+
+  app.delete(
+    `${API_PREFIX}/projects/:id`,
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      try {
+        const result = await softDeleteProject(request.auth!.workspaceId, id);
+        return reply.status(200).send(result);
       } catch (err) {
         if (err instanceof ProjectHttpError) {
           return sendProjectError(reply, err);

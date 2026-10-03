@@ -99,8 +99,9 @@ Fixtures / tests: `packages/timeline-schema/test/fixtures/**` + `pnpm --filter @
 | `schemaVersion` | Contract version (`"1.0"` for MVP) |
 | `fps` | Timeline frame rate |
 | `durationMs` | Total timeline length |
-| `tracks[]` | Parallel layers: `video`, `text`, `captions` (MVP) |
-| `tracks[].clips` | Video track source slices (`assetId` + src range + timeline start) |
+| `tracks[]` | Parallel layers: `video`, `audio`, `text`, `captions` |
+| `tracks[].clips` | Video/audio track source slices (`assetId` + src range + timeline start) |
+| `clips[].mediaKind` | Optional `video` \| `image` on video-track clips (images hold stills) |
 | `tracks[].items` | Text/caption timed overlays |
 | `transitions` | Basic transitions (may be empty in early MVP) |
 | `meta` | Provenance (AI vs user, prompt, notes) |
@@ -111,14 +112,15 @@ Fixtures / tests: `packages/timeline-schema/test/fixtures/**` + `pnpm --filter @
 
 | `type` | Contents | Renderer (`renderTimeline.ts`) |
 |--------|----------|--------------------------------|
-| `video` | `clips[]` | `trim` + `concat` (sorted by `timelineStartMs`); needs `assetPaths[assetId]` |
+| `video` | `clips[]` | Video: `trim` + `concat`. Images (`mediaKind: "image"`): loop still for `(srcEndMs - srcStartMs)` + silence. Sorted by `timelineStartMs`; needs `assetPaths[assetId]` |
+| `audio` | `clips[]` | `atrim` + `adelay` by `timelineStartMs`, then `amix` with the visual track audio |
 | `text` | `items[]` + style | **`drawtext` overlays** (required MVP) |
 | `captions` | `items[]` | Softsubs: write sibling `.srt`, mux `mov_text`; optional `--burn-captions` |
 
 **Assumptions (MVP):**
 
-- Clips are treated as a contiguous concat in `timelineStartMs` order (gaps not filled with black).
-- Source media must include an audio stream (demo `dummy.mp4` does).
+- Visual clips are treated as a contiguous concat in `timelineStartMs` order (gaps not filled with black).
+- Video source media should include an audio stream when used as video clips (demo `dummy.mp4` does). Image stills synthesize silence; dedicated audio-track clips supply the soundtrack.
 - Default output size 1280×720 (letterboxed).
 
 ---

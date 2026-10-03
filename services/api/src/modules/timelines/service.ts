@@ -777,7 +777,7 @@ export async function loadTimelineRenderContext(
   const timeline = parseTimelineContent(row.currentVersion.content);
   const assetIds = new Set<string>();
   for (const track of timeline.tracks) {
-    if (track.type === 'video') {
+    if (track.type === 'video' || track.type === 'audio') {
       for (const clip of track.clips) {
         assetIds.add(clip.assetId);
       }
@@ -787,7 +787,7 @@ export async function loadTimelineRenderContext(
     throw new TimelinesHttpError(
       400,
       'validation_error',
-      'Timeline has no video clips to render',
+      'Timeline has no video/image/audio clips to render',
     );
   }
 

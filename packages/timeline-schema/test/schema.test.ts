@@ -96,6 +96,62 @@ describe('editTimelineSchema', () => {
     const parsed = safeParseTimeline(raw);
     assert.equal(parsed.success, true);
   });
+
+  it('accepts image stills + parallel audio track', () => {
+    const raw = {
+      schemaVersion: '1.0',
+      fps: 30,
+      durationMs: 5000,
+      tracks: [
+        {
+          id: 'v1',
+          type: 'video',
+          clips: [
+            {
+              id: 'img1',
+              assetId: 'asset-img',
+              srcStartMs: 0,
+              srcEndMs: 3000,
+              timelineStartMs: 0,
+              mediaKind: 'image',
+              label: 'still',
+            },
+            {
+              id: 'img2',
+              assetId: 'asset-img-2',
+              srcStartMs: 0,
+              srcEndMs: 2000,
+              timelineStartMs: 3000,
+              mediaKind: 'image',
+            },
+          ],
+        },
+        {
+          id: 'a1',
+          type: 'audio',
+          clips: [
+            {
+              id: 'aud1',
+              assetId: 'asset-aud',
+              srcStartMs: 0,
+              srcEndMs: 5000,
+              timelineStartMs: 0,
+              label: 'bed',
+            },
+          ],
+        },
+      ],
+      transitions: [],
+    };
+    const parsed = safeParseTimeline(raw);
+    assert.equal(parsed.success, true);
+    if (parsed.success) {
+      const video = parsed.data.tracks.find((t) => t.type === 'video');
+      assert.ok(video && video.type === 'video');
+      assert.equal(video.clips[0]?.mediaKind, 'image');
+      assert.ok(parsed.data.tracks.some((t) => t.type === 'audio'));
+    }
+  });
 });
 
 describe('assertValidTimeline', () => {

@@ -418,6 +418,15 @@ export async function getPackDownload(
   };
 }
 
+export async function deletePack(
+  workspaceId: string,
+  packId: string,
+): Promise<{ id: string; deleted: true }> {
+  await findOwnedPack(workspaceId, packId);
+  await prisma.platformPack.delete({ where: { id: packId } });
+  return { id: packId, deleted: true };
+}
+
 /** Deterministic copy when generateSupporting is unavailable. */
 export function mockPackCopy(platform: Platform, topicHint?: string): {
   title: string;

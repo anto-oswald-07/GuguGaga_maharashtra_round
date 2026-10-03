@@ -1,6 +1,6 @@
 /**
  * Insights + jobs helpers for Phase 10 (kept under app/ allowed paths).
- * Reuses `apiFetch` from `@/lib/api`. TODO_SHARED: Anto Zod DTOs.
+ * Reuses `apiFetch` from `@/lib/api`. Normalizes Anto `@creatorai/shared` overview shape.
  */
 
 import {
@@ -124,7 +124,8 @@ function normalizeOverview(raw: unknown): InsightsOverview {
             : typeof row.title === "string"
               ? row.title
               : undefined,
-        count: num(row.count ?? row.clips),
+        // API (`@creatorai/shared`) uses `clipCount`; older drafts used `count`/`clips`.
+        count: num(row.clipCount ?? row.count ?? row.clips),
       };
     }),
     platformMix: mixRaw.map((item) => {
@@ -134,10 +135,25 @@ function normalizeOverview(raw: unknown): InsightsOverview {
         count: num(row.count ?? row.value),
       };
     }),
-    avgTimeInStageMs:
-      r.avgTimeInStageMs === null || r.avgTimeInStageMs === undefined
-        ? null
-        : num(r.avgTimeInStageMs, 0),
+    // API returns avgTimeInStageMs as [{ stage, avgMs }]; UI only needs a scalar optional.
+    avgTimeInStageMs: (() => {
+      if (r.avgTimeInStageMs === null || r.avgTimeInStageMs === undefined) {
+        return null;
+      }
+      if (Array.isArray(r.avgTimeInStageMs)) {
+        const vals = r.avgTimeInStageMs
+          .map((item) => {
+            const row = asRecord(item) ?? {};
+            return row.avgMs === null || row.avgMs === undefined
+              ? null
+              : num(row.avgMs, 0);
+          })
+          .filter((n): n is number => typeof n === "number" && n > 0);
+        if (vals.length === 0) return null;
+        return vals.reduce((a, b) => a + b, 0) / vals.length;
+      }
+      return num(r.avgTimeInStageMs, 0);
+    })(),
   };
 }
 

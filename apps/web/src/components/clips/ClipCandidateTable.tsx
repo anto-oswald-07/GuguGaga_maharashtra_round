@@ -16,6 +16,7 @@ type ClipCandidateTableProps = {
   onAccept: (candidate: ClipCandidateDto) => void;
   onReject: (candidate: ClipCandidateDto) => void;
   onRender: (candidate: ClipCandidateDto) => void;
+  onDelete: (candidate: ClipCandidateDto) => void;
   busy?: boolean;
 };
 
@@ -36,6 +37,7 @@ export function ClipCandidateTable({
   onAccept,
   onReject,
   onRender,
+  onDelete,
   busy,
 }: ClipCandidateTableProps) {
   if (candidates.length === 0) {
@@ -173,6 +175,14 @@ export function ClipCandidateTable({
                         {row.status === "rendered" ? "Rendered" : "Render"}
                       </button>
                     ) : null}
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => onDelete(row)}
+                      className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-800 disabled:opacity-40"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </td>
               </tr>

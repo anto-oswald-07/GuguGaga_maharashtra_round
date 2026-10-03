@@ -189,6 +189,15 @@ export async function getScript(
   };
 }
 
+export async function deleteScript(
+  workspaceId: string,
+  scriptId: string,
+): Promise<{ id: string; deleted: true }> {
+  await findOwnedScript(workspaceId, scriptId);
+  await prisma.scriptDocument.delete({ where: { id: scriptId } });
+  return { id: scriptId, deleted: true };
+}
+
 export async function createScriptVersion(
   workspaceId: string,
   scriptId: string,

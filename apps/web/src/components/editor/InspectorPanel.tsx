@@ -3,7 +3,14 @@
 import { useEditorStore } from "@/components/editor/editor-store";
 
 export function InspectorPanel() {
-  const { state, updateClip, updateText, updateCaption } = useEditorStore();
+  const {
+    state,
+    updateClip,
+    updateAudioClip,
+    updateText,
+    updateCaption,
+    removeClip,
+  } = useEditorStore();
   const { draft, selected } = state;
 
   if (!selected) {
@@ -34,13 +41,30 @@ export function InspectorPanel() {
         </aside>
       );
     }
+    const isImage = clip.mediaKind === "image";
+    const holdMs = Math.max(0, clip.srcEndMs - clip.srcStartMs);
     return (
       <aside className="flex h-full flex-col rounded-lg border border-[var(--border)] bg-[var(--surface)]">
         <div className="border-b border-[var(--border)] px-3 py-2">
-          <h2 className="text-sm font-semibold">Inspector · Clip</h2>
+          <h2 className="text-sm font-semibold">
+            Inspector · {isImage ? "Image still" : "Video clip"}
+          </h2>
           <p className="font-mono text-[10px] text-[var(--muted)]">{clip.id}</p>
         </div>
         <div className="space-y-3 overflow-y-auto p-3 text-sm">
+          <label className="block space-y-1">
+            <span className="font-medium">Label</span>
+            <input
+              type="text"
+              value={clip.label ?? ""}
+              onChange={(e) =>
+                updateClip(selected.trackId, clip.id, {
+                  label: e.target.value,
+                })
+              }
+              className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1.5 text-sm"
+            />
+          </label>
           <label className="block space-y-1">
             <span className="font-medium">Asset ID</span>
             <input
@@ -48,6 +72,124 @@ export function InspectorPanel() {
               value={clip.assetId}
               onChange={(e) =>
                 updateClip(selected.trackId, clip.id, {
+                  assetId: e.target.value,
+                })
+              }
+              className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1.5 text-sm"
+            />
+          </label>
+          {isImage ? (
+            <label className="block space-y-1">
+              <span className="font-medium">Hold duration (ms)</span>
+              <input
+                type="number"
+                min={250}
+                value={holdMs}
+                onChange={(e) => {
+                  const next = Math.max(250, Number(e.target.value) || 250);
+                  updateClip(selected.trackId, clip.id, {
+                    srcStartMs: 0,
+                    srcEndMs: next,
+                    mediaKind: "image",
+                  });
+                }}
+                className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1.5 text-sm"
+              />
+            </label>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block space-y-1">
+                <span className="font-medium">Src start (ms)</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={clip.srcStartMs}
+                  onChange={(e) =>
+                    updateClip(selected.trackId, clip.id, {
+                      srcStartMs: Number(e.target.value),
+                    })
+                  }
+                  className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1.5 text-sm"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="font-medium">Src end (ms)</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={clip.srcEndMs}
+                  onChange={(e) =>
+                    updateClip(selected.trackId, clip.id, {
+                      srcEndMs: Number(e.target.value),
+                    })
+                  }
+                  className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1.5 text-sm"
+                />
+              </label>
+            </div>
+          )}
+          <p className="text-xs text-[var(--muted)]">
+            Timeline start {clip.timelineStartMs} ms (set by sequence order)
+          </p>
+          <button
+            type="button"
+            onClick={() => removeClip(selected.trackId, clip.id, "video")}
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm text-red-800"
+          >
+            Remove from timeline
+          </button>
+          <p className="text-xs text-[var(--muted)]">
+            {isImage
+              ? "Images stay on screen for the hold duration. Reorder on the tracks panel."
+              : "Trim by adjusting src start/end. Reorder clips on the tracks panel."}
+          </p>
+        </div>
+      </aside>
+    );
+  }
+
+  if (selected.kind === "audio") {
+    const track = draft.tracks.find(
+      (t) => t.id === selected.trackId && t.type === "audio",
+    );
+    const clip =
+      track && track.type === "audio"
+        ? track.clips.find((c) => c.id === selected.itemId)
+        : null;
+    if (!clip) {
+      return (
+        <aside className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--muted)]">
+          Audio clip not found.
+        </aside>
+      );
+    }
+    return (
+      <aside className="flex h-full flex-col rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+        <div className="border-b border-[var(--border)] px-3 py-2">
+          <h2 className="text-sm font-semibold">Inspector · Audio</h2>
+          <p className="font-mono text-[10px] text-[var(--muted)]">{clip.id}</p>
+        </div>
+        <div className="space-y-3 overflow-y-auto p-3 text-sm">
+          <label className="block space-y-1">
+            <span className="font-medium">Label</span>
+            <input
+              type="text"
+              value={clip.label ?? ""}
+              onChange={(e) =>
+                updateAudioClip(selected.trackId, clip.id, {
+                  label: e.target.value,
+                })
+              }
+              className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1.5 text-sm"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="font-medium">Asset ID</span>
+            <input
+              type="text"
+              value={clip.assetId}
+              onChange={(e) =>
+                updateAudioClip(selected.trackId, clip.id, {
                   assetId: e.target.value,
                 })
               }
@@ -62,7 +204,7 @@ export function InspectorPanel() {
                 min={0}
                 value={clip.srcStartMs}
                 onChange={(e) =>
-                  updateClip(selected.trackId, clip.id, {
+                  updateAudioClip(selected.trackId, clip.id, {
                     srcStartMs: Number(e.target.value),
                   })
                 }
@@ -76,7 +218,7 @@ export function InspectorPanel() {
                 min={0}
                 value={clip.srcEndMs}
                 onChange={(e) =>
-                  updateClip(selected.trackId, clip.id, {
+                  updateAudioClip(selected.trackId, clip.id, {
                     srcEndMs: Number(e.target.value),
                   })
                 }
@@ -91,15 +233,22 @@ export function InspectorPanel() {
               min={0}
               value={clip.timelineStartMs}
               onChange={(e) =>
-                updateClip(selected.trackId, clip.id, {
+                updateAudioClip(selected.trackId, clip.id, {
                   timelineStartMs: Number(e.target.value),
                 })
               }
               className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1.5 text-sm"
             />
           </label>
+          <button
+            type="button"
+            onClick={() => removeClip(selected.trackId, clip.id, "audio")}
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm text-red-800"
+          >
+            Remove from timeline
+          </button>
           <p className="text-xs text-[var(--muted)]">
-            Trim by adjusting src start/end. Reorder clips on the tracks panel.
+            Audio plays alongside the visual track at the timeline start time.
           </p>
         </div>
       </aside>

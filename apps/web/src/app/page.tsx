@@ -1,5 +1,5 @@
-import { DashboardHome } from "./DashboardHome";
+import { LandingPage } from "./LandingPage";
 
-export default function DashboardPage() {
-  return <DashboardHome />;
+export default function HomePage() {
+  return <LandingPage />;
 }

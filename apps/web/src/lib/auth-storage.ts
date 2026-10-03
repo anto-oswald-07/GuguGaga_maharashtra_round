@@ -7,10 +7,12 @@ export function getToken(): string | null {
 
 export function setToken(token: string): void {
   window.localStorage.setItem(TOKEN_KEY, token);
+  window.dispatchEvent(new Event("creatorai-auth"));
 }
 
 export function clearToken(): void {
   window.localStorage.removeItem(TOKEN_KEY);
+  window.dispatchEvent(new Event("creatorai-auth"));
 }
 
 export function hasToken(): boolean {

@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   emptyTimelineJson,
+  type TimelineAudioClip,
   type TimelineCaptionItem,
   type TimelineJson,
   type TimelineTextItem,
@@ -18,6 +19,7 @@ import {
 
 export type EditorSelection =
   | { kind: "clip"; trackId: string; itemId: string }
+  | { kind: "audio"; trackId: string; itemId: string }
   | { kind: "text"; trackId: string; itemId: string }
   | { kind: "caption"; trackId: string; itemId: string }
   | null;
@@ -46,6 +48,12 @@ type EditorAction =
       patch: Partial<TimelineVideoClip>;
     }
   | {
+      type: "updateAudioClip";
+      trackId: string;
+      clipId: string;
+      patch: Partial<TimelineAudioClip>;
+    }
+  | {
       type: "updateText";
       trackId: string;
       itemId: string;
@@ -58,27 +66,82 @@ type EditorAction =
       patch: Partial<TimelineCaptionItem>;
     }
   | { type: "reorderClip"; trackId: string; clipId: string; direction: -1 | 1 }
+  | {
+      type: "reorderAudioClip";
+      trackId: string;
+      clipId: string;
+      direction: -1 | 1;
+    }
+  | { type: "addVisualClip"; clip: TimelineVideoClip }
+  | { type: "addAudioClip"; clip: TimelineAudioClip }
+  | {
+      type: "removeClip";
+      trackId: string;
+      clipId: string;
+      trackType: "video" | "audio";
+    }
   | { type: "replaceDraft"; draft: TimelineJson };
 
 function cloneTimeline(t: TimelineJson): TimelineJson {
   return structuredClone(t);
 }
 
+function newId(prefix: string): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Ensure draft always has video + audio tracks for editor UX. */
+export function ensureEditorTracks(draft: TimelineJson): TimelineJson {
+  const next = cloneTimeline(draft);
+  if (!next.tracks.some((t) => t.type === "video")) {
+    next.tracks.unshift({ id: "v1", type: "video", clips: [] });
+  }
+  if (!next.tracks.some((t) => t.type === "audio")) {
+    const videoIdx = next.tracks.findIndex((t) => t.type === "video");
+    next.tracks.splice(videoIdx + 1, 0, { id: "a1", type: "audio", clips: [] });
+  }
+  if (!next.tracks.some((t) => t.type === "text")) {
+    next.tracks.push({ id: "t1", type: "text", items: [] });
+  }
+  if (!next.tracks.some((t) => t.type === "captions")) {
+    next.tracks.push({ id: "cap1", type: "captions", items: [] });
+  }
+  return next;
+}
+
+function clipLengthMs(clip: { srcStartMs: number; srcEndMs: number }): number {
+  return Math.max(0, clip.srcEndMs - clip.srcStartMs);
+}
+
 function recomputeDuration(draft: TimelineJson): TimelineJson {
   let max = 0;
   for (const track of draft.tracks) {
-    if (track.type === "video") {
-      for (const clip of track.clips) {
-        const len = Math.max(0, clip.srcEndMs - clip.srcStartMs);
-        max = Math.max(max, clip.timelineStartMs + len);
+    if (track.type === "video" || track.type === "audio") {
+      for (const clip of track.clips ?? []) {
+        max = Math.max(max, clip.timelineStartMs + clipLengthMs(clip));
       }
     } else {
-      for (const item of track.items) {
+      for (const item of track.items ?? []) {
         max = Math.max(max, item.endMs);
       }
     }
   }
-  return { ...draft, durationMs: Math.max(draft.durationMs, max) };
+  return { ...draft, durationMs: Math.max(0, max) };
+}
+
+function packSequentialClips<T extends { srcStartMs: number; srcEndMs: number; timelineStartMs: number }>(
+  clips: T[],
+): T[] {
+  let cursor = 0;
+  return clips.map((c) => {
+    const len = clipLengthMs(c);
+    const updated = { ...c, timelineStartMs: cursor };
+    cursor += len;
+    return updated;
+  });
 }
 
 function editorReducer(state: EditorState, action: EditorAction): EditorState {
@@ -87,7 +150,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return {
         ...state,
         timelineId: action.timelineId,
-        draft: cloneTimeline(action.draft),
+        draft: ensureEditorTracks(action.draft),
         dirty: false,
         selected: null,
       };
@@ -97,7 +160,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       if (!state.proposal) return state;
       return {
         ...state,
-        draft: cloneTimeline(state.proposal),
+        draft: ensureEditorTracks(state.proposal),
         proposal: null,
         dirty: true,
         selected: null,
@@ -118,7 +181,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
     case "replaceDraft":
       return {
         ...state,
-        draft: recomputeDuration(cloneTimeline(action.draft)),
+        draft: recomputeDuration(ensureEditorTracks(action.draft)),
         dirty: true,
       };
     case "updateClip": {
@@ -127,6 +190,24 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         (t) => t.id === action.trackId && t.type === "video",
       );
       if (!track || track.type !== "video") return state;
+      // Keep a contiguous visual sequence after hold/trim edits.
+      track.clips = packSequentialClips(
+        track.clips.map((c) =>
+          c.id === action.clipId ? { ...c, ...action.patch, id: c.id } : c,
+        ),
+      );
+      return {
+        ...state,
+        draft: recomputeDuration(draft),
+        dirty: true,
+      };
+    }
+    case "updateAudioClip": {
+      const draft = cloneTimeline(state.draft);
+      const track = draft.tracks.find(
+        (t) => t.id === action.trackId && t.type === "audio",
+      );
+      if (!track || track.type !== "audio") return state;
       track.clips = track.clips.map((c) =>
         c.id === action.clipId ? { ...c, ...action.patch, id: c.id } : c,
       );
@@ -184,18 +265,104 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       const tmp = next[idx]!;
       next[idx] = next[swap]!;
       next[swap] = tmp;
-      // Keep sequential timeline starts after reorder
-      let cursor = 0;
-      track.clips = next.map((c) => {
-        const len = Math.max(0, c.srcEndMs - c.srcStartMs);
-        const updated = { ...c, timelineStartMs: cursor };
-        cursor += len;
-        return updated;
-      });
+      track.clips = packSequentialClips(next);
       return {
         ...state,
         draft: recomputeDuration(draft),
         dirty: true,
+      };
+    }
+    case "reorderAudioClip": {
+      const draft = cloneTimeline(state.draft);
+      const track = draft.tracks.find(
+        (t) => t.id === action.trackId && t.type === "audio",
+      );
+      if (!track || track.type !== "audio") return state;
+      const idx = track.clips.findIndex((c) => c.id === action.clipId);
+      if (idx < 0) return state;
+      const swap = idx + action.direction;
+      if (swap < 0 || swap >= track.clips.length) return state;
+      const next = [...track.clips];
+      const tmp = next[idx]!;
+      next[idx] = next[swap]!;
+      next[swap] = tmp;
+      track.clips = packSequentialClips(next);
+      return {
+        ...state,
+        draft: recomputeDuration(draft),
+        dirty: true,
+      };
+    }
+    case "addVisualClip": {
+      const draft = ensureEditorTracks(cloneTimeline(state.draft));
+      const track = draft.tracks.find((t) => t.type === "video");
+      if (!track || track.type !== "video") return state;
+      let cursor = 0;
+      for (const c of track.clips) {
+        cursor = Math.max(cursor, c.timelineStartMs + clipLengthMs(c));
+      }
+      track.clips = [
+        ...track.clips,
+        { ...action.clip, timelineStartMs: cursor },
+      ];
+      return {
+        ...state,
+        draft: recomputeDuration(draft),
+        dirty: true,
+        selected: {
+          kind: "clip",
+          trackId: track.id,
+          itemId: action.clip.id,
+        },
+      };
+    }
+    case "addAudioClip": {
+      const draft = ensureEditorTracks(cloneTimeline(state.draft));
+      const track = draft.tracks.find((t) => t.type === "audio");
+      if (!track || track.type !== "audio") return state;
+      let cursor = 0;
+      for (const c of track.clips) {
+        cursor = Math.max(cursor, c.timelineStartMs + clipLengthMs(c));
+      }
+      track.clips = [
+        ...track.clips,
+        { ...action.clip, timelineStartMs: cursor },
+      ];
+      return {
+        ...state,
+        draft: recomputeDuration(draft),
+        dirty: true,
+        selected: {
+          kind: "audio",
+          trackId: track.id,
+          itemId: action.clip.id,
+        },
+      };
+    }
+    case "removeClip": {
+      const draft = cloneTimeline(state.draft);
+      const track = draft.tracks.find(
+        (t) =>
+          t.id === action.trackId &&
+          (t.type === "video" || t.type === "audio") &&
+          t.type === action.trackType,
+      );
+      if (!track || (track.type !== "video" && track.type !== "audio")) {
+        return state;
+      }
+      track.clips = track.clips.filter((c) => c.id !== action.clipId);
+      if (action.trackType === "video") {
+        track.clips = packSequentialClips(track.clips);
+      }
+      const clearSelected =
+        state.selected &&
+        (state.selected.kind === "clip" || state.selected.kind === "audio") &&
+        state.selected.itemId === action.clipId;
+      return {
+        ...state,
+        draft: recomputeDuration(draft),
+        dirty: true,
+        selected: clearSelected ? null : state.selected,
       };
     }
     default:
@@ -217,6 +384,11 @@ type EditorStoreValue = {
     clipId: string,
     patch: Partial<TimelineVideoClip>,
   ) => void;
+  updateAudioClip: (
+    trackId: string,
+    clipId: string,
+    patch: Partial<TimelineAudioClip>,
+  ) => void;
   updateText: (
     trackId: string,
     itemId: string,
@@ -228,7 +400,24 @@ type EditorStoreValue = {
     patch: Partial<TimelineCaptionItem>,
   ) => void;
   reorderClip: (trackId: string, clipId: string, direction: -1 | 1) => void;
+  reorderAudioClip: (
+    trackId: string,
+    clipId: string,
+    direction: -1 | 1,
+  ) => void;
+  addVisualClip: (clip: Omit<TimelineVideoClip, "timelineStartMs"> & {
+    timelineStartMs?: number;
+  }) => void;
+  addAudioClip: (clip: Omit<TimelineAudioClip, "timelineStartMs"> & {
+    timelineStartMs?: number;
+  }) => void;
+  removeClip: (
+    trackId: string,
+    clipId: string,
+    trackType: "video" | "audio",
+  ) => void;
   replaceDraft: (draft: TimelineJson) => void;
+  makeClipId: (prefix?: string) => string;
 };
 
 const EditorStoreContext = createContext<EditorStoreValue | null>(null);
@@ -272,6 +461,12 @@ export function EditorStoreProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+  const updateAudioClip = useCallback(
+    (trackId: string, clipId: string, patch: Partial<TimelineAudioClip>) => {
+      dispatch({ type: "updateAudioClip", trackId, clipId, patch });
+    },
+    [],
+  );
   const updateText = useCallback(
     (trackId: string, itemId: string, patch: Partial<TimelineTextItem>) => {
       dispatch({ type: "updateText", trackId, itemId, patch });
@@ -290,9 +485,54 @@ export function EditorStoreProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+  const reorderAudioClip = useCallback(
+    (trackId: string, clipId: string, direction: -1 | 1) => {
+      dispatch({ type: "reorderAudioClip", trackId, clipId, direction });
+    },
+    [],
+  );
+  const addVisualClip = useCallback(
+    (
+      clip: Omit<TimelineVideoClip, "timelineStartMs"> & {
+        timelineStartMs?: number;
+      },
+    ) => {
+      dispatch({
+        type: "addVisualClip",
+        clip: {
+          ...clip,
+          timelineStartMs: clip.timelineStartMs ?? 0,
+        },
+      });
+    },
+    [],
+  );
+  const addAudioClip = useCallback(
+    (
+      clip: Omit<TimelineAudioClip, "timelineStartMs"> & {
+        timelineStartMs?: number;
+      },
+    ) => {
+      dispatch({
+        type: "addAudioClip",
+        clip: {
+          ...clip,
+          timelineStartMs: clip.timelineStartMs ?? 0,
+        },
+      });
+    },
+    [],
+  );
+  const removeClip = useCallback(
+    (trackId: string, clipId: string, trackType: "video" | "audio") => {
+      dispatch({ type: "removeClip", trackId, clipId, trackType });
+    },
+    [],
+  );
   const replaceDraft = useCallback((draft: TimelineJson) => {
     dispatch({ type: "replaceDraft", draft });
   }, []);
+  const makeClipId = useCallback((prefix = "c") => newId(prefix), []);
 
   const value = useMemo(
     () => ({
@@ -305,10 +545,16 @@ export function EditorStoreProvider({ children }: { children: ReactNode }) {
       markClean,
       setPreviewAssetId,
       updateClip,
+      updateAudioClip,
       updateText,
       updateCaption,
       reorderClip,
+      reorderAudioClip,
+      addVisualClip,
+      addAudioClip,
+      removeClip,
       replaceDraft,
+      makeClipId,
     }),
     [
       state,
@@ -320,10 +566,16 @@ export function EditorStoreProvider({ children }: { children: ReactNode }) {
       markClean,
       setPreviewAssetId,
       updateClip,
+      updateAudioClip,
       updateText,
       updateCaption,
       reorderClip,
+      reorderAudioClip,
+      addVisualClip,
+      addAudioClip,
+      removeClip,
       replaceDraft,
+      makeClipId,
     ],
   );
 

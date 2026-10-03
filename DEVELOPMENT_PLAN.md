@@ -1055,21 +1055,21 @@ Use curl multipart upload + list + patch + delete.
 **Lead:** Brendan  
 
 ### Final Verification — Golden Path Gate (from SRS §8)
-- [ ] Sign up / log in
-- [ ] Create project + platforms
-- [ ] Upload/generate script + upload footage
-- [ ] Transcribe + map + correct one mapping
-- [ ] Propose clips; accept one; render
-- [ ] Generate timeline; edit one overlay; re-render
-- [ ] Generate ≥2 platform packs
-- [ ] Move stages to Ready/Published
-- [ ] Insights show metrics
-- [ ] Root README can bring up system cold
+- [x] Sign up / log in
+- [x] Create project + platforms
+- [x] Upload/generate script + upload footage
+- [x] Transcribe + map + correct one mapping
+- [x] Propose clips; accept one; render
+- [x] Generate timeline; edit one overlay; re-render
+- [x] Generate ≥2 platform packs
+- [x] Move stages to Ready/Published
+- [x] Insights show metrics
+- [x] Root README can bring up system cold
 
 ### Release
 1. Merge to `main`.
 2. Tag `v0.1.0-mvp` and `phase-10-done`.
-3. Final `context.md` INTEGRATION entry: “MVP COMPLETE”.
+3. Final `context.md` INTEGRATION entry: “MVP COMPLETE”. ✅ (2026-10-04 on `Arvin`)
 
 ---
 

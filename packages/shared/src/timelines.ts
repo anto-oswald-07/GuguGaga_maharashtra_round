@@ -24,6 +24,21 @@ export const timelineVideoClipSchema = z.object({
   srcEndMs: z.number().int().nonnegative(),
   timelineStartMs: z.number().int().nonnegative(),
   label: z.string().max(200).optional(),
+  /**
+   * Visual media kind. Images use srcStart/srcEnd as the on-timeline hold
+   * duration (usually 0 → durationMs). Default video when omitted.
+   */
+  mediaKind: z.enum(['video', 'image']).optional(),
+});
+
+/** Audio clip on an audio track (plays alongside the visual timeline). */
+export const timelineAudioClipSchema = z.object({
+  id: z.string().min(1),
+  assetId: z.string().uuid(),
+  srcStartMs: z.number().int().nonnegative(),
+  srcEndMs: z.number().int().nonnegative(),
+  timelineStartMs: z.number().int().nonnegative(),
+  label: z.string().max(200).optional(),
 });
 
 export const timelineTextItemSchema = z.object({
@@ -47,6 +62,12 @@ export const timelineVideoTrackSchema = z.object({
   clips: z.array(timelineVideoClipSchema),
 });
 
+export const timelineAudioTrackSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal('audio'),
+  clips: z.array(timelineAudioClipSchema),
+});
+
 export const timelineTextTrackSchema = z.object({
   id: z.string().min(1),
   type: z.literal('text'),
@@ -61,6 +82,7 @@ export const timelineCaptionsTrackSchema = z.object({
 
 export const timelineTrackSchema = z.discriminatedUnion('type', [
   timelineVideoTrackSchema,
+  timelineAudioTrackSchema,
   timelineTextTrackSchema,
   timelineCaptionsTrackSchema,
 ]);
@@ -80,12 +102,12 @@ export const editTimelineJsonSchema = z
   })
   .superRefine((doc, ctx) => {
     for (const track of doc.tracks) {
-      if (track.type === 'video') {
+      if (track.type === 'video' || track.type === 'audio') {
         for (const clip of track.clips) {
           if (clip.srcEndMs <= clip.srcStartMs) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
-              message: `Video clip ${clip.id}: srcEndMs must be > srcStartMs`,
+              message: `${track.type} clip ${clip.id}: srcEndMs must be > srcStartMs`,
             });
           }
         }

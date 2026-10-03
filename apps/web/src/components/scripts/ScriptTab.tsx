@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
+  deleteScript,
   generateProjectScript,
   generateScriptHooks,
   generateScriptSupporting,
@@ -353,6 +354,44 @@ export function ScriptTab({ projectId, defaultPlatform }: ScriptTabProps) {
     }
   }
 
+  async function onDeleteScript() {
+    if (!activeScript) return;
+    const label = activeScript.topic || activeScript.id.slice(0, 8);
+    if (
+      !window.confirm(
+        `Delete script “${label}”? This removes the document and its versions.`,
+      )
+    ) {
+      return;
+    }
+    setActionPending(true);
+    setError(null);
+    try {
+      await deleteScript(activeScript.id);
+      const remaining = scripts.filter((s) => s.id !== activeScript.id);
+      setScripts(remaining);
+      if (remaining[0]) {
+        applyScript(remaining[0]);
+      } else {
+        setActiveScriptId(null);
+        setDraft(emptyContent());
+        setActiveVersionId(null);
+        setHooks([]);
+        setSupporting(null);
+      }
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Delete script failed",
+      );
+    } finally {
+      setActionPending(false);
+    }
+  }
+
   function onSelectVersion(version: ScriptVersion) {
     setActiveVersionId(version.id);
     setDraft(version.content);
@@ -416,14 +455,24 @@ export function ScriptTab({ projectId, defaultPlatform }: ScriptTabProps) {
         <div className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">Current script</h3>
-            <button
-              type="button"
-              disabled={busy || !activeScript}
-              onClick={() => void onSaveVersion()}
-              className="rounded-md border border-[var(--border)] bg-white px-3 py-1.5 text-sm disabled:opacity-40"
-            >
-              Save as new version
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={busy || !activeScript}
+                onClick={() => void onSaveVersion()}
+                className="rounded-md border border-[var(--border)] bg-white px-3 py-1.5 text-sm disabled:opacity-40"
+              >
+                Save as new version
+              </button>
+              <button
+                type="button"
+                disabled={busy || !activeScript}
+                onClick={() => void onDeleteScript()}
+                className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm text-red-800 disabled:opacity-40"
+              >
+                Delete script
+              </button>
+            </div>
           </div>
           <ScriptDisplay
             content={draft}

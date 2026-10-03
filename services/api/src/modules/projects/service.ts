@@ -275,3 +275,20 @@ export async function getStageHistory(
 
   return { items: rows.map(toStageEventDto) };
 }
+
+export async function softDeleteProject(
+  workspaceId: string,
+  projectId: string,
+): Promise<{ id: string; deletedAt: string }> {
+  await findOwnedProject(workspaceId, projectId);
+
+  const row = await prisma.project.update({
+    where: { id: projectId },
+    data: { deletedAt: new Date() },
+  });
+
+  return {
+    id: row.id,
+    deletedAt: row.deletedAt!.toISOString(),
+  };
+}

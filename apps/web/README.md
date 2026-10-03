@@ -45,9 +45,10 @@ cp .env.example .env.local
 |----------|---------|
 | `NEXT_PUBLIC_API_BASE_URL` | API base URL (default `http://localhost:4000/api/v1`) |
 
-## Routes (Phase 1 stubs)
+## Routes
 
-- `/` — Dashboard
+- `/` — Landing (features)
+- `/dashboard` — Workspace dashboard
 - `/login`, `/register` — Auth
 - `/assets` — Asset library
 - `/projects` — Project list
