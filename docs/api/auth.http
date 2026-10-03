@@ -1,0 +1,128 @@
+### CreatorAi Auth API — HTTP examples (Phase 2)
+### Base: http://localhost:4000/api/v1
+### Docs: SDD.md §5.1 + §5.10; Development Plan Phase 2
+###
+### Variables (VS Code REST Client / IntelliJ HTTP Client):
+@baseUrl = http://localhost:4000/api/v1
+@email = phase2.tester@example.com
+@password = password123
+@name = Phase Two Tester
+@token = {{login.response.body.token}}
+
+### ============================================================
+### 1) REGISTER — happy path
+### Expected: 201 (or 200) with user public fields + JWT
+### ============================================================
+# @name register
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "name": "{{name}}"
+}
+
+### ============================================================
+### 2) LOGIN — happy path
+### Expected: 200 with token (+ user / workspace ids)
+### ============================================================
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### ============================================================
+### 3) ME — happy path (Bearer token)
+### Expected: 200 with current user (no passwordHash)
+### ============================================================
+# @name me
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+### ============================================================
+### 4) LOGOUT — client discard (optional server blacklist)
+### Expected: 204 or 200; client must drop token regardless
+### ============================================================
+# @name logout
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{token}}
+
+### ============================================================
+### NEGATIVE CASES
+### ============================================================
+
+### 5) Duplicate email on register
+### Expected: 409 (or 400) with error.code e.g. EMAIL_TAKEN / CONFLICT
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "name": "Duplicate Attempt"
+}
+
+### 6) Login with wrong password
+### Expected: 401 with error.code e.g. INVALID_CREDENTIALS
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "wrong-password!!"
+}
+
+### 7) Login with unknown email
+### Expected: 401 INVALID_CREDENTIALS (do not reveal whether email exists)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "nobody@example.com",
+  "password": "{{password}}"
+}
+
+### 8) ME without Authorization header
+### Expected: 401 UNAUTHORIZED
+GET {{baseUrl}}/auth/me
+
+### 9) ME with malformed / garbage token
+### Expected: 401 UNAUTHORIZED / INVALID_TOKEN
+GET {{baseUrl}}/auth/me
+Authorization: Bearer not.a.real.jwt
+
+### 10) Register validation — password too short (< 8)
+### Expected: 400 VALIDATION_ERROR
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "short.pw@example.com",
+  "password": "short",
+  "name": "Too Short"
+}
+
+### 11) Register validation — missing fields
+### Expected: 400 VALIDATION_ERROR
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "missing.fields@example.com"
+}
+
+### 12) Register validation — invalid email
+### Expected: 400 VALIDATION_ERROR
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "not-an-email",
+  "password": "{{password}}",
+  "name": "Bad Email"
+}
