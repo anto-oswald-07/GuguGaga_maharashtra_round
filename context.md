@@ -28,15 +28,15 @@
 
 | Field | Value |
 |-------|-------|
-| **Current phase** | Phase 3 Integration complete — Phase 4 next |
-| **Last completed tag** | `phase-1-done` (local only); Phase 2/3 Integration recorded in context — **no git tags/commits this session (user request)** |
-| **main status** | Auth + Assets end-to-end: register/login/me, asset CRUD, sync video metadata+thumb enrichment, UI list uses `{ items }` |
+| **Current phase** | Phase 4 Integration complete — Phase 5 next |
+| **Last completed tag** | `phase-1-done` (local only); Phase 2–4 Integration recorded in context — **no git tags this session** |
+| **main status** | Auth + Assets + Projects/workflow end-to-end: create/attach/stage/history + Kanban UI |
 | **Package manager** | **pnpm** workspaces (final) |
 | **Queue decision** | **DB-polling queue for MVP**; Redis remains optional in compose (`--profile redis`) for later BullMQ. Phase 3 video enrichment is **sync inline** until Job table exists. |
 | **Default AI provider** | `mock` until keys available |
 | **API base URL (local)** | `http://localhost:4000/api/v1` |
-| **Web app (local)** | `http://localhost:3000` |
-| **Who is Integration Lead next** | Cyrus (after Phase 4) |
+| **Web app (local)** | `http://localhost:3002` (or `:3000` if free) |
+| **Who is Integration Lead next** | Anto (Phase 5) |
 
 ### 2.1 What Already Works
 - `pnpm install` at root (workspace: web, api, worker, shared)
@@ -44,8 +44,10 @@
 - Auth: `POST /auth/register`, `POST /auth/login`, `GET /auth/me` (JWT `userId`+`workspaceId`)
 - Assets: multipart upload/list/get/patch/soft-delete + `/content` + `/thumbnail`
 - Video upload sync-enriches `metadata` (ffprobe or mock) + derivative thumb (ffmpeg or placeholder JPEG)
-- Web: login/register, asset library (list envelope `{ items }`), video card thumb/placeholder
-- `pnpm --filter worker` skeleton + `extractMetadata` / `generateThumbnail` exported for API
+- **Projects:** CRUD-ish create/list/get/patch, stage transition + history, attach/detach assets
+- Web: login/register, asset library, `/projects` list+detail, `/workflow` Kanban by stage
+- Shared: auth/assets Zod, assetMetadata, `projectStageSchema` + workflow helpers, project DTOs
+- Seed: `scripts/seed/sample-project.ts` auto login/register `demo@creatorai.local`
 - Postgres via compose (`POSTGRES_HOST_PORT`, default 5432; use 5433 if host busy)
 - Sample script at `samples/scripts/sample_script.md`
 
@@ -53,28 +55,31 @@
 - Host `:5432` often occupied — set `POSTGRES_HOST_PORT=5433` + matching `DATABASE_URL` (see `.env.example`).
 - This laptop has no ffmpeg/ffprobe → metadata `metaSource=mock`, thumbs `thumbnailSource=placeholder` (by design).
 - No Job table yet — enrichment is sync MVP; move to queued jobs in a later phase.
-- Web still has local `api.ts` types (not importing `@creatorai/shared` Zod at runtime) — shapes aligned.
-- Git tags `phase-2-done` / `phase-3-done` not created (no git ops this session).
+- Web still has local stage/platform constants (`TODO_SHARED`) — names match shared; web package does not depend on `@creatorai/shared` yet.
+- Git tags `phase-2-done` / `phase-3-done` / `phase-4-done` not created unless requested.
 
 ### 2.3 Active Blockers
 - None.
 
 ### 2.4 Open NEED Items (from developers)
-- None open for Phase 2/3.
+- None open for Phase 4.
 
 ### 2.5 Important Paths That Exist
 ```
 /
-├── apps/web/
-├── services/api/          # auth + assets + enrich.ts
+├── apps/web/              # /projects, /workflow Kanban
+├── services/api/          # auth + assets + projects + enrich.ts
 ├── services/worker/       # extractMetadata + thumbnail exports
-├── packages/shared/       # auth + assets Zod, assetMetadata, workflow stages
+├── packages/shared/       # auth + assets + projects Zod, workflow stages
 ├── samples/scripts/sample_script.md
+├── samples/projects/demo-project.json
+├── scripts/seed/sample-project.ts
 ├── scripts/media/
 ├── storage/
 ├── docs/api/ auth.http + auth.postman.json
 ├── docs/assets/metadata.md
 ├── docs/workflow/stages.md
+├── docs/demo/golden-path-prep.md
 ├── docs/testing/phase-2-auth.md
 ├── docs/security/
 ├── docker-compose.yml     # POSTGRES_HOST_PORT
@@ -819,6 +824,7 @@ _(Template above kept for other developers.)_
 | 2026-10-03 | Brendan | LoginPayload | `apps/web/src/lib/api.ts` | `packages/shared` | Resolved — matches Anto Zod |
 | 2026-10-03 | Arvin | Auth DTOs + ApiErrorBody | `docs/proposed-auth-types.ts` | Prefer Anto Zod in `packages/shared` | Superseded by Anto — keep as reference only |
 | 2026-10-03 | Brendan | Asset + AssetListResponse | `apps/web/src/lib/api.ts` | `packages/shared` | Resolved Phase 3 Integration — list is `{ items: Asset[] }` (web fixed) |
+| 2026-10-03 | Brendan | ProjectStage/Platform constants | `apps/web/src/components/projects/constants.ts` | `@creatorai/shared` | Open — names match; web has no shared dep yet (`TODO_SHARED`) |
 
 ---
 
@@ -1153,3 +1159,40 @@ _(Template above kept for other developers.)_
   - `/projects`, `/projects/[id]`, `/workflow` UI
   - Anto: same REST shapes already documented
 - **Notes for next phase me:** Phase 5 Script tab — extend `lib/api.ts` (allowed then) or keep pattern; replace `TODO_SHARED` constants when shared package builds clean
+
+## INTEGRATION COMPLETE — Phase 4
+- **Date:** 2026-10-03
+- **Lead:** Arvin Almeida (acting; plan Lead was Cyrus)
+- **Branches merged (in order):** A/B/C/D deliverables already on `Arvin` working tree; Integration fixed contracts + migrate (no git push)
+- **Conflicts & resolutions:**
+  - Shared `index.ts` orphaned/`ProjectStage` duplicate export → export stages from `./workflow`, projects DTOs from `./projects` without re-exporting `ProjectStage`
+  - Duplicate `projectStageSchema` in `projects.ts` → import from `workflow/stages.ts` (single source)
+  - Phase 4 Prisma migration not applied → `prisma migrate deploy` created `Project` / `ProjectAsset` / `StageEvent`
+  - Seed required manual JWT → auto login/register `demo@creatorai.local`
+- **Verification checklist results:**
+  - [x] Create project (API + seed + UI route `/projects` 200)
+  - [x] Attach asset (+ detach with CORS DELETE)
+  - [x] Move stages; history returns events (IDEA→SCRIPT→RECORDED)
+  - [x] Kanban `/workflow` 200; list filter `?stage=` groups by stage
+- **Decisions made:**
+  - Keep web local stage/platform constants (`TODO_SHARED`) until web depends on `@creatorai/shared`
+  - CORS methods include DELETE/PATCH (needed for detach + asset delete)
+  - Demo user email `demo@creatorai.local` / `password123` for seed
+- **Updated Current Snapshot:** yes
+- **Tag pushed:** none (user: do not touch git unless asked)
+- **Follow-ups for Phase 5:** Script/AI generation; optionally add `@creatorai/shared` dep to web; Job table for queued enrichment
+
+---
+
+### Chronological — 2026-10-03 20:04 (Arvin / Phase 4 Integration)
+- **Summary:** Phase 4 A–D were present but Integration incomplete (broken shared re-exports, unapplied migration, API down, seed needed token). Fixed shared exports + stage schema dedupe, applied `20261003140857_phase4_projects`, restarted API/web, smoke-tested create/attach/stage/history/detach/Kanban, wired seed auto-auth.
+- **Verify:**
+  ```bash
+  set -a && source .env && set +a && cd services/api && npx prisma migrate deploy
+  pnpm --filter api dev
+  pnpm --filter web exec next dev -p 3002
+  # register → create project → attach → POST /stage → GET /stage-history
+  pnpm --filter api exec tsx ../../scripts/seed/sample-project.ts
+  ```
+- **Needs from others:** None for Phase 4; Phase 5 Lead = Anto
+- **Risks:** Next sometimes hangs on :3002 (listening, no response) — restart `next dev` if UI spins
