@@ -135,6 +135,27 @@ export {
   type JobListResponse,
   type MockCompleteJobRequest,
 } from './jobs';
+export {
+  LOW_CONFIDENCE_THRESHOLD,
+  transcriptSegmentSchema,
+  transcriptSchema,
+  transcriptDetailSchema,
+  transcriptListResponseSchema,
+  scriptFootageMapSchema,
+  mappingListResponseSchema,
+  transcribeRequestSchema,
+  alignScriptRequestSchema,
+  patchMappingRequestSchema,
+  type TranscriptSegmentDto,
+  type TranscriptDto,
+  type TranscriptDetailDto,
+  type TranscriptListResponse,
+  type ScriptFootageMapDto,
+  type MappingListResponse,
+  type TranscribeRequest,
+  type AlignScriptRequest,
+  type PatchMappingRequest,
+} from './mapping';
 
 /** Response shape for `GET /api/v1/health`. */
 export type HealthResponse = {
