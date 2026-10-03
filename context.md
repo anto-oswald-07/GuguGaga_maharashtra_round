@@ -28,9 +28,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Current phase** | Phase 8 Integration COMPLETE — Timelines (propose → Apply → edit → save → render) E2E |
+| **Current phase** | Phase 9 in progress — Dev C (`generateSupporting` platform copy) DONE; A/B/D + Integration pending |
 | **Last completed tag** | `phase-1-done` (local only); Phase 2–8 Integration recorded in context — **no git tags this session** |
-| **main status** | Auth + Assets + Projects + Scripts/Jobs + Transcript/Mapping + Clips + **Timelines** (generate/apply/render) end-to-end |
+| **main status** | Auth + Assets + Projects + Scripts/Jobs + Transcript/Mapping + Clips + Timelines + **platform copy** (ai-provider) |
 | **Package manager** | **pnpm** workspaces (final) |
 | **Queue decision** | **DB-polling queue for MVP**; API in-process poller (`startJobPoller`) claims `QUEUED` jobs; Redis optional (`--profile redis`) for later BullMQ |
 | **Default AI provider** | `mock` until keys available (`AI_PROVIDER=mock\|openai\|gemini`) |
@@ -63,6 +63,7 @@
 - Postgres via compose (`POSTGRES_HOST_PORT`, default 5432; use 5433 if host busy)
 - Sample media: `storage/samples/dummy.mp4`; STT fixtures under `packages/ai-provider/test/fixtures`
 - **Timeline proposal (Phase 8 C):** `AiProvider.proposeTimeline` → EditTimeline `schemaVersion: 1.0` (clips + hook 0–3s); CLI `pnpm --filter worker generate-timeline -- --fixture`
+- **Platform copy (Phase 9 C):** `AiProvider.generateSupporting` → distinct title/caption/hashtags per Platform (soft length limits); CLI `pnpm --filter worker generate-platform-copy -- --fixture`; docs `docs/ai/platform-copy-guidelines.md`
 
 ### 2.2 Known Broken / Gaps
 - Host `:5432` often occupied — set `POSTGRES_HOST_PORT=5433` + matching `DATABASE_URL` (see `.env.example`).
@@ -78,16 +79,18 @@
 - None.
 
 ### 2.4 Open NEED Items (from developers)
-- None open for Phase 8.
+- Anto: Packs API / `ADAPT_PLATFORM` should call `generateSupporting` (or worker helper) and persist per-platform copy.
+- Brendan: Packs UI editable title/caption/hashtags.
+- Cyrus: aspect adapt FFmpeg (9 D).
 
 ### 2.5 Important Paths That Exist
 ```
 /
 ├── apps/web/              # /projects (Script + Mapping + Clips + Editor), /workflow
 ├── services/api/          # auth + assets + projects + scripts + jobs + mapping + clips + timelines
-├── services/worker/       # extractMetadata, thumbnail, extractAudio, cutClip, renderTimeline, STT/align/scoreClips/generateTimeline CLIs
+├── services/worker/       # extractMetadata, thumbnail, extractAudio, cutClip, renderTimeline, STT/align/scoreClips/generateTimeline/generatePlatformCopy CLIs
 ├── packages/shared/       # Zod DTOs incl. mapping + clips + timelines
-├── packages/ai-provider/  # mock+Whisper STT, fuzzy align, clip scoring, proposeTimeline
+├── packages/ai-provider/  # mock+Whisper STT, fuzzy align, clip scoring, proposeTimeline, platform copy
 ├── packages/timeline-schema/  # EditTimeline schemaVersion 1.0 + assertValidTimeline
 ├── samples/scripts/sample_script.md
 ├── samples/projects/demo-project.json
@@ -96,6 +99,7 @@
 ├── storage/
 ├── docs/api/ auth.http + auth.postman.json
 ├── docs/assets/metadata.md
+├── docs/ai/platform-copy-guidelines.md
 ├── docs/workflow/stages.md
 ├── docs/demo/golden-path-prep.md
 ├── docs/testing/phase-2-auth.md
@@ -2099,3 +2103,54 @@ _(Template above kept for other developers.)_
   - Renderer MVP concat ignores timeline gaps; drawtext needs fontconfig
   - Propose without accepted clips uses 5s Intro (safe for `dummy.mp4`)
 - **Ready for Phase 9:** yes (Anto Integration Lead)
+
+### [2026-10-03 22:52] ROLE=C NAME=Arvin Almeida PHASE=9 TYPE=START
+- **Summary:** Starting Phase 9 Dev C — platform copy generation (title/caption/hashtags tuned per platform length limits; distinct mock strings; `docs/ai/platform-copy-guidelines.md` + worker consumer).
+- **Files touched:** (in progress on `Arvin`)
+- **APIs / types added:** (pending) `generatePlatformCopy` / enhanced `generateSupporting`
+- **How to run / test what I did:** `git checkout Arvin`
+- **Depends on:** Phase 8 Integration COMPLETE; existing `AiProvider.generateSupporting` (Phase 5 basic)
+- **Needs from others:** Anto Packs API (`ADAPT_PLATFORM`); Brendan Packs UI; Cyrus aspect adapt
+- **Risks:** Shared flat `supportingContentSchema` differs from AiProvider `byPlatform` shape — keep byPlatform for packs; Anto flattens as needed
+
+### [2026-10-03 23:01] ROLE=C NAME=Arvin Almeida PHASE=9 TYPE=DONE
+- **Summary:** Phase 9 C complete. Platform-tuned `generateSupporting` with soft title/caption/hashtag limits per Platform; mock returns distinct demo-labeled strings (`[YT]`/`[Shorts]`/`[Reels]`/`[TikTok]`/`[LinkedIn]`); OpenAI/Gemini clamp post-hoc; worker CLI `generate-platform-copy`; guidelines doc.
+- **Files touched:**
+  - `packages/ai-provider/src/platform/{copyLimits,generatePlatformCopy}.ts` (new)
+  - `packages/ai-provider/src/{index,mock/MockAiProvider,openai/OpenAiProvider,gemini/GeminiProvider}.ts`
+  - `packages/ai-provider/test/platform-copy.test.ts` + `test/fixtures/sample_platform_copy.json`
+  - `packages/ai-provider/README.md`
+  - `services/worker/src/ai/generatePlatformCopy.ts`, `services/worker/src/consumers/generatePlatformCopy.ts`
+  - `services/worker/{package.json,src/index.ts}`
+  - `docs/ai/platform-copy-guidelines.md`, `docs/ai/prompts/generate-supporting.md`, `docs/ai-contracts.md`, `docs/jobs/queue.md`, `context.md`
+- **APIs / types added:**
+  - `PLATFORM_COPY_LIMITS`, `buildPlatformCopyItem`, `generatePlatformCopyFromScript`, `clampSupportingItem`, `clampCopy`, `limitsForPlatform`
+  - Worker: `processGeneratePlatformCopyJob` / CLI `generate-platform-copy`
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter @creatorai/ai-provider build
+  pnpm --filter @creatorai/ai-provider test
+  AI_PROVIDER=mock pnpm --filter worker generate-platform-copy -- --fixture
+  ```
+- **Depends on:** Phase 8 Integration COMPLETE; existing `AiProvider.generateSupporting` surface
+- **Needs from others:**
+  - Anto: Packs API / `ADAPT_PLATFORM` → call `generateSupporting` (or worker helper) + persist per-platform copy
+  - Brendan: Packs UI editable title/caption/hashtags (show distinct mock labels)
+  - Cyrus: aspect adapt (9 D) for default aspects in guidelines
+- **Risks:** Soft limits only (not API 400); flat Phase 5 `supportingContentSchema` differs from `byPlatform` shape — Packs should use byPlatform; strip `#` before flat assert if needed
+## Phase 9 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** `Arvin` (working tree; commit when ready)
+- **All allowed tasks done:** yes
+- **Incomplete items:** none for Phase 9 C scope (Packs API = Anto 9 B; Packs UI = Brendan 9 A; aspect FFmpeg = Cyrus 9 D)
+- **Blockers handed to Integration:**
+  - Anto: wire pack generate → `AiProvider.generateSupporting` → store copy fields
+  - Brendan: Packs tab consumes `byPlatform` titles/captions/hashtags
+  - Cyrus: crop/pad to aspects listed in `docs/ai/platform-copy-guidelines.md`
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/ai-provider build
+  pnpm --filter @creatorai/ai-provider test
+  AI_PROVIDER=mock pnpm --filter worker generate-platform-copy -- --fixture
+  ```
+- **Notes for next phase me:** Phase 10 insights / polish may reuse supporting copy for dashboard demos

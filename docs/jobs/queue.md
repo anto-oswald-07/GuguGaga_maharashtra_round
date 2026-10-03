@@ -70,6 +70,16 @@ UI Suggest panel: read `pendingProposal` / `pendingProposalVersionId` from GET; 
 
 Lightweight Zod validation lives in `@creatorai/shared` (`editTimelineJsonSchema`) until Cyrus’s `packages/timeline-schema` lands.
 
+## Phase 9 platform copy notes
+
+| Type | Producer | Artifact |
+|------|----------|----------|
+| `GENERATE_SUPPORTING` / pack copy | Packs generate (Anto 9 B) or worker CLI | `SupportingContent.byPlatform` titles/captions/hashtags |
+
+- Builder: `AiProvider.generateSupporting` (Arvin 9 C) — soft length limits in `docs/ai/platform-copy-guidelines.md`
+- CLI smoke: `pnpm --filter worker generate-platform-copy -- --fixture`
+- Aspect adaptation (Cyrus 9 D) is separate (`adaptAspect`); copy + aspect combine in Packs Integration
+
 ## Script content shape
 
 ```json

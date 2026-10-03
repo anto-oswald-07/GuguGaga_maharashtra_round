@@ -1,6 +1,6 @@
 # `@creatorai/ai-provider`
 
-LLM + STT + clip scoring provider package for CreatorAi (Phases 5–7 — Dev C / Arvin).
+LLM + STT + clip scoring + timeline + platform-copy provider package for CreatorAi (Phases 5–9 — Dev C / Arvin).
 
 ## Providers
 
@@ -76,6 +76,14 @@ const timeline = await ai.proposeTimeline({
   sourceAssetId: '…',
 });
 // timeline.schemaVersion === '1.0'; tracks: video | text | captions
+
+// Phase 9 — platform-tuned titles / captions / hashtags (soft length limits)
+const supporting = await ai.generateSupporting(script.fullText, [
+  'YOUTUBE',
+  'INSTAGRAM_REELS',
+  'TIKTOK',
+]);
+// supporting.byPlatform.TIKTOK.titles[0] starts with "[TikTok]"
 ```
 
 ## Worker consumers
@@ -87,8 +95,9 @@ const timeline = await ai.proposeTimeline({
 | `ALIGN_SCRIPT` | `pnpm --filter worker align -- --fixture` |
 | `SCORE_CLIPS` | `pnpm --filter worker score-clips -- --fixture` |
 | `GENERATE_TIMELINE` | `pnpm --filter worker generate-timeline -- --fixture` |
+| `GENERATE_SUPPORTING` | `pnpm --filter worker generate-platform-copy -- --fixture` |
 
-Helpers: `services/worker/src/ai/{provider,transcribe,align,scoreClips,proposeTimeline}.ts`
+Helpers: `services/worker/src/ai/{provider,transcribe,align,scoreClips,proposeTimeline,generatePlatformCopy}.ts`
 
 ## Alignment (MVP)
 
@@ -112,9 +121,18 @@ Pure builder in `src/timeline/proposeTimeline.ts`:
 - Local shape assert (`assertValidTimelineShape`); uses `@creatorai/timeline-schema` when present (Cyrus Phase 8 D)
 - Identical inputs → identical timeline JSON
 
+## Platform copy (MVP)
+
+Pure builder in `src/platform/generatePlatformCopy.ts` + limits in `copyLimits.ts`:
+- Soft title/caption/hashtag caps per Platform (see `docs/ai/platform-copy-guidelines.md`)
+- Mock titles/captions prefixed with `[YT]` / `[Shorts]` / `[Reels]` / `[TikTok]` / `[LinkedIn]`
+- OpenAI / Gemini responses clamped via `clampSupportingItem`
+- Identical script + platforms → identical `SupportingContent`
+
 ## Fixtures / tests
 
 - `test/fixtures/sample_script.json`
 - `test/fixtures/sample_spoken.txt`
 - `test/fixtures/sample_timeline_context.json`
+- `test/fixtures/sample_platform_copy.json`
 - `pnpm --filter @creatorai/ai-provider test`
