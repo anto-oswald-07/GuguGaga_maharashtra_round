@@ -1,0 +1,15 @@
+{
+  "name": "creatorai",
+  "private": true,
+  "version": "0.0.1",
+  "description": "CreatorAi monorepo — Bit n Build Maharashtra round (Team GuguGaga)",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev:api": "pnpm --filter api dev",
+    "build:shared": "pnpm --filter @creatorai/shared build",
+    "build:api": "pnpm --filter api build"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
