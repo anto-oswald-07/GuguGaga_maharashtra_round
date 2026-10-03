@@ -32,8 +32,9 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const { body, auth = true, headers, ...rest } = options;
   const requestHeaders = new Headers(headers);
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
 
-  if (body !== undefined && !requestHeaders.has("Content-Type")) {
+  if (body !== undefined && !isFormData && !requestHeaders.has("Content-Type")) {
     requestHeaders.set("Content-Type", "application/json");
   }
 
@@ -47,7 +48,12 @@ export async function apiFetch<T>(
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
     headers: requestHeaders,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body:
+      body === undefined
+        ? undefined
+        : isFormData
+          ? (body as FormData)
+          : JSON.stringify(body),
   });
 
   if (response.status === 401) {
@@ -80,12 +86,18 @@ export type AuthUser = {
   id: string;
   email: string;
   name: string;
-  workspaceId: string;
+  workspaceId?: string;
+  createdAt?: string;
 };
 
 export type AuthResponse = {
   token: string;
   user: AuthUser;
+  workspace?: {
+    id: string;
+    userId: string;
+    createdAt: string;
+  };
 };
 
 export type RegisterPayload = {
@@ -112,5 +124,82 @@ export function login(payload: LoginPayload) {
     method: "POST",
     body: payload,
     auth: false,
+  });
+}
+
+/** Asset types per SDD enum AssetType. */
+export type AssetType = "VIDEO" | "IMAGE" | "AUDIO" | "DOCUMENT" | "OTHER";
+
+export type Asset = {
+  id: string;
+  workspaceId: string;
+  type: AssetType;
+  name: string;
+  path: string;
+  mime: string;
+  size: number;
+  tags: string[];
+  description: string | null;
+  deletedAt: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+export type AssetListResponse = {
+  assets: Asset[];
+};
+
+export type ListAssetsParams = {
+  type?: AssetType | "";
+  q?: string;
+  tag?: string;
+};
+
+export type UpdateAssetPayload = {
+  name?: string;
+  tags?: string[];
+  description?: string | null;
+};
+
+function buildQuery(params: ListAssetsParams = {}): string {
+  const query = new URLSearchParams();
+  if (params.type) query.set("type", params.type);
+  if (params.q?.trim()) query.set("q", params.q.trim());
+  if (params.tag?.trim()) query.set("tag", params.tag.trim());
+  const qs = query.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export function listAssets(params: ListAssetsParams = {}) {
+  return apiFetch<AssetListResponse>(`/assets${buildQuery(params)}`);
+}
+
+export function getAsset(id: string) {
+  return apiFetch<Asset>(`/assets/${id}`);
+}
+
+export function uploadAsset(file: File, extras?: { name?: string; tags?: string }) {
+  const form = new FormData();
+  form.append("file", file);
+  if (extras?.name?.trim()) form.append("name", extras.name.trim());
+  if (extras?.tags?.trim()) form.append("tags", extras.tags.trim());
+
+  return apiFetch<Asset>("/assets", {
+    method: "POST",
+    body: form,
+  });
+}
+
+export function updateAsset(id: string, payload: UpdateAssetPayload) {
+  return apiFetch<Asset>(`/assets/${id}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export function deleteAsset(id: string) {
+  return apiFetch<{ ok: true } | Asset>(`/assets/${id}`, {
+    method: "DELETE",
   });
 }

@@ -399,6 +399,42 @@ Copy-paste this template every time:
 - **Needs from others:** Integration — reconcile proposed types vs Anto Zod; note Phase 1 flat `ApiError` vs SDD nested `{ error: { code, message, details } }`
 - **Risks:** Live curl cannot fully pass until Phase 2 B lands
 
+### [2026-10-03 18:30] ROLE=A NAME=Brendan Rodrigues PHASE=3 TYPE=START
+- **Summary:** Verified Phase 1–2 state on `main` (`e040e83`) before Phase 3 Asset Library UI.
+- **Files touched:** _(read-only verification)_
+- **APIs / types added:** None
+- **How to run / test what I did:** `git log origin/main`, tags, Section 2/7 of `context.md`, tree for auth + assets modules.
+- **Depends on:** —
+- **Needs from others:** Phase 2 Integration Lead (Brendan) still owes formal Phase 2 close-out OR current Integration Lead should record it.
+- **Verification results:**
+  - **Phase 1:** Deliverables present; `INTEGRATION COMPLETE — Phase 1` recorded; worker/samples filled in by Anto. Tag `phase-1-done` claimed local-only — **not present in remote `git tag -l`**.
+  - **Phase 2 code on main:** Yes — Auth UI, Auth API + Prisma User, Arvin auth docs/http, Cyrus security docs. Snapshot Section 2 still says “Phase 1 complete — Phase 2 next” and “No auth yet” (stale).
+  - **Phase 2 Integration:** **Not done correctly / incomplete** — no `INTEGRATION COMPLETE — Phase 2`; no `phase-2-done` tag; merge order on main was Arvin → Cyrus → Anto → Brendan (plan: Anto → Arvin → Cyrus → Brendan). Auth shape mismatch: shared Zod returns `{ token, user, workspace }` while early web types used flat `user.workspaceId` (login still works — only `token` used).
+  - **Phase 3 Assets API:** Not on main yet (Anto Phase 3) — UI will target SDD 5.2 shapes.
+
+### [2026-10-03 18:35] ROLE=A NAME=Brendan Rodrigues PHASE=3 TYPE=DONE
+- **Summary:** Phase 3 Asset Library UI on `phase-03-brendan`: multipart upload, grid (name/type/date/tags), type+name filters, detail drawer (edit tags/description, soft-delete), empty state. Extended `api.ts` with FormData support + asset helpers.
+- **Files touched:**
+  - `apps/web/src/app/assets/page.tsx`
+  - `apps/web/src/components/assets/*` (AssetLibrary, AssetUpload, AssetFilters, AssetCard, AssetDetailDrawer)
+  - `apps/web/src/lib/api.ts` (multipart + asset methods)
+  - `context.md`
+- **APIs / types added (client-assumed until Anto ships):**
+  - `POST /assets` multipart field `file` (+ optional `name`, `tags` string)
+  - `GET /assets?type=&q=&tag=` → `{ assets: Asset[] }`
+  - `PATCH /assets/:id` `{ name?, tags?, description? }`
+  - `DELETE /assets/:id`
+  - `Asset` fields per SDD (type enum VIDEO|IMAGE|AUDIO|DOCUMENT|OTHER)
+- **How to run / test what I did:**
+  ```bash
+  cd apps/web && pnpm install && pnpm dev
+  # login first, open /assets
+  # upload image + storage/samples/dummy.mp4 once Assets API exists
+  ```
+- **Depends on:** Anto Phase 3 Assets API + storage adapter
+- **Needs from others:** Anto — implement SDD 5.2; if list response is not `{ assets: [...] }`, adapt at Integration. Also close Phase 2 Integration record/tag if still open.
+- **Risks:** Upload/list fail until Assets API exists (UI shows API error messages).
+
 ---
 
 ## 6. Phase Completion Blocks (paste at end of your phase)
@@ -526,6 +562,20 @@ _(Template above kept for other developers.)_
   - `docs/security/auth-checklist.md` → Integration verify (JWT secret, no token logging, min-8)
 - **Notes for next phase me:** Phase 3 = thumbnail FFmpeg helper (`services/worker/src/media/thumbnail.ts` + shell script)
 
+## Phase 3 Completion — Brendan Rodrigues (Dev A)
+- **Date:** 2026-10-03
+- **Branch:** phase-03-brendan
+- **All allowed tasks done:** yes
+- **Incomplete items:** E2E upload/list blocked until Anto Assets API (expected parallel)
+- **Blockers handed to Integration:** Confirm list envelope `{ assets }`, multipart field name `file`, and soft-delete list exclusion; optionally reconcile Phase 2 auth types + write Phase 2 Integration record
+- **Commands to verify my work:**
+  ```bash
+  cd apps/web && pnpm install && pnpm dev
+  # /assets — upload, filter, open drawer, tag, delete
+  ```
+- **Files I expect others to connect to:** `apps/web/src/lib/api.ts` asset helpers; `/assets` UI
+- **Notes for next phase me:** Phase 4 Projects UI + Kanban — multi-select attach from library
+
 ---
 
 ## 7. Integration Records (paste after each Integration Mini-Phase)
@@ -579,6 +629,7 @@ _(Template above kept for other developers.)_
 | 2026-10-03 | Brendan | RegisterPayload | `apps/web/src/lib/api.ts` | `packages/shared` | Assumed `{ email, password, name }` |
 | 2026-10-03 | Brendan | LoginPayload | `apps/web/src/lib/api.ts` | `packages/shared` | Assumed `{ email, password }` |
 | 2026-10-03 | Arvin | Auth DTOs + ApiErrorBody | `docs/proposed-auth-types.ts` | `packages/shared` (prefer Anto’s Zod if present) | Proposed |
+| 2026-10-03 | Brendan | Asset + AssetListResponse | `apps/web/src/lib/api.ts` | `packages/shared` (Anto Phase 3) | Assumed — `{ assets: Asset[] }`, multipart `file` |
 
 ---
 

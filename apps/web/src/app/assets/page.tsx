@@ -1,10 +1,5 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { AssetLibrary } from "@/components/assets/AssetLibrary";
 
 export default function AssetsPage() {
-  return (
-    <ComingSoon
-      title="Assets"
-      description="Coming soon — asset library."
-    />
-  );
+  return <AssetLibrary />;
 }
