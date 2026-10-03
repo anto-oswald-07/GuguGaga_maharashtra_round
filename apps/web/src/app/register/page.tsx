@@ -1,7 +1,9 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { RegisterForm } from "@/components/auth/RegisterForm";
 
 export default function RegisterPage() {
   return (
-    <ComingSoon title="Register" description="Coming soon — create an account." />
+    <section className="px-4 py-12">
+      <RegisterForm />
+    </section>
   );
 }

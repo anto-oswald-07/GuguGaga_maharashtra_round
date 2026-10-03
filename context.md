@@ -245,6 +245,47 @@ Copy-paste this template every time:
 - **Needs from others:** Integration will merge worker + web into workspace.
 - **Risks:** Documented in PROGRESS (compose plugin / port 5432 on this laptop).
 
+### [2026-10-03 17:55] ROLE=A NAME=Brendan Rodrigues PHASE=2 TYPE=START
+- **Summary:** Verified Phase 1 merge state on `main` (`4fa6f6d`) before starting Phase 2 Auth UI. Individual A/B/D deliverables are present; formal Integration Mini-Phase was **not** completed correctly.
+- **Files touched:** _(read-only verification)_
+- **APIs / types added:** None
+- **How to run / test what I did:** Inspected git history/PRs, tree, tags, `context.md` Section 2 + Integration records.
+- **Depends on:** —
+- **Needs from others:** Integration Lead (Anto) should still close Phase 1 gaps listed below.
+- **Risks / Phase 1 Integration gaps found:**
+  1. **Merge order wrong:** actual PR merges were Anto → Brendan → Cyrus. Plan required Anto → Arvin → Cyrus → Brendan.
+  2. **Arvin Phase 1 missing:** no `phase-01-arvin` branch merged; no `services/worker`, no `samples/scripts/sample_script.md`.
+  3. **No Integration record:** Section 7 still says “No integrations yet”; Section 2 snapshot still says “Not started — Phase 1 next”; no `phase-1-done` tag.
+  4. **Scripts not executable:** `scripts/media/*.sh` are `644` (Cyrus asked Integration to `chmod +x`).
+  5. **Root scripts incomplete:** workspace includes `apps/web`, but root `package.json` has no `dev:web`; `pnpm --filter web` should work once install succeeds.
+  6. **Binary committed:** `storage/samples/dummy.mp4` is on `main` (Cyrus said do not commit).
+  7. **What does work on main:** `apps/web` shell, `services/api` health stub, `packages/shared`, `docker-compose.yml`, media scripts/docs, root `pnpm-workspace.yaml`.
+- **Decision for Phase 2:** Proceed with Auth UI against SDD/plan shapes; Auth API not on `main` yet (Anto Phase 2). UI will show API errors until Auth API lands.
+
+### [2026-10-03 18:00] ROLE=A NAME=Brendan Rodrigues PHASE=2 TYPE=DONE
+- **Summary:** Phase 2 Auth UI complete on branch `phase-02-brendan`. Register/Login forms, JWT localStorage, `apiFetch` Authorization helper, Logout in nav, dashboard redirects to `/login` when token missing.
+- **Files touched:**
+  - `apps/web/src/lib/api.ts`
+  - `apps/web/src/lib/auth-storage.ts`
+  - `apps/web/src/components/auth/*` (LoginForm, RegisterForm, LogoutButton, DashboardGate)
+  - `apps/web/src/app/login/page.tsx`, `apps/web/src/app/register/page.tsx`, `apps/web/src/app/page.tsx`
+  - `apps/web/src/components/AppNav.tsx` (Logout button — required by Phase 2 task 6)
+  - `context.md`
+- **APIs / types added (client-assumed until Anto ships):**
+  - `POST /auth/register` body `{ email, password, name }` → `{ token, user: { id, email, name, workspaceId } }`
+  - `POST /auth/login` body `{ email, password }` → same AuthResponse
+  - Errors prefer `{ message }` / `{ error }` / `ApiError` shape from shared
+- **How to run / test what I did:**
+  ```bash
+  cd apps/web && pnpm install && pnpm dev
+  # open /register → submit (needs Anto auth API for success)
+  # /login → store token → redirect /
+  # Logout → clears token → /login
+  # visit / without token → redirect /login
+  ```
+- **Depends on:** Anto Phase 2 Auth API matching assumed shapes (or Integration adapts)
+- **Needs from others:** Anto — implement `/auth/register`, `/auth/login`, `/auth/me`. If response keys differ (`accessToken` vs `token`, nested workspace, etc.), note mismatch at Integration.
+- **Risks:** End-to-end register/login cannot succeed until Auth API exists.
 ### [2026-10-03 18:00] ROLE=B NAME=Anto Oswald PHASE=1 TYPE=INTEGRATION
 - **Summary:** Phase 1 Integration Lead closed gaps (worker skeleton, ai-contracts, samples, ffmpeg script fix), verified checklist, decided pnpm + DB-polling queue for MVP.
 - **Files touched:** `services/worker/**`, `docs/ai-contracts.md`, `samples/**`, `scripts/media/check-ffmpeg.sh`, `package.json`, `README.md`, `.env.example`, `context.md`
@@ -434,6 +475,20 @@ _(Template above kept for other developers.)_
 - **Files I expect others to connect to:** `apps/web` package name `web`; `NEXT_PUBLIC_API_BASE_URL` points at Anto’s API
 - **Notes for next phase me:** Phase 2 is Auth UI — build against documented `/auth/login` and `/auth/register` shapes even before API merge
 
+## Phase 2 Completion — Brendan Rodrigues (Dev A)
+- **Date:** 2026-10-03
+- **Branch:** phase-02-brendan
+- **All allowed tasks done:** yes
+- **Incomplete items:** E2E success path blocked until Anto Auth API exists (expected parallel work)
+- **Blockers handed to Integration:** Align AuthResponse shape if Anto differs; close leftover Phase 1 Integration gaps (Arvin worker/samples, tag, snapshot, chmod scripts)
+- **Commands to verify my work:**
+  ```bash
+  cd apps/web && pnpm install && pnpm dev
+  # Register → Login → Dashboard stub → Logout
+  # Without token, / should bounce to /login
+  ```
+- **Files I expect others to connect to:** `apps/web/src/lib/api.ts` (`Authorization: Bearer`), localStorage key `creatorai_token`
+- **Notes for next phase me:** Phase 3 Asset Library UI — reuse `apiFetch`; consider showing logged-in state in nav
 ## Phase 2 Completion — Anto Oswald (Dev B)
 - **Date:** 2026-10-03
 - **Branch:** phase-02-anto
@@ -519,6 +574,10 @@ _(Template above kept for other developers.)_
 
 | Date | Author | Contract name | Temporary location | Final home (after Integration) | Status |
 |------|--------|---------------|--------------------|--------------------------------|--------|
+| — | — | — | — | — | — |
+| 2026-10-03 | Brendan | AuthResponse | `apps/web/src/lib/api.ts` | `packages/shared` (Anto Phase 2) | Assumed — awaiting Anto |
+| 2026-10-03 | Brendan | RegisterPayload | `apps/web/src/lib/api.ts` | `packages/shared` | Assumed `{ email, password, name }` |
+| 2026-10-03 | Brendan | LoginPayload | `apps/web/src/lib/api.ts` | `packages/shared` | Assumed `{ email, password }` |
 | 2026-10-03 | Arvin | Auth DTOs + ApiErrorBody | `docs/proposed-auth-types.ts` | `packages/shared` (prefer Anto’s Zod if present) | Proposed |
 
 ---
