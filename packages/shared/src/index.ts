@@ -1,4 +1,10 @@
 export { API_PREFIX } from './constants';
+export {
+  MIN_PASSWORD_LENGTH,
+  isPasswordAcceptable,
+  checkPasswordStrength,
+} from './validation/password';
+export type { PasswordStrengthResult } from './validation/password';
 
 /** Response shape for `GET /api/v1/health`. */
 export type HealthResponse = {
