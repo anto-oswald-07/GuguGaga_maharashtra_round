@@ -1,17 +1,8 @@
 import { z } from 'zod';
+import { projectStageSchema, type ProjectStage } from './workflow/stages';
 
-/** Project lifecycle stages — mirrors Prisma `ProjectStage` / SDD §4.2. */
-export const projectStageSchema = z.enum([
-  'IDEA',
-  'SCRIPT',
-  'RECORDED',
-  'EDITING',
-  'CLIPS',
-  'ADAPTED',
-  'READY',
-  'PUBLISHED',
-]);
-export type ProjectStage = z.infer<typeof projectStageSchema>;
+/** Re-export stage schema/type so project DTOs stay single-source with workflow helpers. */
+export { projectStageSchema, type ProjectStage };
 
 export const PROJECT_STAGES = projectStageSchema.options;
 

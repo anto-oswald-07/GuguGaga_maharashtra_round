@@ -47,6 +47,7 @@ export {
   isProjectStage,
   type ProjectStage,
 } from './workflow';
+export {
   PROJECT_STAGES,
   platformSchema,
   PLATFORMS,
@@ -60,7 +61,6 @@ export {
   detachAssetsRequestSchema,
   stageEventSchema,
   stageHistoryResponseSchema,
-  type ProjectStage,
   type Platform,
   type ProjectDto,
   type CreateProjectRequest,
