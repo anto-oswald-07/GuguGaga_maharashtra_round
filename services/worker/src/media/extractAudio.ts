@@ -1,5 +1,5 @@
 /**
- * Audio extract helper (Phase 6 — Dev D).
+ * Audio extract helper (Phase 6 — Dev D; hardened Phase 10).
  * Pulls a mono WAV/MP3 track from video for STT (Whisper) input.
  *
  * Derivative path convention (SDD §4.4):
@@ -9,13 +9,14 @@
  * Default: 16 kHz mono PCM WAV — Whisper-friendly and small for demos.
  */
 
-import { execFile } from 'node:child_process';
-import { access, mkdir } from 'node:fs/promises';
-import { constants } from 'node:fs';
-import { dirname, extname } from 'node:path';
-import { promisify } from 'node:util';
-
-const execFileAsync = promisify(execFile);
+import { extname } from 'node:path';
+import {
+  assertInputReadable,
+  assertOutputWritten,
+  assertPositiveDuration,
+  ensureOutputDir,
+  runFfmpeg,
+} from './mediaGuard';
 
 /** Supported STT-oriented container encodings. */
 export type AudioExtractFormat = 'wav' | 'mp3';
@@ -47,14 +48,6 @@ export type ExtractAudioResult = {
 const DEFAULT_SAMPLE_RATE_HZ = 16_000;
 const DEFAULT_CHANNELS = 1;
 const DEFAULT_MP3_BITRATE = '64k';
-
-async function assertReadable(path: string): Promise<void> {
-  try {
-    await access(path, constants.R_OK);
-  } catch {
-    throw new Error(`Input media not readable: ${path}`);
-  }
-}
 
 function resolveFormat(
   outputPath: string,
@@ -88,8 +81,9 @@ export async function extractAudio(
   outputPath: string,
   options: ExtractAudioOptions = {},
 ): Promise<ExtractAudioResult> {
-  await assertReadable(inputPath);
-  await mkdir(dirname(outputPath), { recursive: true });
+  await assertInputReadable(inputPath, 'media');
+  await assertPositiveDuration(inputPath, { kind: 'media' });
+  await ensureOutputDir(outputPath);
 
   const format = resolveFormat(outputPath, options.format);
   const sampleRateHz = options.sampleRateHz ?? DEFAULT_SAMPLE_RATE_HZ;
@@ -120,8 +114,11 @@ export async function extractAudio(
     args.push('-acodec', 'libmp3lame', '-b:a', bitrate, outputPath);
   }
 
-  await execFileAsync('ffmpeg', args, { maxBuffer: 10 * 1024 * 1024 });
-  await access(outputPath, constants.R_OK);
+  await runFfmpeg(args, {
+    maxBuffer: 10 * 1024 * 1024,
+    op: `extractAudio(${format})`,
+  });
+  await assertOutputWritten(outputPath, 'extractAudio');
 
   return { inputPath, outputPath, format, sampleRateHz, channels };
 }

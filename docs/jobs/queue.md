@@ -107,6 +107,17 @@ Lightweight Zod validation lives in `@creatorai/shared` (`editTimelineJsonSchema
 
 Shared Zod: `@creatorai/shared` → `packages/shared/src/packs.ts`.
 
+## Phase 10 insights + retry
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/insights/overview` | Workspace counts, stage mix, clips/project, platform mix, avg clip length, time-in-stage, engagement totals |
+| POST | `/insights/engagement` | Body `{ projectId, packId?, platform?, views?, likes?, notes? }` → `InsightMetric` (201) |
+| POST | `/jobs/:id/retry` | Only `FAILED` → enqueues new `QUEUED` job with same type/input + `retriedFromJobId` |
+
+- Health: `GET /health` now probes Postgres (`db: up|down`); 503 when DB down.
+- Shared Zod: `@creatorai/shared` → `packages/shared/src/insights.ts`.
+
 ## Script content shape
 
 ```json

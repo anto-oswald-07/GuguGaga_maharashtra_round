@@ -1,10 +1,5 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { InsightsView } from "./InsightsView";
 
 export default function InsightsPage() {
-  return (
-    <ComingSoon
-      title="Insights"
-      description="Coming soon — intelligence overview."
-    />
-  );
+  return <InsightsView />;
 }

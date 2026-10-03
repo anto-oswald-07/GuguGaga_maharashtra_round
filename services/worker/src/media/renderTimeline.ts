@@ -11,11 +11,8 @@
  *   storage/workspaces/{workspaceId}/renders/{jobId}/output.mp4
  */
 
-import { execFile } from 'node:child_process';
-import { access, mkdir, writeFile } from 'node:fs/promises';
-import { constants } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { promisify } from 'node:util';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   assertValidTimeline,
   type CaptionItem,
@@ -23,8 +20,15 @@ import {
   type TextItem,
   type VideoClip,
 } from '@creatorai/timeline-schema';
-
-const execFileAsync = promisify(execFile);
+import {
+  MediaPipelineError,
+  assertInputReadable,
+  assertOutputWritten,
+  assertPositiveDuration,
+  ensureOutputDir,
+  normalizeCutRangeMs,
+  runFfmpeg,
+} from './mediaGuard';
 
 export type RenderTimelineOptions = {
   /** Map assetId → readable media path on disk. */
@@ -134,6 +138,46 @@ function collectCaptions(tl: EditTimeline): CaptionItem[] {
   return items;
 }
 
+/**
+ * Clamp each video clip's [srcStartMs, srcEndMs] to the probed source duration.
+ * Matches cutClip / prior ffmpeg trim behavior so mock SCORE windows that
+ * overshoot short demo media (e.g. 5s dummy.mp4) still render.
+ */
+export function clampTimelineToSourceDurations(
+  timeline: EditTimeline,
+  durationSecByAssetId: Map<string, number>,
+): EditTimeline {
+  return {
+    ...timeline,
+    tracks: timeline.tracks.map((track) => {
+      if (track.type !== 'video') return track;
+      return {
+        ...track,
+        clips: track.clips.map((clip) => {
+          const dur = durationSecByAssetId.get(clip.assetId);
+          if (dur == null) return clip;
+          const range = normalizeCutRangeMs(
+            clip.srcStartMs,
+            clip.srcEndMs,
+            dur,
+          );
+          if (
+            range.startMs === clip.srcStartMs &&
+            range.endMs === clip.srcEndMs
+          ) {
+            return clip;
+          }
+          return {
+            ...clip,
+            srcStartMs: range.startMs,
+            srcEndMs: range.endMs,
+          };
+        }),
+      };
+    }),
+  };
+}
+
 function formatSrtTime(ms: number): string {
   const clamped = Math.max(0, Math.floor(ms));
   const h = Math.floor(clamped / 3_600_000);
@@ -155,14 +199,6 @@ export function captionsToSrt(items: CaptionItem[]): string {
     .join('\n');
 }
 
-async function assertReadable(path: string): Promise<void> {
-  try {
-    await access(path, constants.R_OK);
-  } catch {
-    throw new Error(`Input media not readable: ${path}`);
-  }
-}
-
 /**
  * Build ffmpeg inputs + filter_complex from a validated timeline.
  * Does not execute ffmpeg.
@@ -176,7 +212,25 @@ export function buildFfmpegPlan(
 ): FfmpegTimelinePlan {
   const clips = collectVideoClips(timeline);
   if (clips.length < 1) {
-    throw new Error('timeline has no video clips');
+    throw new MediaPipelineError(
+      'RANGE_INVALID',
+      'timeline has no video clips — cannot render preview',
+    );
+  }
+  if (!(timeline.durationMs > 0)) {
+    throw new MediaPipelineError(
+      'ZERO_DURATION',
+      `timeline.durationMs must be > 0 (got ${timeline.durationMs})`,
+    );
+  }
+  for (const clip of clips) {
+    if (!(clip.srcEndMs > clip.srcStartMs)) {
+      throw new MediaPipelineError(
+        'RANGE_INVALID',
+        `Video clip "${clip.id}" has zero/negative source window ` +
+          `(srcStartMs=${clip.srcStartMs}, srcEndMs=${clip.srcEndMs})`,
+      );
+    }
   }
 
   const width = options.width ?? 1280;
@@ -187,8 +241,10 @@ export function buildFfmpegPlan(
   function inputIndexFor(assetId: string): number {
     const path = options.assetPaths[assetId];
     if (!path) {
-      throw new Error(
-        `No media path mapped for assetId "${assetId}" (pass assetPaths)`,
+      throw new MediaPipelineError(
+        'ASSET_UNMAPPED',
+        `No media path mapped for assetId "${assetId}" (pass assetPaths). ` +
+          `Job cannot resolve originals/renders for this timeline clip.`,
       );
     }
     const existing = inputIndexByPath.get(path);
@@ -303,17 +359,32 @@ export async function renderTimeline(
   const textItems = collectTextItems(timeline);
   const captionItems = collectCaptions(timeline);
 
+  const durationSecByAssetId = new Map<string, number>();
   for (const clip of clips) {
     const path = options.assetPaths[clip.assetId];
     if (!path) {
-      throw new Error(`No media path mapped for assetId "${clip.assetId}"`);
+      throw new MediaPipelineError(
+        'ASSET_UNMAPPED',
+        `No media path mapped for assetId "${clip.assetId}"`,
+      );
     }
-    await assertReadable(path);
+    await assertInputReadable(path, `asset ${clip.assetId}`);
+    const durationSec = await assertPositiveDuration(path, {
+      kind: `asset ${clip.assetId}`,
+    });
+    durationSecByAssetId.set(clip.assetId, durationSec);
   }
 
-  await mkdir(dirname(options.outputPath), { recursive: true });
+  // Clamp overshooting SCORE/mock windows to source EOF (hard-fail only when
+  // start is past EOF or the window collapses).
+  const clampedTimeline = clampTimelineToSourceDurations(
+    timeline,
+    durationSecByAssetId,
+  );
 
-  const plan = buildFfmpegPlan(timeline, options);
+  await ensureOutputDir(options.outputPath);
+
+  const plan = buildFfmpegPlan(clampedTimeline, options);
 
   if (plan.softsubsPath && plan.softsubsContent != null) {
     await writeFile(plan.softsubsPath, plan.softsubsContent, 'utf8');
@@ -365,8 +436,11 @@ export async function renderTimeline(
 
   args.push(options.outputPath);
 
-  await execFileAsync('ffmpeg', args, { maxBuffer: 40 * 1024 * 1024 });
-  await access(options.outputPath, constants.R_OK);
+  await runFfmpeg(args, {
+    maxBuffer: 40 * 1024 * 1024,
+    op: 'renderTimeline',
+  });
+  await assertOutputWritten(options.outputPath, 'renderTimeline');
 
   return {
     outputPath: options.outputPath,

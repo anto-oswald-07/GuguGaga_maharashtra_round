@@ -9,13 +9,14 @@
  * Face-aware reframe is intentionally skipped (FR-PLT-004 P1).
  */
 
-import { execFile } from 'node:child_process';
-import { access, mkdir } from 'node:fs/promises';
-import { constants } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { promisify } from 'node:util';
-
-const execFileAsync = promisify(execFile);
+import { join } from 'node:path';
+import {
+  assertInputReadable,
+  assertOutputWritten,
+  assertPositiveDuration,
+  ensureOutputDir,
+  runFfmpeg,
+} from './mediaGuard';
 
 /** Platform pack aspect ratios (`@creatorai/shared` packs.ts). */
 export type AspectRatio = 'R_16_9' | 'R_9_16' | 'R_1_1';
@@ -60,14 +61,6 @@ export type AdaptAspectResult = {
   fit: AdaptFitMode;
   label: string;
 };
-
-async function assertReadable(path: string): Promise<void> {
-  try {
-    await access(path, constants.R_OK);
-  } catch {
-    throw new Error(`Input media not readable: ${path}`);
-  }
-}
 
 export function isAspectRatio(value: string): value is AspectRatio {
   return (ASPECT_RATIOS as readonly string[]).includes(value);
@@ -161,8 +154,9 @@ export async function adaptAspect(
     );
   }
 
-  await assertReadable(inputPath);
-  await mkdir(dirname(outputPath), { recursive: true });
+  await assertInputReadable(inputPath, 'video');
+  await assertPositiveDuration(inputPath, { kind: 'video' });
+  await ensureOutputDir(outputPath);
 
   const fit: AdaptFitMode = options.fit ?? 'crop';
   const { filter, width, height, label } = buildAdaptFilter(
@@ -194,8 +188,11 @@ export async function adaptAspect(
     outputPath,
   ];
 
-  await execFileAsync('ffmpeg', args, { maxBuffer: 40 * 1024 * 1024 });
-  await access(outputPath, constants.R_OK);
+  await runFfmpeg(args, {
+    maxBuffer: 40 * 1024 * 1024,
+    op: `adaptAspect(${options.aspectRatio}/${fit})`,
+  });
+  await assertOutputWritten(outputPath, 'adaptAspect');
 
   return {
     inputPath,

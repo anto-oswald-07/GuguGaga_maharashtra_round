@@ -1,7 +1,5 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { JobsCenter } from "./JobsCenter";
 
 export default function JobsPage() {
-  return (
-    <ComingSoon title="Jobs" description="Coming soon — job center." />
-  );
+  return <JobsCenter />;
 }
