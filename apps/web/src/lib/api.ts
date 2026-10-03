@@ -204,3 +204,179 @@ export function deleteAsset(id: string) {
     method: "DELETE",
   });
 }
+
+/* -------------------------------------------------------------------------- */
+/* Scripts + Jobs (Phase 5) — shapes aligned to SDD §5.4 / §5.9 / §6.1        */
+/* TODO_SHARED: replace with `@creatorai/shared` once Anto/Cyrus land Zod     */
+/* -------------------------------------------------------------------------- */
+
+export type ScriptPlatform =
+  | "YOUTUBE"
+  | "YOUTUBE_SHORTS"
+  | "INSTAGRAM_REELS"
+  | "TIKTOK"
+  | "LINKEDIN";
+
+export type ScriptContent = {
+  hook: string;
+  body: string;
+  cta: string;
+};
+
+export type ScriptVersion = {
+  id: string;
+  scriptId: string;
+  version: number;
+  content: ScriptContent;
+  /** Free-form note: AI | MANUAL | REFINE | etc. */
+  source?: string | null;
+  createdAt: string;
+};
+
+export type SupportingContent = {
+  titles: string[];
+  captions: string[];
+  hashtags: string[];
+  description?: string | null;
+};
+
+export type ScriptDocument = {
+  id: string;
+  projectId: string;
+  workspaceId?: string;
+  topic: string | null;
+  audience: string | null;
+  tone: string | null;
+  platform: ScriptPlatform | null;
+  /** Latest structured content (convenience; may mirror latest version). */
+  content: ScriptContent | null;
+  hooks: string[];
+  supporting: SupportingContent | null;
+  versions: ScriptVersion[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ScriptListResponse = {
+  items: ScriptDocument[];
+};
+
+export type GenerateScriptPayload = {
+  topic: string;
+  audience: string;
+  tone: string;
+  platform: ScriptPlatform;
+};
+
+export type RefineScriptPayload = {
+  instruction: string;
+};
+
+export type SaveScriptVersionPayload = {
+  content: ScriptContent;
+  source?: string;
+};
+
+export type JobStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+
+export type Job = {
+  id: string;
+  workspaceId?: string;
+  projectId?: string | null;
+  type: string;
+  status: JobStatus;
+  progress: number;
+  input?: unknown;
+  output?: unknown;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Enqueue responses — Anto may return scriptId immediately or only after job. */
+export type EnqueueJobResponse = {
+  jobId: string;
+  scriptId?: string;
+};
+
+export function listProjectScripts(projectId: string) {
+  return apiFetch<ScriptListResponse>(`/projects/${projectId}/scripts`);
+}
+
+export function createProjectScript(
+  projectId: string,
+  payload: Partial<GenerateScriptPayload> & { content?: ScriptContent },
+) {
+  return apiFetch<ScriptDocument>(`/projects/${projectId}/scripts`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function generateProjectScript(
+  projectId: string,
+  payload: GenerateScriptPayload,
+) {
+  return apiFetch<EnqueueJobResponse>(
+    `/projects/${projectId}/scripts/generate`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}
+
+export function getScript(scriptId: string) {
+  return apiFetch<ScriptDocument>(`/scripts/${scriptId}`);
+}
+
+export function refineScript(scriptId: string, payload: RefineScriptPayload) {
+  return apiFetch<EnqueueJobResponse>(`/scripts/${scriptId}/refine`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function generateScriptHooks(scriptId: string, n = 5) {
+  return apiFetch<EnqueueJobResponse | { hooks: string[] }>(
+    `/scripts/${scriptId}/hooks`,
+    {
+      method: "POST",
+      body: { n },
+    },
+  );
+}
+
+export function generateScriptSupporting(
+  scriptId: string,
+  platforms?: ScriptPlatform[],
+) {
+  return apiFetch<EnqueueJobResponse | { supporting: SupportingContent }>(
+    `/scripts/${scriptId}/supporting`,
+    {
+      method: "POST",
+      body: platforms ? { platforms } : {},
+    },
+  );
+}
+
+export function saveScriptVersion(
+  scriptId: string,
+  payload: SaveScriptVersionPayload,
+) {
+  return apiFetch<ScriptVersion | ScriptDocument>(
+    `/scripts/${scriptId}/versions`,
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}
+
+export function getJob(jobId: string) {
+  return apiFetch<Job>(`/jobs/${jobId}`);
+}
+
+export function listJobs() {
+  return apiFetch<{ items: Job[] }>("/jobs");
+}
