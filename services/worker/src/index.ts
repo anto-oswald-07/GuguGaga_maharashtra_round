@@ -1,5 +1,7 @@
 /**
- * CreatorAi worker skeleton (Phase 1).
- * Real job consumers arrive in Phase 6+.
+ * CreatorAi worker entry (Phase 5).
+ * Consumers are invoked via CLI scripts or a future DB poller (Phase 5 Integration).
  */
-console.log('worker skeleton started');
+console.log(
+  'worker ready — consumers: generateScript (pnpm --filter worker generate-script)',
+);

@@ -1196,3 +1196,31 @@ _(Template above kept for other developers.)_
   ```
 - **Needs from others:** None for Phase 4; Phase 5 Lead = Anto
 - **Risks:** Next sometimes hangs on :3002 (listening, no response) — restart `next dev` if UI spins
+
+## Phase 5 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** `Arvin` (working tree; commit when ready)
+- **All allowed tasks done:** yes
+- **Incomplete items:** none for Phase 5 C scope (Job table / ScriptVersion persistence = Anto Phase 5 B + Integration)
+- **Blockers handed to Integration:**
+  - Anto: wire `GENERATE_SCRIPT` Job → `processGenerateScriptJob` → write `ScriptVersion`; expose `WORKER_CALLBACK_URL` or let worker use Prisma
+  - Cyrus: prefer `docs/ai/prompts/**` + shared `scriptSchema` (do not collide on `packages/ai-provider`)
+  - Brendan: poll `/jobs/:id`; consume `ScriptGenResult` `{ title, hook, body, cta, fullText }`
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/ai-provider build
+  pnpm --filter worker build
+  AI_PROVIDER=mock pnpm --filter worker generate-script -- --topic "Batch Reels" --audience "creators" --tone "practical" --platform INSTAGRAM_REELS
+  node -e "const {createAiProvider}=require('./packages/ai-provider/dist'); createAiProvider().generateScript({topic:'X',audience:'Y',tone:'Z',platform:'TIKTOK'}).then(s=>console.log(s.provider,s.hook.slice(0,40)))"
+  ```
+- **Files I expect others to connect to:**
+  - `@creatorai/ai-provider` → API/worker
+  - `services/worker/src/consumers/generateScript.ts` → Job runner
+  - `packages/ai-provider/README.md` + `.env.example` AI_* vars
+- **Notes for next phase me:** Phase 6 C = STT + alignment algorithms on same AiProvider stubs
+
+### Chronological — 2026-10-03 20:12 (Arvin / Phase 5 Dev C)
+- **Summary:** Implemented `packages/ai-provider` (`MockAiProvider`, `OpenAiProvider`, `GeminiProvider`, `createAiProvider`), worker `ai/provider.ts` + `consumers/generateScript.ts`, README + env docs. Mock smoke + CLI SUCCEEDED; real providers gated on keys (never committed).
+- **Files touched:** `packages/ai-provider/**`, `services/worker/src/ai/**`, `services/worker/src/consumers/generateScript.ts`, `services/worker/package.json`, `docs/ai-contracts.md`, `.env.example`, `context.md`
+- **Needs from others:** Anto Job/Script modules; Integration e2e from UI without key
+- **Risks:** Without Job table, consumer persists only via optional `WORKER_CALLBACK_URL` or returns JSON for local/Integration use
