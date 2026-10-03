@@ -1,7 +1,9 @@
 # Golden Path Prep — CreatorAi Demo
 
 > Started Phase 4 (Dev D / Cyrus). Companion fixture: `samples/projects/demo-project.json`.  
-> Full judge click-script lands later: `docs/demo/judge-script.md` (Phase 10 / Arvin).
+> **Judge click-script (Phase 10):** [`docs/demo/judge-script.md`](./judge-script.md)  
+> **Offline fallbacks:** [`docs/demo/offline-fallbacks.md`](./offline-fallbacks.md)  
+> **Demo seed:** `pnpm --filter @creatorai/ai-provider exec tsx ../../scripts/demo/seed-demo.ts`
 
 ---
 
@@ -77,10 +79,10 @@ npx tsx scripts/seed/sample-project.ts --dry-run
 
 ## 6. Open wiring (Integration / later phases)
 
-- [ ] Durable demo user + token for seed script (`TODO_INTEGRATION` in seed file)
-- [ ] Optional: auto-attach `dummy.mp4` after upload
-- [ ] Phase 5+: load `sample_script.md` into Script tab / Mock AI
-- [ ] Phase 10: expand into click-by-click `docs/demo/judge-script.md`
+- [x] Durable demo user + token for seed script (`scripts/demo/seed-demo.ts` — Phase 10 C)
+- [x] Optional: auto-attach `dummy.mp4` after upload (seed-demo)
+- [x] Phase 5+: load `sample_script.md` into Script tab / Mock AI (seed-demo POSTs script)
+- [x] Phase 10: expand into click-by-click `docs/demo/judge-script.md`
 
 ---
 

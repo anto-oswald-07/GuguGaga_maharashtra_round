@@ -1,22 +1,30 @@
 # `@creatorai/ai-provider`
 
-LLM + STT + clip scoring + timeline + platform-copy provider package for CreatorAi (Phases 5–9 — Dev C / Arvin).
+LLM + STT + clip scoring + timeline + platform-copy provider package for CreatorAi (Phases 5–10 — Dev C / Arvin).
 
 ## Providers
 
 | `AI_PROVIDER` | Class | Needs |
 |---------------|-------|--------|
-| `mock` (default) | `MockAiProvider` | nothing — deterministic from topic / hintText |
+| `mock` (default) | `MockAiProvider` | nothing — **deterministic** from topic / hintText + optional `AI_MOCK_SEED` |
 | `openai` | `OpenAiProvider` | `OPENAI_API_KEY` (Chat + Whisper) |
 | `gemini` | `GeminiProvider` | `GEMINI_API_KEY` (chat; STT falls back to mock segments) |
 
 **Never commit API keys.** Put them in root `.env` (gitignored) only.
+
+### Demo stability (Phase 10)
+
+- `MockAiProvider` does **not** use `Math.random` / wall-clock for content.
+- Optional `AI_MOCK_SEED` (or `createAiProvider({ mockSeed })`) only selects a deterministic hash lane.
+- Identical seed + inputs → identical scripts, hooks, STT segments, clip scores, timelines, pack copy.
+- Offline judge path: keep `AI_PROVIDER=mock` — see `docs/demo/offline-fallbacks.md`.
 
 ## Setup
 
 ```bash
 # root .env
 AI_PROVIDER=mock
+# AI_MOCK_SEED=creatorai-demo
 # AI_PROVIDER=openai
 # OPENAI_API_KEY=sk-...
 # OPENAI_MODEL=gpt-4o-mini

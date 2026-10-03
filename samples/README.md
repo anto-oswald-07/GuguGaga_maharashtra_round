@@ -9,19 +9,23 @@ Sample content for local demos and judge walkthroughs. Keep footage short so tra
 | Ideal footage length | **Under 3 minutes** for demos |
 | Example topic | “How I batch-create Reels in one afternoon” |
 | Script fixture | `samples/scripts/sample_script.md` |
+| Project fixture | `samples/projects/demo-project.json` |
 | Dummy video | Generate via `./scripts/media/make-dummy-video.sh` → `storage/samples/dummy.mp4` (do **not** commit binaries) |
+| Judge click-script | `docs/demo/judge-script.md` (Phase 10) |
+| Demo seed | `pnpm --filter @creatorai/ai-provider exec tsx ../../scripts/demo/seed-demo.ts` |
+| Offline fallbacks | `docs/demo/offline-fallbacks.md` |
 
 ## What’s in this folder
 
-- `scripts/sample_script.md` — Hook / Body / CTA script used by Mock AI and golden-path demos (Phase 5+)
+- `scripts/sample_script.md` — Hook / Body / CTA script used by Mock AI and golden-path demos
+- `projects/demo-project.json` — title / platforms / paths for seed + judge prep
 
 ## How to use in a demo
 
-1. Register/login (Phase 2).
-2. Create a project aimed at Reels / Shorts.
-3. Paste or load the sample script text.
-4. Attach short footage (dummy MP4 or your own < 3 min clip).
-5. Walk Script → Mapping → Clips → Timeline → Platform Packs.
+1. Ensure `AI_PROVIDER=mock` (deterministic; optional `AI_MOCK_SEED`).
+2. `pnpm --filter @creatorai/ai-provider exec tsx ../../scripts/demo/seed-demo.ts` (user + project + footage + sample script).
+3. Login `demo@creatorai.local` / `password123`.
+4. Walk Script → Mapping → Clips → Timeline → Platform Packs per `docs/demo/judge-script.md`.
 
 ## Notes
 
