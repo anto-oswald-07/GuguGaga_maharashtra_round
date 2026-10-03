@@ -399,6 +399,30 @@ Copy-paste this template every time:
 - **Needs from others:** Integration — reconcile proposed types vs Anto Zod; note Phase 1 flat `ApiError` vs SDD nested `{ error: { code, message, details } }`
 - **Risks:** Live curl cannot fully pass until Phase 2 B lands
 
+### [2026-10-03 13:04] ROLE=D NAME=Cyrus Selvaraj PHASE=3 TYPE=START
+- **Summary:** Prior Dev D phases verified on `main` (Phase 1 media scripts + Phase 2 security/password helpers merged). Starting Phase 3 Dev D — thumbnail generation.
+- **Files touched:** branch `phase-03-cyrus` from `main`
+- **APIs / types added:** None yet
+- **How to run / test what I did:** `git checkout phase-03-cyrus`
+- **Depends on:** FFmpeg; `storage/samples/dummy.mp4` (generate via Phase 1 script); worker package skeleton from Phase 1
+- **Needs from others:** None to start (`services/worker/src/media` did not exist)
+- **Risks:** None
+
+### [2026-10-03 13:06] ROLE=D NAME=Cyrus Selvaraj PHASE=3 TYPE=DONE
+- **Summary:** Phase 3 Dev D complete — mid-frame JPEG thumbnail helper + shell wrapper; derivative path documented in ffmpeg notes; smoked on dummy.mp4.
+- **Files touched:** `services/worker/src/media/thumbnail.ts`, `scripts/media/generate-thumb.sh`, `docs/ffmpeg-notes.md`, `context.md`
+- **APIs / types added:** `generateThumbnail`, `probeDurationSeconds` (+ options/result types) in worker media module
+- **How to run / test what I did:**
+  ```bash
+  ./scripts/media/make-dummy-video.sh   # if needed
+  ./scripts/media/generate-thumb.sh
+  # → storage/samples/dummy-thumb.jpg (JPEG 640x360 @ seek 2.5s). Do NOT git add.
+  file storage/samples/dummy-thumb.jpg
+  ```
+- **Depends on:** `ffmpeg` + `ffprobe` on PATH
+- **Needs from others:** Integration / Anto — call `generateThumbnail` after video upload into `storage/workspaces/{workspaceId}/derivatives/{assetId}/thumb.jpg`
+- **Risks:** None for Phase 3 D scope
+
 ---
 
 ## 6. Phase Completion Blocks (paste at end of your phase)
@@ -525,6 +549,23 @@ _(Template above kept for other developers.)_
   - `packages/shared/src/validation/password.ts` → Anto register validation
   - `docs/security/auth-checklist.md` → Integration verify (JWT secret, no token logging, min-8)
 - **Notes for next phase me:** Phase 3 = thumbnail FFmpeg helper (`services/worker/src/media/thumbnail.ts` + shell script)
+
+## Phase 3 Completion — Cyrus Selvaraj (Dev D)
+- **Date:** 2026-10-03
+- **Branch:** phase-03-cyrus
+- **All allowed tasks done:** yes
+- **Incomplete items:** none
+- **Blockers handed to Integration:** Wire thumbnail after video upload (sync OK for MVP); keep generated thumbs under `storage/` gitignored
+- **Commands to verify my work:**
+  ```bash
+  ./scripts/media/generate-thumb.sh
+  file storage/samples/dummy-thumb.jpg
+  ```
+- **Files I expect others to connect to:**
+  - `services/worker/src/media/thumbnail.ts` → Assets upload / EXTRACT_METADATA+thumb jobs
+  - `scripts/media/generate-thumb.sh` → manual smoke
+  - `docs/ffmpeg-notes.md` §5 derivative path convention
+- **Notes for next phase me:** Phase 4 = sample project seed fixtures + golden-path prep doc
 
 ---
 
