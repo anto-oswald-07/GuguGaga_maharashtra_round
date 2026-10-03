@@ -1,10 +1,5 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { ProjectList } from "@/components/projects/ProjectList";
 
 export default function ProjectsPage() {
-  return (
-    <ComingSoon
-      title="Projects"
-      description="Coming soon — project list."
-    />
-  );
+  return <ProjectList />;
 }

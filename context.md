@@ -1060,3 +1060,52 @@ _(Template above kept for other developers.)_
   - `POST/GET/PATCH /api/v1/projects*` (+ `/stage`, `/assets`, `/stage-history`)
   - Prisma `Project`, `ProjectAsset`, `StageEvent`
 - **Notes for next phase me:** Phase 5 = Scripts API + Jobs table; projects already workspace-scoped
+
+### [2026-10-03 19:45] ROLE=A NAME=Brendan Rodrigues PHASE=4 TYPE=START
+- **Summary:** Synced `main` (fast-forward to `8d31618` — Phase 4 B Anto + Phase 4 C Arvin already merged). Created branch `phase-04-brendan`. Starting Projects UI + Kanban.
+- **Files touched:** (branch only) `context.md`
+- **APIs / types added:** none yet
+- **How to run / test what I did:** `git checkout phase-04-brendan`
+- **Depends on:** Anto Projects API (`{ items }` + `assetIds`); Arvin stage order/labels in `docs/workflow/stages.md`
+- **Needs from others:** Integration should fix `packages/shared/src/index.ts` — missing `export {` before projects re-exports → `@creatorai/shared` `tsc` fails on main
+- **Risks:** Phase 4 A allowed paths omit `lib/api.ts`; will keep project fetch helpers under `components/projects/`
+
+### [2026-10-03 19:49] ROLE=A NAME=Brendan Rodrigues PHASE=4 TYPE=DONE
+- **Summary:** Phase 4 Dev A complete — project list/create, detail Overview (stage move + attach/detach assets + history), Kanban `/workflow` with stage columns and ←→ move buttons.
+- **Files touched:**
+  - `apps/web/src/app/projects/page.tsx`, `apps/web/src/app/projects/[id]/page.tsx`, `apps/web/src/app/workflow/page.tsx`
+  - `apps/web/src/components/projects/**` (list, create, detail, stage controls, attach panel, constants, project-api)
+  - `apps/web/src/components/workflow/**` (KanbanBoard, KanbanColumn, KanbanCard)
+  - `context.md`
+- **APIs / types added (client-side only):**
+  - Local `TODO_SHARED` enums: `PROJECT_STAGES`, `PLATFORMS` (+ labels) matching shared/SDD names
+  - Client helpers via `apiFetch`: list/create/get project, stage transition, attach/detach assets, stage-history
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter api prisma:migrate
+  pnpm --filter api dev
+  pnpm --filter web dev
+  # login → /projects create → open detail → move stage + attach asset → /workflow move cards
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web exec eslint src/components/projects src/components/workflow src/app/projects src/app/workflow
+  ```
+- **Depends on:** API running with Phase 4 projects migration; JWT auth; assets for attach
+- **Needs from others:** Integration — fix shared `index.ts` export syntax; optional later wire web → `@creatorai/shared`
+- **Risks:** Did not edit `lib/api.ts` (outside Phase 4 A paths); project client lives in `components/projects/project-api.ts`
+
+## Phase 4 Completion — Brendan Rodrigues (Dev A)
+- **Date:** 2026-10-03
+- **Branch:** phase-04-brendan
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (drag-and-drop skipped; buttons OK for MVP)
+- **Blockers handed to Integration:** `packages/shared/src/index.ts` broken re-export of `./projects` (syntax); web uses local stage/platform constants (`TODO_SHARED`)
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web dev
+  # Manual: create project, filter/search, open Overview, move stage, attach asset, check /workflow columns
+  ```
+- **Files I expect others to connect to:**
+  - `/projects`, `/projects/[id]`, `/workflow` UI
+  - Anto: same REST shapes already documented
+- **Notes for next phase me:** Phase 5 Script tab — extend `lib/api.ts` (allowed then) or keep pattern; replace `TODO_SHARED` constants when shared package builds clean
