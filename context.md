@@ -974,3 +974,89 @@ _(Template above kept for other developers.)_
 - **Depends on:** none (pure shared package)
 - **Needs from others:** Anto — Prisma enum exact names; Brendan — import shared stages for Kanban
 - **Risks:** None for Phase 4 C scope
+### [2026-10-03 19:37] ROLE=B NAME=Anto Oswald PHASE=4 TYPE=START
+- **Summary:** Started Phase 4 Dev B on `phase-04-anto` — Projects API + StageEvents + shared ProjectStage/Platform DTOs.
+- **Files touched:** (branch `phase-04-anto` created from `main` after Phase 3 Integration)
+- **APIs / types added:** Planned SDD §5.3 — POST/GET/PATCH `/projects`, stage transition, attach/detach assets, stage-history; filter list by `stage`
+- **How to run / test what I did:** `git checkout phase-04-anto`
+- **Depends on:** Phase 2 auth (`requireAuth` + `workspaceId`); Phase 3 Asset model for attach validation
+- **Needs from others:** Brendan — Projects UI + Kanban against these endpoints; Arvin — workflow helpers should match SDD stage enum names exactly
+- **Risks:** Soft-delete semantics for projects (NFR-007); detach not in SDD table but required by plan — will add DELETE `/projects/:id/assets`
+
+### [2026-10-03 19:40] ROLE=B NAME=Anto Oswald PHASE=4 TYPE=PROGRESS
+- **Summary:** Implemented Project/ProjectAsset/StageEvent Prisma models, shared Zod project DTOs + ProjectStage/Platform enums, and full projects REST module (CRUD, stage transition + history, attach/detach assets, list filter by stage).
+- **Files touched:**
+  - `packages/shared/src/projects.ts`, `packages/shared/src/index.ts`
+  - `services/api/prisma/schema.prisma`, `services/api/prisma/migrations/20261003140857_phase4_projects/**`
+  - `services/api/src/modules/projects/{routes,service}.ts`, `services/api/src/index.ts`
+  - `context.md`
+- **APIs / types added:**
+  - `POST /api/v1/projects` body `{ title, description?, targetPlatforms? }` → ProjectDto 201 (stage=`IDEA`, initial StageEvent recorded)
+  - `GET /api/v1/projects?stage=&q=` → `{ items: ProjectDto[] }`
+  - `GET /api/v1/projects/:id` → ProjectDto (includes `assetIds`)
+  - `PATCH /api/v1/projects/:id` body `{ title?, description?, targetPlatforms? }`
+  - `POST /api/v1/projects/:id/stage` body `{ stage }` — any forward/back allowed; writes StageEvent
+  - `POST /api/v1/projects/:id/assets` body `{ assetIds: uuid[] }` — attach (workspace-owned, non-deleted)
+  - `DELETE /api/v1/projects/:id/assets` body `{ assetIds: uuid[] }` — detach (plan requires detach; not in SDD table)
+  - `GET /api/v1/projects/:id/stage-history` → `{ items: StageEventDto[] }`
+  - Shared: `projectStageSchema`, `platformSchema`, `PROJECT_STAGES`, `PLATFORMS`, create/update/list/transition/attach schemas, `ProjectDto`, `StageEventDto`
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter api prisma:migrate   # applies phase4_projects
+  pnpm --filter api dev
+  # register/login → TOKEN
+  curl -X POST localhost:4000/api/v1/projects -H "Authorization: Bearer TOKEN" \
+    -H 'content-type: application/json' \
+    -d '{"title":"Demo","targetPlatforms":["TIKTOK","YOUTUBE_SHORTS"]}'
+  curl "localhost:4000/api/v1/projects?stage=IDEA" -H "Authorization: Bearer TOKEN"
+  curl -X POST localhost:4000/api/v1/projects/PROJECT_ID/stage -H "Authorization: Bearer TOKEN" \
+    -H 'content-type: application/json' -d '{"stage":"SCRIPT"}'
+  curl localhost:4000/api/v1/projects/PROJECT_ID/stage-history -H "Authorization: Bearer TOKEN"
+  curl -X POST localhost:4000/api/v1/projects/PROJECT_ID/assets -H "Authorization: Bearer TOKEN" \
+    -H 'content-type: application/json' -d '{"assetIds":["ASSET_ID"]}'
+  curl -X DELETE localhost:4000/api/v1/projects/PROJECT_ID/assets -H "Authorization: Bearer TOKEN" \
+    -H 'content-type: application/json' -d '{"assetIds":["ASSET_ID"]}'
+  ```
+- **Depends on:** Auth JWT `workspaceId`; Asset rows for attach
+- **Needs from others:** Brendan — Projects UI + Kanban against `{ items }` list envelope + `assetIds`; Arvin — stage helpers must use identical enum names (`IDEA`…`PUBLISHED`)
+- **Risks:** Soft-delete field on Project exists but no DELETE project route yet (NFR-007 can wire later); detach is extra vs SDD §5.3 table
+
+### [2026-10-03 19:41] ROLE=B NAME=Anto Oswald PHASE=4 TYPE=DONE
+- **Summary:** Phase 4 Dev B complete — Projects API + stage history + attach/detach verified via curl (create, filter by stage, forward/back transitions, history events, asset attach/detach, validation 400/404).
+- **Files touched:** Same as PROGRESS + this completion block
+- **APIs / types added:** (unchanged from PROGRESS)
+- **How to run / test what I did:** See PROGRESS + Phase Completion block below
+- **Depends on:** Postgres on `DATABASE_URL`; auth token; at least one asset for attach path
+- **Needs from others:** Brendan UI; Arvin workflow helpers matching enum names; Cyrus seed fixtures can target these endpoints at Integration
+- **Risks:** None remaining for Phase 4 B scope
+
+## Phase 4 Completion — Anto Oswald (Dev B)
+- **Date:** 2026-10-03
+- **Branch:** phase-04-anto
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (project soft-delete endpoint optional / not in SDD §5.3)
+- **Blockers handed to Integration:** Confirm Brendan uses `{ items }` + `assetIds`; note `DELETE /projects/:id/assets` for detach
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter api prisma:migrate
+  pnpm --filter api dev
+  curl -X POST localhost:4000/api/v1/auth/register -H 'content-type: application/json' \
+    -d '{"email":"p4@b.com","password":"password123","name":"P4"}'
+  # TOKEN from response:
+  curl -X POST localhost:4000/api/v1/projects -H "Authorization: Bearer TOKEN" \
+    -H 'content-type: application/json' \
+    -d '{"title":"Demo Reel","description":"x","targetPlatforms":["TIKTOK"]}'
+  curl "localhost:4000/api/v1/projects?stage=IDEA" -H "Authorization: Bearer TOKEN"
+  curl -X POST localhost:4000/api/v1/projects/PROJECT_ID/stage -H "Authorization: Bearer TOKEN" \
+    -H 'content-type: application/json' -d '{"stage":"SCRIPT"}'
+  curl localhost:4000/api/v1/projects/PROJECT_ID/stage-history -H "Authorization: Bearer TOKEN"
+  curl -X POST localhost:4000/api/v1/projects/PROJECT_ID/assets -H "Authorization: Bearer TOKEN" \
+    -H 'content-type: application/json' -d '{"assetIds":["ASSET_ID"]}'
+  ```
+- **Files I expect others to connect to:**
+  - `@creatorai/shared` `ProjectStage` / `Platform` / `ProjectDto` / Zod schemas
+  - `POST/GET/PATCH /api/v1/projects*` (+ `/stage`, `/assets`, `/stage-history`)
+  - Prisma `Project`, `ProjectAsset`, `StageEvent`
+- **Notes for next phase me:** Phase 5 = Scripts API + Jobs table; projects already workspace-scoped

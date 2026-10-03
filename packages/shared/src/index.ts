@@ -47,6 +47,32 @@ export {
   isProjectStage,
   type ProjectStage,
 } from './workflow';
+  PROJECT_STAGES,
+  platformSchema,
+  PLATFORMS,
+  projectSchema,
+  createProjectRequestSchema,
+  updateProjectRequestSchema,
+  projectListQuerySchema,
+  projectListResponseSchema,
+  transitionStageRequestSchema,
+  attachAssetsRequestSchema,
+  detachAssetsRequestSchema,
+  stageEventSchema,
+  stageHistoryResponseSchema,
+  type ProjectStage,
+  type Platform,
+  type ProjectDto,
+  type CreateProjectRequest,
+  type UpdateProjectRequest,
+  type ProjectListQuery,
+  type ProjectListResponse,
+  type TransitionStageRequest,
+  type AttachAssetsRequest,
+  type DetachAssetsRequest,
+  type StageEventDto,
+  type StageHistoryResponse,
+} from './projects';
 
 /** Response shape for `GET /api/v1/health`. */
 export type HealthResponse = {
