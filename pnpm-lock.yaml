@@ -102,6 +102,10 @@ importers:
         version: 5.9.3
 
   services/worker:
+    dependencies:
+      '@creatorai/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
     devDependencies:
       '@types/node':
         specifier: ^22.10.7
