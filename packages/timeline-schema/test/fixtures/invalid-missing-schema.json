@@ -1,0 +1,19 @@
+{
+  "fps": 30,
+  "durationMs": 2000,
+  "tracks": [
+    {
+      "id": "v1",
+      "type": "video",
+      "clips": [
+        {
+          "id": "c1",
+          "assetId": "dummy-asset",
+          "srcStartMs": 0,
+          "srcEndMs": 2000,
+          "timelineStartMs": 0
+        }
+      ]
+    }
+  ]
+}

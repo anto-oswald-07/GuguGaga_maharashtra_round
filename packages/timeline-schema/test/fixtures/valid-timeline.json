@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0",
+  "fps": 30,
+  "durationMs": 2000,
+  "tracks": [
+    {
+      "id": "v1",
+      "type": "video",
+      "clips": [
+        {
+          "id": "c1",
+          "assetId": "dummy-asset",
+          "srcStartMs": 1000,
+          "srcEndMs": 3000,
+          "timelineStartMs": 0
+        }
+      ]
+    },
+    {
+      "id": "t1",
+      "type": "text",
+      "items": [
+        {
+          "id": "tx1",
+          "text": "HOOK HERE",
+          "startMs": 0,
+          "endMs": 2000,
+          "style": { "position": "bottom", "fontSize": 48 }
+        }
+      ]
+    },
+    {
+      "id": "cap1",
+      "type": "captions",
+      "items": [
+        {
+          "id": "s1",
+          "text": "Hello creators",
+          "startMs": 0,
+          "endMs": 1800
+        }
+      ]
+    }
+  ],
+  "transitions": [],
+  "meta": { "generatedBy": "ai", "prompt": "demo batch reels" }
+}

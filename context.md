@@ -735,6 +735,29 @@ _(Template above kept for other developers.)_
   - `docs/ffmpeg-notes.md` §7 re-encode decision
 - **Notes for next phase me:** Phase 8 D = `packages/timeline-schema` + FFmpeg timeline renderer
 
+## Phase 8 Completion — Cyrus Selvaraj (Dev D)
+- **Date:** 2026-10-03
+- **Branch:** phase-08-cyrus
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (Anto Timelines API validation + Brendan editor Apply + Integration wiring RENDER_TIMELINE are peers)
+- **Blockers handed to Integration:** Call `assertValidTimeline` / `safeParseTimeline` before persist; wire `processRenderTimelineJob` for RENDER_TIMELINE with `assetPaths` map; consume `output.outputPath` (+ optional `.srt`)
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/timeline-schema test
+  ./scripts/media/make-dummy-video.sh   # if needed
+  pnpm --filter worker render-timeline -- \
+    --timeline packages/timeline-schema/test/fixtures/valid-timeline.json \
+    --asset dummy-asset=storage/samples/dummy.mp4 \
+    --output storage/samples/dummy-timeline.mp4
+  ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 storage/samples/dummy-timeline.mp4
+  ```
+- **Files I expect others to connect to:**
+  - `@creatorai/timeline-schema` → Anto API + Arvin soft peer assert
+  - `services/worker/src/media/renderTimeline.ts` → preview render
+  - `services/worker/src/consumers/renderTimeline.ts` → RENDER_TIMELINE job
+  - `docs/timeline-notes.md` (FINAL)
+- **Notes for next phase me:** Phase 8 Integration Lead = me; Phase 9 D = aspect ratio adaptation FFmpeg
+
 ## Phase 3 Completion — Brendan Rodrigues (Dev A)
 - **Date:** 2026-10-03
 - **Branch:** phase-03-brendan
@@ -909,6 +932,7 @@ _(Template above kept for other developers.)_
 | Script prompts + Zod | Done Phase 5 (Cyrus) | `docs/ai/prompts/**` + `packages/shared/src/schemas/scriptSchema.ts` |
 | STT audio extract | Done Phase 6 (Cyrus) | `extractAudio.ts` + `extract-audio.sh` (16 kHz mono WAV) |
 | Clip cut RENDER | Done Phase 7 (Cyrus) | `cutClip.ts` + `renderClip.ts` + `cut-clip.sh` (re-encode default) |
+| Timeline schema + render | Done Phase 8 (Cyrus) | `@creatorai/timeline-schema` + `renderTimeline.ts` (drawtext + softsubs) |
 | Golden path judge script | Planned Phase 10 (Arvin) | `docs/demo/judge-script.md` |
 | Emergency pre-rendered clip | Planned Phase 10 (Cyrus) | |
 
@@ -1995,3 +2019,21 @@ _(Template above kept for other developers.)_
 - **Depends on:** timeline-notes / SDD contract
 - **Needs from others:** Anto/Brendan/Cyrus Phase 8 peers
 - **Risks:** Soft schema until Cyrus package ships
+
+### [2026-10-03 16:48] ROLE=D NAME=Cyrus Selvaraj PHASE=8 TYPE=START
+- **Summary:** Prior Dev D phases verified on `main` (P1–P7). Phase 8 C (proposeTimeline) merged; implementing Phase 8 D — `packages/timeline-schema` + FFmpeg timeline renderer.
+- **Files touched:** branch `phase-08-cyrus` from `origin/main` (later FF to include Arvin #43)
+- **APIs / types added:** None yet
+- **How to run / test what I did:** `git checkout phase-08-cyrus`
+- **Depends on:** SDD §4.3 + `docs/timeline-notes.md`; Arvin EditTimeline shape
+- **Needs from others:** Anto Timelines API; Brendan editor; Integration wires RENDER_TIMELINE
+- **Risks:** WSL/Windows npm path quirks for local smoke
+
+### [2026-10-03 17:03] ROLE=D NAME=Cyrus Selvaraj PHASE=8 TYPE=DONE
+- **Summary:** Shipped `@creatorai/timeline-schema` (Zod schemaVersion 1.0 + `assertValidTimeline`, 7 tests) + `renderTimeline.ts` / `renderTimeline` consumer (video concat + drawtext + softsubs SRT). Docs FINAL. Smoke: valid-timeline.json + dummy.mp4 → 2.000s MP4 + SRT.
+- **Files touched:** `packages/timeline-schema/**`, `services/worker/src/media/renderTimeline.ts`, `services/worker/src/consumers/renderTimeline.ts`, `services/worker/package.json`, `services/worker/src/index.ts`, `docs/timeline-notes.md`, `context.md`
+- **APIs / types added:** `EditTimeline` Zod + `assertValidTimeline` / `safeParseTimeline`; `processRenderTimelineJob` / `renderTimeline` / `renderTimelinePath`
+- **How to run / test what I did:** see Phase 8 Completion — Cyrus commands
+- **Depends on:** dummy.mp4 audio stream; `assetPaths` map from Integration
+- **Needs from others:** Anto validate on write; Brendan Apply; wire RENDER_TIMELINE job type
+- **Risks:** MVP concat ignores timeline gaps; drawtext needs a working ffmpeg fontconfig
