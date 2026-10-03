@@ -735,7 +735,7 @@ export async function loadTimelineGenerateContext(
             endMs: m.endMs,
             title: m.scriptRef.slice(0, 80),
           }))
-        : [{ startMs: 0, endMs: 15_000, title: 'Intro' }];
+        : [{ startMs: 0, endMs: 5_000, title: 'Intro' }];
 
   return {
     hook,
@@ -750,5 +750,73 @@ export async function loadTimelineGenerateContext(
       endMs: m.endMs,
       confidence: m.confidence,
     })),
+  };
+}
+
+/**
+ * Load applied timeline JSON + resolve assetId → absolute media paths
+ * for RENDER_TIMELINE (Cyrus renderTimeline).
+ */
+export async function loadTimelineRenderContext(
+  workspaceId: string,
+  timelineId: string,
+): Promise<{
+  timeline: EditTimelineJson;
+  versionId: string;
+  assetPaths: Record<string, string>;
+}> {
+  const row = await findOwnedTimeline(workspaceId, timelineId);
+  if (!row.currentVersionId || !row.currentVersion) {
+    throw new TimelinesHttpError(
+      400,
+      'validation_error',
+      'No applied timeline version — Apply a proposal (PUT) before render',
+    );
+  }
+
+  const timeline = parseTimelineContent(row.currentVersion.content);
+  const assetIds = new Set<string>();
+  for (const track of timeline.tracks) {
+    if (track.type === 'video') {
+      for (const clip of track.clips) {
+        assetIds.add(clip.assetId);
+      }
+    }
+  }
+  if (assetIds.size === 0) {
+    throw new TimelinesHttpError(
+      400,
+      'validation_error',
+      'Timeline has no video clips to render',
+    );
+  }
+
+  const assets = await prisma.asset.findMany({
+    where: {
+      id: { in: [...assetIds] },
+      workspaceId,
+      deletedAt: null,
+    },
+    select: { id: true, path: true },
+  });
+  if (assets.length !== assetIds.size) {
+    const found = new Set(assets.map((a) => a.id));
+    const missing = [...assetIds].filter((id) => !found.has(id));
+    throw new TimelinesHttpError(
+      404,
+      'not_found',
+      `Source asset(s) not found: ${missing.join(', ')}`,
+    );
+  }
+
+  const assetPaths: Record<string, string> = {};
+  for (const a of assets) {
+    assetPaths[a.id] = storage.absoluteFromRelative(a.path);
+  }
+
+  return {
+    timeline,
+    versionId: row.currentVersionId,
+    assetPaths,
   };
 }

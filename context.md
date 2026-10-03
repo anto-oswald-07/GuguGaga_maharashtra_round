@@ -28,15 +28,15 @@
 
 | Field | Value |
 |-------|-------|
-| **Current phase** | Phase 8 in progress — Dev C (`proposeTimeline`) done; A/B/D + Integration pending |
-| **Last completed tag** | `phase-1-done` (local only); Phase 2–7 Integration recorded in context — **no git tags this session** |
-| **main status** | Auth + Assets + Projects + Scripts/Jobs + Transcript/Mapping + Clips (propose/accept/render) end-to-end |
+| **Current phase** | Phase 8 Integration COMPLETE — Timelines (propose → Apply → edit → save → render) E2E |
+| **Last completed tag** | `phase-1-done` (local only); Phase 2–8 Integration recorded in context — **no git tags this session** |
+| **main status** | Auth + Assets + Projects + Scripts/Jobs + Transcript/Mapping + Clips + **Timelines** (generate/apply/render) end-to-end |
 | **Package manager** | **pnpm** workspaces (final) |
 | **Queue decision** | **DB-polling queue for MVP**; API in-process poller (`startJobPoller`) claims `QUEUED` jobs; Redis optional (`--profile redis`) for later BullMQ |
 | **Default AI provider** | `mock` until keys available (`AI_PROVIDER=mock\|openai\|gemini`) |
 | **API base URL (local)** | `http://localhost:4000/api/v1` |
 | **Web app (local)** | `http://localhost:3002` (or `:3000` if free) |
-| **Who is Integration Lead next** | Cyrus (Phase 8) |
+| **Who is Integration Lead next** | Anto (Phase 9) |
 
 ### 2.1 What Already Works
 - `pnpm install` at root (workspace: web, api, worker, shared, ai-provider)
@@ -51,8 +51,14 @@
   - SCORE_CLIPS → `AiProvider.scoreClipWindows` → persist `ClipCandidate` (3 ranked 15–60s windows)
   - RENDER_CLIP → `cutClip` (ffmpeg re-encode or copy fallback) → Asset + `status=rendered`
   - Web Clips tab: Propose → table → tweak/accept/reject → Render → preview/link
-- Web: login/register, asset library, `/projects` (Script + Footage & Mapping + Clips), `/workflow` Kanban
-- Shared: auth/assets/projects/scripts/jobs/mapping/clips Zod + `LOW_CONFIDENCE_THRESHOLD`
+- **Timelines (Phase 8):** `POST .../timelines/generate`, `GET/PUT /timelines/:id`, `POST /timelines/:id/render`
+  - GENERATE_TIMELINE → `AiProvider.proposeTimeline` → `TimelineVersion` `source=ai_proposal` (not applied)
+  - Apply = PUT `{ timeline }` → new USER version + sets `currentVersionId`
+  - RENDER_TIMELINE → worker `renderTimeline` (ffmpeg concat + drawtext; mock-copy fallback) → preview Asset
+  - Web editor `/projects/:id/editor`: Suggest → Apply → edit → Save → Render preview
+  - Package `@creatorai/timeline-schema` + shared `editTimelineJsonSchema` reject invalid puts
+- Web: login/register, asset library, `/projects` (Script + Footage & Mapping + Clips + Editor), `/workflow` Kanban
+- Shared: auth/assets/projects/scripts/jobs/mapping/clips/timelines Zod + `LOW_CONFIDENCE_THRESHOLD`
 - Seed: `scripts/seed/sample-project.ts` auto login/register `demo@creatorai.local` / `password123`
 - Postgres via compose (`POSTGRES_HOST_PORT`, default 5432; use 5433 if host busy)
 - Sample media: `storage/samples/dummy.mp4`; STT fixtures under `packages/ai-provider/test/fixtures`
@@ -60,27 +66,29 @@
 
 ### 2.2 Known Broken / Gaps
 - Host `:5432` often occupied — set `POSTGRES_HOST_PORT=5433` + matching `DATABASE_URL` (see `.env.example`).
-- This laptop has no ffmpeg/ffprobe → metadata mock / thumbs placeholder; TRANSCRIBE skips extractAudio; RENDER_CLIP **copies** source into `renders/{jobId}/output.mp4` (Asset still created; boundaries not actually cut).
+- ffmpeg is present on this host (`/usr/bin/ffmpeg`) — Phase 8 RENDER_TIMELINE smoked with `mode=ffmpeg`. Older Phase 7 notes about copy-fallback may still apply if ffmpeg fails for a given cut.
 - OpenAI Whisper / live LLM paths untested without API keys.
 - Re-align replaces prior maps for the same script+transcript pair (including USER edits).
 - Re-propose deletes prior **proposed** clip rows only (keeps accepted/rejected/rendered).
+- Timeline generate without accepted clips defaults to a short Intro window (5s) so short `dummy.mp4` still renders.
 - Next.js `/projects` can hang under load — restart web on `:3002` if needed.
-- Git tags `phase-2-done` … `phase-7-done` not created unless requested.
+- Git tags `phase-2-done` … `phase-8-done` not created unless requested.
 
 ### 2.3 Active Blockers
 - None.
 
 ### 2.4 Open NEED Items (from developers)
-- None open for Phase 7.
+- None open for Phase 8.
 
 ### 2.5 Important Paths That Exist
 ```
 /
-├── apps/web/              # /projects (Script + Mapping + Clips), /workflow
-├── services/api/          # auth + assets + projects + scripts + jobs + mapping + clips
-├── services/worker/       # extractMetadata, thumbnail, extractAudio, cutClip, STT/align/scoreClips/generateTimeline CLIs
-├── packages/shared/       # Zod DTOs incl. mapping + clips
+├── apps/web/              # /projects (Script + Mapping + Clips + Editor), /workflow
+├── services/api/          # auth + assets + projects + scripts + jobs + mapping + clips + timelines
+├── services/worker/       # extractMetadata, thumbnail, extractAudio, cutClip, renderTimeline, STT/align/scoreClips/generateTimeline CLIs
+├── packages/shared/       # Zod DTOs incl. mapping + clips + timelines
 ├── packages/ai-provider/  # mock+Whisper STT, fuzzy align, clip scoring, proposeTimeline
+├── packages/timeline-schema/  # EditTimeline schemaVersion 1.0 + assertValidTimeline
 ├── samples/scripts/sample_script.md
 ├── samples/projects/demo-project.json
 ├── scripts/seed/sample-project.ts
@@ -2037,3 +2045,57 @@ _(Template above kept for other developers.)_
 - **Depends on:** dummy.mp4 audio stream; `assetPaths` map from Integration
 - **Needs from others:** Anto validate on write; Brendan Apply; wire RENDER_TIMELINE job type
 - **Risks:** MVP concat ignores timeline gaps; drawtext needs a working ffmpeg fontconfig
+
+### [2026-10-03 22:45] ROLE=INTEGRATION NAME=Cyrus Selvaraj (via Arvin session) PHASE=8 TYPE=START
+- **Summary:** Resuming Phase 8 Integration after usage-limit interrupt. A/B/C/D deliverables present on branch; wiring gaps were RENDER_TIMELINE mock-copy, GENERATE missing `sourceAssetId`/`acceptedClips`, web PUT body mismatch, unapplied timelines migration.
+- **Files touched:** (in progress)
+- **Depends on:** Phase 8 A–D already merged/present
+- **Needs from others:** None
+- **Risks:** Short `dummy.mp4` vs long default clip windows
+
+### Chronological — 2026-10-03 22:45 (Phase 8 Integration)
+- **Summary:** Wired real `renderTimeline` into API job poller; GENERATE passes `sourceAssetId` + `acceptedClips`; web `saveTimeline` sends `{ timeline }`; applied `20261003164500_phase8_timelines`; E2E PASS (ffmpeg render).
+- **Files touched:**
+  - `services/api/src/modules/jobs/service.ts` (GENERATE sourceAssetId/acceptedClips + timeline in output; RENDER_TIMELINE → worker renderTimeline)
+  - `services/api/src/modules/timelines/service.ts` (`loadTimelineRenderContext`; default Intro 5s)
+  - `packages/shared/src/timelines.ts` (optional video clip `label`)
+  - `apps/web/src/lib/api.ts` (`saveTimeline` body wrap; `pendingProposal` on document)
+  - `apps/web/src/components/editor/TimelineEditor.tsx` (pendingProposal fallback)
+  - `DEVELOPMENT_PLAN.md` (Phase 8 Integration verify checkboxes)
+  - `context.md`
+- **How to run / test what I did:** see INTEGRATION COMPLETE — Phase 8
+- **Depends on:** ffmpeg for true render (available); Postgres :5433
+- **Needs from others:** None for Phase 8
+- **Risks:** Caption timing MVP; timeline gaps ignored by renderer
+
+## INTEGRATION COMPLETE — Phase 8
+- **Date:** 2026-10-03
+- **Lead:** Cyrus (plan Lead=Cyrus; work continued on `Arvin` branch after usage-limit interrupt)
+- **Verified:**
+  - [x] AI propose → Apply → edit text → save → render preview plays
+  - [x] Timeline versions list grows (proposal 1 → Apply 2 → Save 3)
+  - [x] Invalid timeline rejected by API validation (`schemaVersion` must be `"1.0"`)
+- **What was wired / fixed:**
+  - Applied Prisma `EditTimeline` / `TimelineVersion` migration
+  - GENERATE_TIMELINE → `proposeTimeline({ sourceAssetId, acceptedClips, alignments, script })` + full timeline JSON in job output
+  - RENDER_TIMELINE → `loadTimelineRenderContext` + worker `renderTimeline` (ffmpeg; mock-copy fallback)
+  - Web PUT body `{ timeline }` (was sending bare JSON — 400)
+  - Shared optional clip `label`; default Intro window 5s for short media
+- **Commands to re-verify:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter @creatorai/timeline-schema test
+  pnpm --filter @creatorai/ai-provider test
+  AI_PROVIDER=mock pnpm --filter worker generate-timeline -- --fixture
+  # API + web:
+  pnpm --filter api dev   # job poller
+  pnpm --filter web exec next dev -p 3002
+  # E2E API: register → project → upload dummy.mp4 → attach → scripts/generate → timelines/generate
+  #   → PUT apply (edit text) → PUT save → POST render → GET /assets/:id/content
+  # UI: /projects/:id/editor → Suggest → Apply → edit → Save → Render
+  ```
+- **E2E smoke (2026-10-03 22:45):** PASS — GENERATE_TIMELINE provider=mock hook 0–3000ms → versions 1→2→3 → invalid PUT 400 → RENDER_TIMELINE `mode=ffmpeg` Asset content **115290** bytes video/mp4
+- **Known gaps / follow-ups:**
+  - Renderer MVP concat ignores timeline gaps; drawtext needs fontconfig
+  - Propose without accepted clips uses 5s Intro (safe for `dummy.mp4`)
+- **Ready for Phase 9:** yes (Anto Integration Lead)

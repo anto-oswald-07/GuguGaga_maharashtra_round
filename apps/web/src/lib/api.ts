@@ -884,6 +884,9 @@ export type TimelineDocument = {
   projectId: string;
   /** Current working JSON (may also live on latest non-proposal version). */
   content: TimelineJson | null;
+  /** Latest AI proposal JSON (not applied until PUT). */
+  pendingProposal?: TimelineJson | null;
+  pendingProposalVersionId?: string | null;
   versions: TimelineVersionDto[];
   createdAt?: string;
   updatedAt?: string;
@@ -1031,10 +1034,20 @@ function normalizeTimelineDocument(raw: unknown): TimelineDocument {
     const latest = [...pick].sort((a, b) => b.version - a.version)[0];
     content = latest?.content ?? null;
   }
+  const pendingRaw = r.pendingProposal;
+  const pendingProposal =
+    pendingRaw && typeof pendingRaw === "object"
+      ? normalizeTimelineJson(pendingRaw)
+      : null;
   return {
     id: String(r.id ?? ""),
     projectId: String(r.projectId ?? ""),
     content,
+    pendingProposal,
+    pendingProposalVersionId:
+      typeof r.pendingProposalVersionId === "string"
+        ? r.pendingProposalVersionId
+        : null,
     versions,
     createdAt: typeof r.createdAt === "string" ? r.createdAt : undefined,
     updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : undefined,
@@ -1099,11 +1112,11 @@ export async function saveTimeline(
 ) {
   const raw = await apiFetch<unknown>(`/timelines/${timelineId}`, {
     method: "PUT",
-    body: content,
+    body: { timeline: content },
   });
   // API may return document, version, or { timeline, version }
   const r = asRecord(raw) ?? {};
-  if (r.content || r.versions || r.current || r.timeline) {
+  if (r.content || r.versions || r.current || r.timeline || r.pendingProposal) {
     return normalizeTimelineDocument(raw);
   }
   if (r.version !== undefined || r.source !== undefined) {
