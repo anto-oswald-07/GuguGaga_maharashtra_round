@@ -683,6 +683,27 @@ _(Template above kept for other developers.)_
   - `packages/shared/src/schemas/scriptSchema.ts` → API Scripts + worker consumers + web
 - **Notes for next phase me:** Phase 6 D = audio extract for STT (`extractAudio.ts` + shell script)
 
+## Phase 6 Completion — Cyrus Selvaraj (Dev D)
+- **Date:** 2026-10-03
+- **Branch:** phase-06-cyrus
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (TRANSCRIBE consumer wiring of `extractAudio` → `filePath` is Integration / Arvin)
+- **Blockers handed to Integration:** Call `extractAudio` (or shell) before Whisper; use `audioDerivativePath` under `derivatives/{assetId}/audio.wav`
+- **Commands to verify my work:**
+  ```bash
+  ./scripts/media/make-dummy-video.sh   # if needed
+  ./scripts/media/extract-audio.sh
+  file storage/samples/dummy-audio.wav  # expect: PCM, mono 16000 Hz
+  # optional mp3:
+  ./scripts/media/extract-audio.sh storage/samples/dummy.mp4 storage/samples/dummy-audio.mp3
+  node --experimental-strip-types -e "import { extractAudio } from './services/worker/src/media/extractAudio.ts'; await extractAudio('storage/samples/dummy.mp4','storage/samples/dummy-audio-ts.wav').then(console.log);"
+  ```
+- **Files I expect others to connect to:**
+  - `services/worker/src/media/extractAudio.ts` → TRANSCRIBE job / Arvin consumer before `AiProvider.transcribe`
+  - `scripts/media/extract-audio.sh` → manual smoke
+  - `docs/ffmpeg-notes.md` §6 sample-rate + path convention
+- **Notes for next phase me:** Phase 7 D = FFmpeg clip cutter (`cutClip.ts` + shell)
+
 ## Phase 3 Completion — Brendan Rodrigues (Dev A)
 - **Date:** 2026-10-03
 - **Branch:** phase-03-brendan
@@ -855,6 +876,7 @@ _(Template above kept for other developers.)_
 | Golden path prep | Started Phase 4 (Cyrus) | `docs/demo/golden-path-prep.md` (stages IDEA→PUBLISHED) |
 | Mock AI stable | Planned Phase 5/10 (Arvin) | |
 | Script prompts + Zod | Done Phase 5 (Cyrus) | `docs/ai/prompts/**` + `packages/shared/src/schemas/scriptSchema.ts` |
+| STT audio extract | Done Phase 6 (Cyrus) | `extractAudio.ts` + `extract-audio.sh` (16 kHz mono WAV) |
 | Golden path judge script | Planned Phase 10 (Arvin) | `docs/demo/judge-script.md` |
 | Emergency pre-rendered clip | Planned Phase 10 (Cyrus) | |
 
@@ -1506,3 +1528,25 @@ _(Template above kept for other developers.)_
 - **Files touched:** `packages/ai-provider/src/{types,index,align/fuzzyAlign,stt/*,mock,openai,gemini}.ts`, `packages/ai-provider/test/**`, `packages/ai-provider/{package.json,README.md}`, `services/worker/src/{ai/{transcribe,align},consumers/{transcribe,align},index}.ts`, `services/worker/package.json`, `docs/ai-contracts.md`, `.env.example`, `context.md`
 - **Needs from others:** Anto Job/Transcript persistence; Brendan Mapping UI; Cyrus audio extract
 - **Risks:** Whisper untested without `OPENAI_API_KEY`; Gemini STT is mock-fallback only; fuzzy align can yield low-confidence short excerpts (UI should highlight / allow remapping)
+
+### [2026-10-03 15:41] ROLE=D NAME=Cyrus Selvaraj PHASE=6 TYPE=START
+- **Summary:** Prior Dev D phases verified on `main` (P1–P5). Phase 6 A/B/C already merged; implementing remaining Dev D — FFmpeg audio extract for STT.
+- **Files touched:** branch `phase-06-cyrus` from `origin/main` @ `6709885`
+- **APIs / types added:** None yet
+- **How to run / test what I did:** `git checkout phase-06-cyrus`
+- **Depends on:** Phase 1 media scripts + dummy.mp4; Arvin `TranscribeInput.filePath`
+- **Needs from others:** Integration wires extract → TRANSCRIBE consumer
+- **Risks:** None for Phase 6 D scope
+
+### [2026-10-03 15:43] ROLE=D NAME=Cyrus Selvaraj PHASE=6 TYPE=DONE
+- **Summary:** Added `extractAudio.ts` + `extract-audio.sh` (default 16 kHz mono WAV `pcm_s16le`, optional MP3). Documented sample rates + `derivatives/{assetId}/audio.wav` in `docs/ffmpeg-notes.md` §6. Smoke on `dummy.mp4` → `dummy-audio.wav` (PCM 16-bit mono 16000 Hz, ~5s).
+- **Files touched:** `services/worker/src/media/extractAudio.ts`, `scripts/media/extract-audio.sh`, `docs/ffmpeg-notes.md`, `context.md`
+- **APIs / types added:** `extractAudio`, `audioDerivativePath`, `ExtractAudioOptions` / `ExtractAudioResult`
+- **How to run / test what I did:**
+  ```bash
+  ./scripts/media/extract-audio.sh
+  file storage/samples/dummy-audio.wav
+  ```
+- **Depends on:** ffmpeg on PATH; `storage/samples/dummy.mp4`
+- **Needs from others:** Brendan Integration — call extract before Whisper `filePath`
+- **Risks:** None
