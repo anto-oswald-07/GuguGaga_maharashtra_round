@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0",
+  "slug": "demo-batch-reels",
+  "title": "Batch Reels in One Afternoon",
+  "description": "Golden-path demo project: plan, film, cut, and adapt a week of short-form content from one batch session.",
+  "initialStage": "IDEA",
+  "targetPlatforms": [
+    "INSTAGRAM_REELS",
+    "YOUTUBE_SHORTS",
+    "TIKTOK"
+  ],
+  "sampleScript": {
+    "path": "samples/scripts/sample_script.md",
+    "topic": "How I batch-create Reels in one afternoon",
+    "audience": "Solo creators who want a repeatable weekly content system",
+    "tone": "Practical, energetic, no fluff"
+  },
+  "sampleMedia": {
+    "dummyVideoScript": "scripts/media/make-dummy-video.sh",
+    "dummyVideoPath": "storage/samples/dummy.mp4",
+    "notes": "Generate locally; do not commit binaries. Ideal demo footage < 3 minutes."
+  },
+  "seedHints": {
+    "createVia": "POST /api/v1/projects",
+    "auth": "Bearer JWT from register/login (CREATORAI_TOKEN or --token)",
+    "attachAssetsLater": true
+  }
+}
