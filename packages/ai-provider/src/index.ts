@@ -37,3 +37,21 @@ export {
   stableDemoClipIdeas,
   windowText,
 } from './clips/scoreClipWindows';
+export {
+  DEMO_SOURCE_ASSET_ID,
+  HOOK_OVERLAY_END_MS,
+  HOOK_OVERLAY_START_MS,
+  assertValidTimelineShape,
+  proposeTimelineFromContext,
+  stableDemoAcceptedClips,
+  stableDemoTimeline,
+  validateTimeline,
+} from './timeline/proposeTimeline';
+export type {
+  TimelineAcceptedClip,
+  TimelineCaptionItem,
+  TimelineTextItem,
+  TimelineTextStyle,
+  TimelineTrack,
+  TimelineVideoClip,
+} from './types';
