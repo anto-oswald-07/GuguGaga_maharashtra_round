@@ -74,7 +74,7 @@ Use this file for upload / cut / thumbnail smoke tests. Do **not** git-add it.
 |----|-------|-------|
 | `ffmpeg -version` / `ffprobe` check | 1 | `scripts/media/check-ffmpeg.sh` |
 | Dummy MP4 generation | 1 | `scripts/media/make-dummy-video.sh` |
-| Thumbnail (mid-frame JPEG) | 3 | `services/worker/src/media/thumbnail.ts` |
+| Thumbnail (mid-frame JPEG) | 3 | `services/worker/src/media/thumbnail.ts` + `scripts/media/generate-thumb.sh` |
 | Audio extract for STT | 6 | wav/mp3 from video |
 | Clip cut (`-ss` / `-to`) | 7 | prefer re-encode if keyframe drift |
 | Timeline render (`filter_complex`) | 8 | from timeline JSON |
@@ -84,10 +84,53 @@ Design rule (SDD): pure function `timelineToFfmpegPlan(timeline) -> commands` in
 
 ---
 
-## 5. Smoke commands
+## 5. Thumbnail generation (Phase 3)
+
+### 5.1 Derivative path convention (SDD §4.4)
+
+After Assets API upload, thumbnails land at:
+
+```
+storage/workspaces/{workspaceId}/derivatives/{assetId}/thumb.jpg
+```
+
+- **Originals:** `storage/workspaces/{workspaceId}/originals/{assetId}/{filename}`
+- **Thumbs:** `derivatives/{assetId}/thumb.jpg` (JPEG, mid-frame by default)
+- DB stores the path/URL; worker/API must create the `derivatives/...` directories before write.
+
+### 5.2 TypeScript helper
+
+```ts
+import { generateThumbnail } from '../media/thumbnail'; // from worker
+
+await generateThumbnail(
+  'storage/workspaces/.../originals/.../clip.mp4',
+  'storage/workspaces/.../derivatives/.../thumb.jpg',
+);
+// seeks to duration/2 via ffprobe; override with { seekSeconds }
+```
+
+### 5.3 Shell smoke (manual)
+
+```bash
+./scripts/media/make-dummy-video.sh          # if needed
+./scripts/media/generate-thumb.sh
+# → storage/samples/dummy-thumb.jpg  (gitignored under storage/)
+
+# custom paths:
+./scripts/media/generate-thumb.sh path/in.mp4 path/out.jpg
+```
+
+Do **not** commit generated JPEGs.
+
+---
+
+## 6. Smoke commands
 
 ```bash
 ./scripts/media/check-ffmpeg.sh
 ./scripts/media/make-dummy-video.sh
+./scripts/media/generate-thumb.sh
 ffprobe -hide_banner storage/samples/dummy.mp4
+ls -lh storage/samples/dummy-thumb.jpg
 ```
