@@ -804,3 +804,338 @@ export function renderClipCandidate(candidateId: string) {
     { method: "POST" },
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* Timelines (Phase 8) — SDD §4.3 / §5.7                                      */
+/* TODO_SHARED: replace with `@creatorai/timeline-schema` once Cyrus lands it */
+/* -------------------------------------------------------------------------- */
+
+export type TimelineTextStyle = {
+  position?: string;
+  fontSize?: number;
+};
+
+export type TimelineVideoClip = {
+  id: string;
+  assetId: string;
+  srcStartMs: number;
+  srcEndMs: number;
+  timelineStartMs: number;
+};
+
+export type TimelineTextItem = {
+  id: string;
+  text: string;
+  startMs: number;
+  endMs: number;
+  style?: TimelineTextStyle;
+};
+
+export type TimelineCaptionItem = {
+  id: string;
+  text: string;
+  startMs: number;
+  endMs: number;
+};
+
+export type TimelineVideoTrack = {
+  id: string;
+  type: "video";
+  clips: TimelineVideoClip[];
+};
+
+export type TimelineTextTrack = {
+  id: string;
+  type: "text";
+  items: TimelineTextItem[];
+};
+
+export type TimelineCaptionsTrack = {
+  id: string;
+  type: "captions";
+  items: TimelineCaptionItem[];
+};
+
+export type TimelineTrack =
+  | TimelineVideoTrack
+  | TimelineTextTrack
+  | TimelineCaptionsTrack;
+
+export type TimelineJson = {
+  schemaVersion: string;
+  fps: number;
+  durationMs: number;
+  tracks: TimelineTrack[];
+  transitions: unknown[];
+  meta?: Record<string, unknown>;
+};
+
+export type TimelineVersionDto = {
+  id: string;
+  timelineId: string;
+  version: number;
+  source?: string | null;
+  content: TimelineJson;
+  createdAt?: string;
+};
+
+export type TimelineDocument = {
+  id: string;
+  projectId: string;
+  /** Current working JSON (may also live on latest non-proposal version). */
+  content: TimelineJson | null;
+  versions: TimelineVersionDto[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type TimelineListResponse = {
+  items: TimelineDocument[];
+};
+
+export function emptyTimelineJson(
+  meta?: Record<string, unknown>,
+): TimelineJson {
+  return {
+    schemaVersion: "1.0",
+    fps: 30,
+    durationMs: 0,
+    tracks: [
+      { id: "v1", type: "video", clips: [] },
+      { id: "t1", type: "text", items: [] },
+      { id: "cap1", type: "captions", items: [] },
+    ],
+    transitions: [],
+    meta: meta ?? { generatedBy: "user" },
+  };
+}
+
+function normalizeTextStyle(raw: unknown): TimelineTextStyle | undefined {
+  const r = asRecord(raw);
+  if (!r) return undefined;
+  return {
+    ...(typeof r.position === "string" ? { position: r.position } : {}),
+    ...(typeof r.fontSize === "number" ? { fontSize: r.fontSize } : {}),
+  };
+}
+
+function normalizeVideoClip(raw: unknown): TimelineVideoClip {
+  const r = asRecord(raw) ?? {};
+  return {
+    id: String(r.id ?? cryptoRandomId()),
+    assetId: String(r.assetId ?? ""),
+    srcStartMs:
+      typeof r.srcStartMs === "number" ? r.srcStartMs : Number(r.srcStartMs) || 0,
+    srcEndMs:
+      typeof r.srcEndMs === "number" ? r.srcEndMs : Number(r.srcEndMs) || 0,
+    timelineStartMs:
+      typeof r.timelineStartMs === "number"
+        ? r.timelineStartMs
+        : Number(r.timelineStartMs) || 0,
+  };
+}
+
+function normalizeTextItem(raw: unknown): TimelineTextItem {
+  const r = asRecord(raw) ?? {};
+  return {
+    id: String(r.id ?? cryptoRandomId()),
+    text: typeof r.text === "string" ? r.text : String(r.text ?? ""),
+    startMs: typeof r.startMs === "number" ? r.startMs : Number(r.startMs) || 0,
+    endMs: typeof r.endMs === "number" ? r.endMs : Number(r.endMs) || 0,
+    style: normalizeTextStyle(r.style),
+  };
+}
+
+function normalizeCaptionItem(raw: unknown): TimelineCaptionItem {
+  const r = asRecord(raw) ?? {};
+  return {
+    id: String(r.id ?? cryptoRandomId()),
+    text: typeof r.text === "string" ? r.text : String(r.text ?? ""),
+    startMs: typeof r.startMs === "number" ? r.startMs : Number(r.startMs) || 0,
+    endMs: typeof r.endMs === "number" ? r.endMs : Number(r.endMs) || 0,
+  };
+}
+
+function normalizeTrack(raw: unknown): TimelineTrack {
+  const r = asRecord(raw) ?? {};
+  const type = String(r.type ?? "video");
+  const id = String(r.id ?? cryptoRandomId());
+  if (type === "text") {
+    const items = Array.isArray(r.items) ? r.items.map(normalizeTextItem) : [];
+    return { id, type: "text", items };
+  }
+  if (type === "captions") {
+    const items = Array.isArray(r.items)
+      ? r.items.map(normalizeCaptionItem)
+      : [];
+    return { id, type: "captions", items };
+  }
+  const clips = Array.isArray(r.clips) ? r.clips.map(normalizeVideoClip) : [];
+  return { id, type: "video", clips };
+}
+
+export function normalizeTimelineJson(raw: unknown): TimelineJson {
+  const r = asRecord(raw) ?? {};
+  const tracksRaw = Array.isArray(r.tracks) ? r.tracks : [];
+  const meta = asRecord(r.meta) ?? undefined;
+  return {
+    schemaVersion:
+      typeof r.schemaVersion === "string" ? r.schemaVersion : "1.0",
+    fps: typeof r.fps === "number" ? r.fps : Number(r.fps) || 30,
+    durationMs:
+      typeof r.durationMs === "number"
+        ? r.durationMs
+        : Number(r.durationMs) || 0,
+    tracks: tracksRaw.map(normalizeTrack),
+    transitions: Array.isArray(r.transitions) ? r.transitions : [],
+    ...(meta ? { meta } : {}),
+  };
+}
+
+function cryptoRandomId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `id-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeTimelineVersion(raw: unknown): TimelineVersionDto {
+  const r = asRecord(raw) ?? {};
+  const contentRaw = r.content ?? r.timeline ?? r.json;
+  return {
+    id: String(r.id ?? ""),
+    timelineId: String(r.timelineId ?? r.editTimelineId ?? ""),
+    version: typeof r.version === "number" ? r.version : Number(r.version) || 0,
+    source: typeof r.source === "string" ? r.source : null,
+    content: normalizeTimelineJson(contentRaw ?? emptyTimelineJson()),
+    createdAt: typeof r.createdAt === "string" ? r.createdAt : undefined,
+  };
+}
+
+function normalizeTimelineDocument(raw: unknown): TimelineDocument {
+  const r = asRecord(raw) ?? {};
+  const versionsRaw = Array.isArray(r.versions) ? r.versions : [];
+  const versions = versionsRaw.map(normalizeTimelineVersion);
+  const contentRaw =
+    r.content ?? r.current ?? r.timeline ?? r.json ?? null;
+  let content: TimelineJson | null = null;
+  if (contentRaw && typeof contentRaw === "object") {
+    content = normalizeTimelineJson(contentRaw);
+  } else if (versions.length > 0) {
+    const userVersions = versions.filter(
+      (v) =>
+        !v.source ||
+        !/ai_proposal|proposal/i.test(v.source),
+    );
+    const pick = userVersions.length > 0 ? userVersions : versions;
+    const latest = [...pick].sort((a, b) => b.version - a.version)[0];
+    content = latest?.content ?? null;
+  }
+  return {
+    id: String(r.id ?? ""),
+    projectId: String(r.projectId ?? ""),
+    content,
+    versions,
+    createdAt: typeof r.createdAt === "string" ? r.createdAt : undefined,
+    updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : undefined,
+  };
+}
+
+/** Best-effort extract timeline JSON from GENERATE_TIMELINE job.output. */
+export function timelineFromJobOutput(output: unknown): TimelineJson | null {
+  if (!output || typeof output !== "object") return null;
+  const o = output as Record<string, unknown>;
+  if (o.schemaVersion || o.tracks) return normalizeTimelineJson(o);
+  if (o.timeline) return normalizeTimelineJson(o.timeline);
+  if (o.content) return normalizeTimelineJson(o.content);
+  if (o.proposal) return normalizeTimelineJson(o.proposal);
+  if (o.result && typeof o.result === "object") {
+    return timelineFromJobOutput(o.result);
+  }
+  return null;
+}
+
+export function timelineIdFromJob(
+  job: Job,
+  fallback?: string | null,
+): string | null {
+  if (fallback) return fallback;
+  const output = asRecord(job.output);
+  if (typeof output?.timelineId === "string") return output.timelineId;
+  const input = asRecord(job.input);
+  if (typeof input?.timelineId === "string") return input.timelineId;
+  return null;
+}
+
+export function proposeGenerateTimeline(projectId: string) {
+  return apiFetch<EnqueueJobResponse & { timelineId?: string }>(
+    `/projects/${projectId}/timelines/generate`,
+    { method: "POST", body: {} },
+  );
+}
+
+export async function listProjectTimelines(projectId: string) {
+  const raw = await apiFetch<{ items?: unknown[] } | unknown[]>(
+    `/projects/${projectId}/timelines`,
+  );
+  const items = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw.items)
+      ? raw.items
+      : [];
+  return {
+    items: items.map(normalizeTimelineDocument),
+  } satisfies TimelineListResponse;
+}
+
+export async function getTimeline(timelineId: string) {
+  const raw = await apiFetch<unknown>(`/timelines/${timelineId}`);
+  return normalizeTimelineDocument(raw);
+}
+
+export async function saveTimeline(
+  timelineId: string,
+  content: TimelineJson,
+) {
+  const raw = await apiFetch<unknown>(`/timelines/${timelineId}`, {
+    method: "PUT",
+    body: content,
+  });
+  // API may return document, version, or { timeline, version }
+  const r = asRecord(raw) ?? {};
+  if (r.content || r.versions || r.current || r.timeline) {
+    return normalizeTimelineDocument(raw);
+  }
+  if (r.version !== undefined || r.source !== undefined) {
+    const version = normalizeTimelineVersion(raw);
+    return {
+      id: version.timelineId || timelineId,
+      projectId: "",
+      content: version.content,
+      versions: [version],
+    } satisfies TimelineDocument;
+  }
+  return normalizeTimelineDocument({
+    id: timelineId,
+    content: raw,
+    versions: [],
+  });
+}
+
+export function renderTimeline(timelineId: string) {
+  return apiFetch<EnqueueJobResponse>(`/timelines/${timelineId}/render`, {
+    method: "POST",
+  });
+}
+
+/** Extract rendered preview asset id from RENDER_TIMELINE job.output. */
+export function previewAssetIdFromJob(job: Job): string | null {
+  const output = asRecord(job.output);
+  if (!output) return null;
+  if (typeof output.assetId === "string") return output.assetId;
+  if (typeof output.renderedAssetId === "string") return output.renderedAssetId;
+  if (typeof output.outputAssetId === "string") return output.outputAssetId;
+  const nested = asRecord(output.asset);
+  if (typeof nested?.id === "string") return nested.id;
+  return null;
+}

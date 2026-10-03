@@ -1815,6 +1815,60 @@ _(Template above kept for other developers.)_
 - **Needs from others:** None for Phase 7; Phase 8 Lead = Cyrus
 - **Risks:** ffmpeg missing → mock/copy render; Next.dev hang on :3002
 
+### [2026-10-03 22:10] ROLE=A NAME=Brendan Rodrigues PHASE=8 TYPE=START
+- **Summary:** Synced `main` (`8afc306` Phase 7 Integration). Created `phase-08-brendan`. Starting Timeline Editor UI against SDD §4.3 / §5.7 / FR-ED-* (Phase 8 B timelines API not on main yet).
+- **Files touched:** (branch created; work in progress)
+- **APIs / types added:** None yet
+- **How to run / test what I did:** `git checkout phase-08-brendan`
+- **Depends on:** Phase 7 complete on main
+- **Needs from others:** Anto Phase 8 B timelines API; Arvin proposeTimeline; Cyrus timeline-schema + renderer
+- **Risks:** UI will 404 until Phase 8 B lands
+
+### [2026-10-03 22:21] ROLE=A NAME=Brendan Rodrigues PHASE=8 TYPE=DONE
+- **Summary:** Phase 8 Dev A complete — Timeline editor at `/projects/:id/editor`: layout bin | preview | tracks | inspector; load timeline JSON into editable store; trim/reorder clips + edit text/captions; Save (PUT); AI Suggest panel (Apply = local draft + save, Dismiss cancels); Render preview with job poll + video player.
+- **Files touched:**
+  - `apps/web/src/lib/api.ts` (timeline client + TimelineJson normalizers + job output helpers)
+  - `apps/web/src/components/editor/**` (TimelineEditor, editor-store, MediaBin, PreviewPane, TracksPanel, InspectorPanel, AiSuggestPanel)
+  - `apps/web/src/app/projects/[id]/editor/page.tsx` (wired TimelineEditor; replaces ComingSoon)
+  - `context.md`
+- **APIs / types added (client assumptions — TODO_SHARED until Anto/Cyrus land contracts):**
+  - `POST /projects/:id/timelines/generate` → `{ jobId, timelineId? }` (job type likely `GENERATE_TIMELINE` — not yet in shared jobTypeSchema)
+  - `GET /projects/:id/timelines` → `{ items: TimelineDocument[] }`
+  - `GET /timelines/:id` → TimelineDocument (`content` / `current` / latest version JSON)
+  - `PUT /timelines/:id` body = TimelineJson → document or version (new TimelineVersion)
+  - `POST /timelines/:id/render` → `{ jobId }` (`RENDER_TIMELINE`); output `assetId` / `renderedAssetId` / `outputAssetId`
+  - TimelineJson per SDD §4.3: `schemaVersion`, `fps`, `durationMs`, `tracks[]` (video clips / text items / captions), `transitions`, `meta`
+  - AI proposal: job.output timeline **or** version `source=ai_proposal` — Apply never silent-overwrites (FR-ED-006)
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web exec eslint src/components/editor src/lib/api.ts 'src/app/projects/[id]/editor/page.tsx'
+  pnpm --filter web dev
+  # After Anto API: /projects/:id/editor → Suggest → Apply → edit text → Save → Render preview
+  ```
+- **Depends on:** Phase 8 B timelines API + GENERATE/RENDER jobs + Cyrus schema validation (mock OK)
+- **Needs from others:**
+  - Anto: list envelope `{ items }`; PUT creates version; generate returns timelineId; document apply semantics; add `GENERATE_TIMELINE` to JobType if missing
+  - Arvin: mock proposeTimeline returns valid §4.3 JSON (hook text 0–3s)
+  - Cyrus: `packages/timeline-schema` + assertValidTimeline; RENDER_TIMELINE → Asset
+- **Risks:** Until API exists, Suggest/Save/Render show API errors (expected); empty draft until generate creates document
+
+## Phase 8 Completion — Brendan Rodrigues (Dev A)
+- **Date:** 2026-10-03
+- **Branch:** phase-08-brendan
+- **All allowed tasks done:** yes
+- **Incomplete items:** e2e blocked on Anto/Arvin/Cyrus (expected mid-phase); no drag-drop NLE (reorder via ↑↓)
+- **Blockers handed to Integration:** Align client contracts above; import `@creatorai/timeline-schema` when Cyrus lands it
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web dev
+  # Manual UI smoke without API: editor layout renders; Suggest fails with network/API error
+  ```
+- **Files I expect others to connect to:**
+  - `apps/web/src/lib/api.ts` timeline helpers
+  - `components/editor/TimelineEditor.tsx` + `editor-store.tsx`
+- **Notes for next phase me:** Phase 9 Platform Packs UI — project-tab pattern; Phase 8 Integration Lead = Cyrus
 ### [2026-10-03 22:21] ROLE=B NAME=Anto Oswald PHASE=8 TYPE=START
 - **Summary:** Starting Phase 8 Dev B — Timelines API + versioning (EditTimeline / TimelineVersion + GENERATE_TIMELINE / RENDER_TIMELINE per SDD §5.7).
 - **Files touched:** (branch `phase-08-anto` from `main` @ Phase 7 integration)

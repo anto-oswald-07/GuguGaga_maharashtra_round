@@ -1,4 +1,4 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { TimelineEditor } from "@/components/editor/TimelineEditor";
 
 type EditorPageProps = {
   params: Promise<{ id: string }>;
@@ -6,11 +6,5 @@ type EditorPageProps = {
 
 export default async function EditorPage({ params }: EditorPageProps) {
   const { id } = await params;
-
-  return (
-    <ComingSoon
-      title={`Editor — Project ${id}`}
-      description="Coming soon — timeline editor."
-    />
-  );
+  return <TimelineEditor projectId={id} />;
 }
