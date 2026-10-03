@@ -38,6 +38,34 @@ export type {
   VideoAssetMetadata,
   ExtractedAssetMetadata,
 } from './types/assetMetadata';
+export {
+  projectStageSchema,
+  PROJECT_STAGES,
+  platformSchema,
+  PLATFORMS,
+  projectSchema,
+  createProjectRequestSchema,
+  updateProjectRequestSchema,
+  projectListQuerySchema,
+  projectListResponseSchema,
+  transitionStageRequestSchema,
+  attachAssetsRequestSchema,
+  detachAssetsRequestSchema,
+  stageEventSchema,
+  stageHistoryResponseSchema,
+  type ProjectStage,
+  type Platform,
+  type ProjectDto,
+  type CreateProjectRequest,
+  type UpdateProjectRequest,
+  type ProjectListQuery,
+  type ProjectListResponse,
+  type TransitionStageRequest,
+  type AttachAssetsRequest,
+  type DetachAssetsRequest,
+  type StageEventDto,
+  type StageHistoryResponse,
+} from './projects';
 
 /** Response shape for `GET /api/v1/health`. */
 export type HealthResponse = {
