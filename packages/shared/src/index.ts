@@ -38,6 +38,15 @@ export type {
   VideoAssetMetadata,
   ExtractedAssetMetadata,
 } from './types/assetMetadata';
+export {
+  projectStageSchema,
+  DEFAULT_STAGE_ORDER,
+  defaultStageOrder,
+  stageIndex,
+  isTerminalStage,
+  isProjectStage,
+  type ProjectStage,
+} from './workflow';
 
 /** Response shape for `GET /api/v1/health`. */
 export type HealthResponse = {
