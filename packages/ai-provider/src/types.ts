@@ -121,7 +121,7 @@ export interface AiProvider {
     segments: TranscriptSegment[],
   ): Promise<Alignment[]>;
 
-  /** Phase 7 — stub until then. */
+  /** Phase 7 — rank 15–60s clip windows (title + score 0–1). */
   scoreClipWindows(
     transcript: Transcript,
     script: ScriptDoc,
