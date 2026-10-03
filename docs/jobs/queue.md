@@ -78,7 +78,8 @@ Lightweight Zod validation lives in `@creatorai/shared` (`editTimelineJsonSchema
 
 - Builder: `AiProvider.generateSupporting` (Arvin 9 C) — soft length limits in `docs/ai/platform-copy-guidelines.md`
 - CLI smoke: `pnpm --filter worker generate-platform-copy -- --fixture`
-- Aspect adaptation (Cyrus 9 D) is separate (`adaptAspect`); copy + aspect combine in Packs Integration
+- Aspect adaptation: `adaptAspect` (Cyrus 9 D) — wired into ADAPT_PLATFORM at Integration
+
 ## Phase 9 platform packs notes
 
 | Type | Producer | Artifact |
@@ -98,10 +99,11 @@ Lightweight Zod validation lives in `@creatorai/shared` (`editTimelineJsonSchema
 ### Semantics
 
 1. Generate upserts one pack per `(projectId, platform)` (unique), resets to `DRAFT`, clears prior output.
-2. Job fills copy via `AiProvider.generateSupporting` (fallback `mockPackCopy`) and adapts aspect via `adaptAspect` when present (Cyrus); otherwise **mock-copy** source → new Asset.
+2. Job fills copy via `AiProvider.generateSupporting` (fallback `mockPackCopy`) and adapts aspect via **`adaptAspect`** (ffmpeg center-crop; **mock-copy** fallback if ffmpeg fails).
 3. Default aspects: YouTube 16:9; Shorts/Reels/TikTok 9:16; LinkedIn 1:1.
 4. Source resolution: explicit `sourceAssetId` → timeline preview → rendered clip → project VIDEO.
 5. On success, project stage advances to `ADAPTED` if still earlier.
+6. Integration (2026-10-03): E2E verified distinct dimensions 1280×720 / 720×1280 / 1080×1080.
 
 Shared Zod: `@creatorai/shared` → `packages/shared/src/packs.ts`.
 

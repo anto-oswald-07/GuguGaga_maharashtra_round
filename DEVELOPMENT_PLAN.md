@@ -974,10 +974,10 @@ Use curl multipart upload + list + patch + delete.
 **Lead:** Anto  
 
 ### Verify
-- [ ] Generate packs for ≥2 platforms
-- [ ] Different aspect outputs exist
-- [ ] Status updates persist
-- [ ] Download/open works
+- [x] Generate packs for ≥2 platforms
+- [x] Different aspect outputs exist
+- [x] Status updates persist
+- [x] Download/open works
 
 ---
 

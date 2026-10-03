@@ -28,15 +28,15 @@
 
 | Field | Value |
 |-------|-------|
-| **Current phase** | Phase 9 in progress — Dev C (`generateSupporting` platform copy) DONE; A/B/D + Integration pending |
-| **Last completed tag** | `phase-1-done` (local only); Phase 2–8 Integration recorded in context — **no git tags this session** |
-| **main status** | Auth + Assets + Projects + Scripts/Jobs + Transcript/Mapping + Clips + Timelines + **platform copy** (ai-provider) |
+| **Current phase** | Phase 9 Integration COMPLETE — Platform Packs (generate → adapt → status → download) E2E |
+| **Last completed tag** | `phase-1-done` (local only); Phase 2–9 Integration recorded in context — **no git tags this session** |
+| **main status** | Auth + Assets + Projects + Scripts/Jobs + Transcript/Mapping + Clips + Timelines + **Platform Packs** (copy + aspect adapt) end-to-end |
 | **Package manager** | **pnpm** workspaces (final) |
 | **Queue decision** | **DB-polling queue for MVP**; API in-process poller (`startJobPoller`) claims `QUEUED` jobs; Redis optional (`--profile redis`) for later BullMQ |
 | **Default AI provider** | `mock` until keys available (`AI_PROVIDER=mock\|openai\|gemini`) |
 | **API base URL (local)** | `http://localhost:4000/api/v1` |
 | **Web app (local)** | `http://localhost:3002` (or `:3000` if free) |
-| **Who is Integration Lead next** | Anto (Phase 9) |
+| **Who is Integration Lead next** | Brendan (Phase 10) |
 
 ### 2.1 What Already Works
 - `pnpm install` at root (workspace: web, api, worker, shared, ai-provider)
@@ -64,38 +64,40 @@
 - Sample media: `storage/samples/dummy.mp4`; STT fixtures under `packages/ai-provider/test/fixtures`
 - **Timeline proposal (Phase 8 C):** `AiProvider.proposeTimeline` → EditTimeline `schemaVersion: 1.0` (clips + hook 0–3s); CLI `pnpm --filter worker generate-timeline -- --fixture`
 - **Platform copy (Phase 9 C):** `AiProvider.generateSupporting` → distinct title/caption/hashtags per Platform (soft length limits); CLI `pnpm --filter worker generate-platform-copy -- --fixture`; docs `docs/ai/platform-copy-guidelines.md`
+- **Platform Packs (Phase 9):** `POST .../packs/generate`, `GET .../packs`, `PATCH /packs/:id(/status)`, `GET /packs/:id/download`
+  - ADAPT_PLATFORM → `generateSupporting` + `adaptAspect` (ffmpeg center-crop; mock-copy fallback) → `PlatformPack` + output Asset
+  - Web Packs tab: select platforms → Generate → edit copy → Ready/Published → Download
+  - Default aspects: YT 16:9 · Shorts/Reels/TikTok 9:16 · LinkedIn 1:1
 
 ### 2.2 Known Broken / Gaps
 - Host `:5432` often occupied — set `POSTGRES_HOST_PORT=5433` + matching `DATABASE_URL` (see `.env.example`).
-- ffmpeg is present on this host (`/usr/bin/ffmpeg`) — Phase 8 RENDER_TIMELINE smoked with `mode=ffmpeg`. Older Phase 7 notes about copy-fallback may still apply if ffmpeg fails for a given cut.
+- ffmpeg is present on this host (`/usr/bin/ffmpeg`) — Phase 8/9 renders + aspect adapt smoked with `mode=ffmpeg`. Older notes about copy-fallback may still apply if ffmpeg fails.
 - OpenAI Whisper / live LLM paths untested without API keys.
 - Re-align replaces prior maps for the same script+transcript pair (including USER edits).
 - Re-propose deletes prior **proposed** clip rows only (keeps accepted/rejected/rendered).
 - Timeline generate without accepted clips defaults to a short Intro window (5s) so short `dummy.mp4` still renders.
 - Next.js `/projects` can hang under load — restart web on `:3002` if needed.
-- Git tags `phase-2-done` … `phase-8-done` not created unless requested.
+- Git tags `phase-2-done` … `phase-9-done` not created unless requested.
 
 ### 2.3 Active Blockers
 - None.
 
 ### 2.4 Open NEED Items (from developers)
-- Anto: Packs API / `ADAPT_PLATFORM` should call `generateSupporting` (or worker helper) and persist per-platform copy.
-- Brendan: Packs UI editable title/caption/hashtags.
-- Cyrus: aspect adapt FFmpeg (9 D).
+- None open for Phase 9.
 
 ### 2.5 Important Paths That Exist
 ```
 /
-├── apps/web/              # /projects (Script + Mapping + Clips + Editor), /workflow
-├── services/api/          # auth + assets + projects + scripts + jobs + mapping + clips + timelines
-├── services/worker/       # extractMetadata, thumbnail, extractAudio, cutClip, renderTimeline, STT/align/scoreClips/generateTimeline/generatePlatformCopy CLIs
-├── packages/shared/       # Zod DTOs incl. mapping + clips + timelines
+├── apps/web/              # /projects (Script + Mapping + Clips + Packs + Editor), /workflow
+├── services/api/          # auth + assets + projects + scripts + jobs + mapping + clips + timelines + packs
+├── services/worker/       # extractMetadata, thumbnail, extractAudio, cutClip, renderTimeline, adaptAspect, STT/align/scoreClips/generateTimeline/generatePlatformCopy/adaptPlatform CLIs
+├── packages/shared/       # Zod DTOs incl. mapping + clips + timelines + packs
 ├── packages/ai-provider/  # mock+Whisper STT, fuzzy align, clip scoring, proposeTimeline, platform copy
 ├── packages/timeline-schema/  # EditTimeline schemaVersion 1.0 + assertValidTimeline
 ├── samples/scripts/sample_script.md
 ├── samples/projects/demo-project.json
 ├── scripts/seed/sample-project.ts
-├── scripts/media/         # extract-audio.sh, make-dummy-video.sh, cut-clip.sh
+├── scripts/media/         # extract-audio.sh, make-dummy-video.sh, cut-clip.sh, adapt-aspect.sh
 ├── storage/
 ├── docs/api/ auth.http + auth.postman.json
 ├── docs/assets/metadata.md
@@ -2300,3 +2302,42 @@ _(Template above kept for other developers.)_
   - `scripts/media/adapt-aspect.sh` → manual smoke
   - `docs/ffmpeg-notes.md` §8
 - **Notes for next phase me:** Phase 10 D = media hardening + `docs/demo/media-checklist.md`
+
+### [2026-10-03 23:23] ROLE=B NAME=Anto Oswald PHASE=9 TYPE=START
+- **Summary:** Phase 9 Integration — A/B/C/D all DONE on branch; wiring ADAPT_PLATFORM to real `adaptAspect` (was mock-copy), then E2E verify ≥2 platforms / distinct aspects / status / download.
+- **Files touched:** (in progress) `services/api/src/modules/jobs/service.ts`, `context.md`, `DEVELOPMENT_PLAN.md`
+- **Depends on:** Phase 9 A/B/C/D DONE; ffmpeg on PATH
+- **Needs from others:** none for Integration close
+- **Risks:** short `dummy.mp4` still adapts; different aspect files must differ in dimensions (ffprobe)
+
+## INTEGRATION COMPLETE — Phase 9
+- **Date:** 2026-10-03
+- **Lead:** Anto (plan Lead=Anto; Integration run on `Arvin` branch after A/B/C/D landed)
+- **Verified:**
+  - [x] Generate packs for ≥2 platforms (YOUTUBE + TIKTOK + LINKEDIN)
+  - [x] Different aspect outputs exist (1280×720 / 720×1280 / 1080×1080 via ffprobe)
+  - [x] Status updates persist (`draft` → `ready` → `published`)
+  - [x] Download/open works (`GET /packs/:id/download` → asset content **100941** bytes)
+- **What was wired / fixed:**
+  - Applied Prisma `PlatformPack` migration `20261003180000_phase9_platform_packs`
+  - Rebuilt `@creatorai/shared` so packs Zod schemas resolve in API
+  - ADAPT_PLATFORM → `AiProvider.generateSupporting` + **`adaptAspect`** (was mock-copy only) + `persistAdaptedPack`
+  - ffmpeg fallback still copies source if adapt fails (`mode=mock-copy`)
+- **Commands to re-verify:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter @creatorai/ai-provider build
+  bash scripts/media/adapt-aspect.sh
+  AI_PROVIDER=mock pnpm --filter worker generate-platform-copy -- --fixture
+  pnpm --filter api dev   # job poller
+  pnpm --filter web exec next dev -p 3002
+  # E2E: register → project → upload+attach dummy.mp4 → scripts/generate →
+  #   POST .../packs/generate { platforms: [YOUTUBE,TIKTOK,LINKEDIN] } →
+  #   poll job → GET packs → PATCH status → GET download → ffprobe render outputs
+  # UI: /projects/:id → Packs → Generate → edit → Ready → Download
+  ```
+- **E2E smoke (2026-10-03 23:25):** PASS — ADAPT_PLATFORM `mode=ffmpeg` for 3 packs; copyProvider=mock with distinct `[YT]`/`[TikTok]`/`[LinkedIn]` titles; dimensions 1280×720 / 720×1280 / 1080×1080; status persist; download content 100941 bytes
+- **Known gaps / follow-ups:**
+  - Face-aware reframe skipped (FR-PLT-004 P1)
+  - Zip download not implemented (URLs OK for MVP)
+- **Ready for Phase 10:** yes (Brendan Integration Lead)
