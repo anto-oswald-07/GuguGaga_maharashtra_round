@@ -154,7 +154,7 @@ export function ClipsTab({ projectId, assetIds }: ClipsTabProps) {
   async function onPropose() {
     await startJob("Propose clips", () =>
       proposeProjectClips(projectId, {
-        ...(selectedAssetId ? { assetId: selectedAssetId } : {}),
+        ...(selectedAssetId ? { sourceAssetId: selectedAssetId } : {}),
         ...(selectedScriptId ? { scriptId: selectedScriptId } : {}),
       }),
     );

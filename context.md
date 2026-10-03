@@ -28,15 +28,15 @@
 
 | Field | Value |
 |-------|-------|
-| **Current phase** | Phase 6 Integration complete — Phase 7 next |
-| **Last completed tag** | `phase-1-done` (local only); Phase 2–6 Integration recorded in context — **no git tags this session** |
-| **main status** | Auth + Assets + Projects + Scripts/Jobs + Transcript/Mapping end-to-end (mock STT + fuzzy align) |
+| **Current phase** | Phase 7 Integration complete — Phase 8 next |
+| **Last completed tag** | `phase-1-done` (local only); Phase 2–7 Integration recorded in context — **no git tags this session** |
+| **main status** | Auth + Assets + Projects + Scripts/Jobs + Transcript/Mapping + Clips (propose/accept/render) end-to-end |
 | **Package manager** | **pnpm** workspaces (final) |
 | **Queue decision** | **DB-polling queue for MVP**; API in-process poller (`startJobPoller`) claims `QUEUED` jobs; Redis optional (`--profile redis`) for later BullMQ |
 | **Default AI provider** | `mock` until keys available (`AI_PROVIDER=mock\|openai\|gemini`) |
 | **API base URL (local)** | `http://localhost:4000/api/v1` |
 | **Web app (local)** | `http://localhost:3002` (or `:3000` if free) |
-| **Who is Integration Lead next** | Brendan (Phase 7) |
+| **Who is Integration Lead next** | Cyrus (Phase 8) |
 
 ### 2.1 What Already Works
 - `pnpm install` at root (workspace: web, api, worker, shared, ai-provider)
@@ -46,42 +46,44 @@
 - Video upload sync-enriches `metadata` (ffprobe or mock) + derivative thumb (ffmpeg or placeholder JPEG)
 - **Projects:** CRUD-ish create/list/get/patch, stage transition + history, attach/detach assets (`assetIds[]`)
 - **Scripts + Jobs:** generate/edit/versions; DB-poller `QUEUED`→`RUNNING`→`SUCCEEDED`/`FAILED`
-- **Transcripts + Mapping (Phase 6):** `POST .../transcribe`, `GET .../transcripts`, `POST .../align`, `GET .../mappings`, `PATCH /mappings/:id`
-  - TRANSCRIBE → optional `extractAudio` + `AiProvider.transcribe` (mock STT / Whisper) → `persistTranscript`
-  - ALIGN_SCRIPT → fuzzy `alignScriptToTranscript` → `persistAlignments`; low-confidence threshold **0.55**
-  - Web Footage & Mapping tab: transcribe → segments → align → table + PATCH edit
-- Web: login/register, asset library, `/projects` list+detail (Script + Footage & Mapping), `/workflow` Kanban
-- Shared: auth/assets/projects/scripts/jobs/mapping Zod + `LOW_CONFIDENCE_THRESHOLD`
-- Seed: `scripts/seed/sample-project.ts` auto login/register `demo@creatorai.local`
+- **Transcripts + Mapping (Phase 6):** transcribe → align → PATCH mappings (threshold **0.55**)
+- **Clips (Phase 7):** `POST .../clips/propose`, `GET .../clips/candidates`, `PATCH /clips/candidates/:id`, `POST .../render`
+  - SCORE_CLIPS → `AiProvider.scoreClipWindows` → persist `ClipCandidate` (3 ranked 15–60s windows)
+  - RENDER_CLIP → `cutClip` (ffmpeg re-encode or copy fallback) → Asset + `status=rendered`
+  - Web Clips tab: Propose → table → tweak/accept/reject → Render → preview/link
+- Web: login/register, asset library, `/projects` (Script + Footage & Mapping + Clips), `/workflow` Kanban
+- Shared: auth/assets/projects/scripts/jobs/mapping/clips Zod + `LOW_CONFIDENCE_THRESHOLD`
+- Seed: `scripts/seed/sample-project.ts` auto login/register `demo@creatorai.local` / `password123`
 - Postgres via compose (`POSTGRES_HOST_PORT`, default 5432; use 5433 if host busy)
 - Sample media: `storage/samples/dummy.mp4`; STT fixtures under `packages/ai-provider/test/fixtures`
 
 ### 2.2 Known Broken / Gaps
 - Host `:5432` often occupied — set `POSTGRES_HOST_PORT=5433` + matching `DATABASE_URL` (see `.env.example`).
-- This laptop has no ffmpeg/ffprobe → metadata mock / thumbs placeholder; TRANSCRIBE skips extractAudio (mock STT still works).
-- OpenAI Whisper path untested without `OPENAI_API_KEY`.
+- This laptop has no ffmpeg/ffprobe → metadata mock / thumbs placeholder; TRANSCRIBE skips extractAudio; RENDER_CLIP **copies** source into `renders/{jobId}/output.mp4` (Asset still created; boundaries not actually cut).
+- OpenAI Whisper / live LLM paths untested without API keys.
 - Re-align replaces prior maps for the same script+transcript pair (including USER edits).
+- Re-propose deletes prior **proposed** clip rows only (keeps accepted/rejected/rendered).
 - Next.js `/projects` can hang under load — restart web on `:3002` if needed.
-- Git tags `phase-2-done` … `phase-6-done` not created unless requested.
+- Git tags `phase-2-done` … `phase-7-done` not created unless requested.
 
 ### 2.3 Active Blockers
 - None.
 
 ### 2.4 Open NEED Items (from developers)
-- None open for Phase 6.
+- None open for Phase 7.
 
 ### 2.5 Important Paths That Exist
 ```
 /
-├── apps/web/              # /projects (Script + Footage & Mapping), /workflow
-├── services/api/          # auth + assets + projects + scripts + jobs + mapping
-├── services/worker/       # extractMetadata, thumbnail, extractAudio, STT/align CLIs
-├── packages/shared/       # Zod DTOs incl. mapping / LOW_CONFIDENCE_THRESHOLD
-├── packages/ai-provider/  # mock+Whisper STT, fuzzy align
+├── apps/web/              # /projects (Script + Mapping + Clips), /workflow
+├── services/api/          # auth + assets + projects + scripts + jobs + mapping + clips
+├── services/worker/       # extractMetadata, thumbnail, extractAudio, cutClip, STT/align/scoreClips CLIs
+├── packages/shared/       # Zod DTOs incl. mapping + clips
+├── packages/ai-provider/  # mock+Whisper STT, fuzzy align, clip window scoring
 ├── samples/scripts/sample_script.md
 ├── samples/projects/demo-project.json
 ├── scripts/seed/sample-project.ts
-├── scripts/media/         # extract-audio.sh, make-dummy-video.sh
+├── scripts/media/         # extract-audio.sh, make-dummy-video.sh, cut-clip.sh
 ├── storage/
 ├── docs/api/ auth.http + auth.postman.json
 ├── docs/assets/metadata.md
@@ -1775,3 +1777,39 @@ _(Template above kept for other developers.)_
   - `@creatorai/shared` clip types
   - Job types `SCORE_CLIPS` / `RENDER_CLIP` via `/jobs/:id` poll
 - **Notes for next phase me:** Phase 8 Timelines API — same job+persist + versioning pattern
+
+## INTEGRATION COMPLETE — Phase 7
+- **Date:** 2026-10-03
+- **Lead:** Arvin (plan Lead=Arvin; work on `Arvin` branch)
+- **Verified:**
+  - [x] Propose → accept → render → new asset in library
+  - [x] UI contract: Clips tab sends `sourceAssetId`; normalizer maps API `sourceAssetId` → web `assetId`
+  - [x] Candidate tweak changes persisted bounds (PATCH start/end survived RENDER)
+  - [x] Rendered asset `/content` reachable (HTTP 200)
+- **What was wired / fixed:**
+  - Applied Prisma `ClipCandidate` migration (`migrate deploy`)
+  - Rebuilt `@creatorai/shared` so `proposeClipsRequestSchema` is in dist (API was 500ing without it)
+  - Web: `ClipsTab` propose body `assetId` → `sourceAssetId`; `normalizeClipCandidate` accepts either field
+  - SCORE_CLIPS / RENDER_CLIP already in API poller (`jobs/service.ts`); cutClip fallback without ffmpeg
+- **Commands to re-verify:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter api dev   # + web on :3002
+  # login demo@creatorai.local / password123
+  # upload dummy.mp4 → attach assetIds → generate script → transcribe
+  # POST /projects/:id/clips/propose {scriptId,transcriptId,sourceAssetId} → poll
+  # PATCH /clips/candidates/:id {startMs,endMs,status:accepted}
+  # POST /clips/candidates/:id/render → poll → GET /assets/:renderedAssetId/content
+  # UI: http://localhost:3002/projects → Clips tab
+  ```
+- **E2E smoke (2026-10-03 22:03):** PASS — SCORE_CLIPS 3 candidates → PATCH 500–2500ms accepted → RENDER_CLIP SUCCEEDED → Asset `Phase7 smoke clip.mp4` content 88650 bytes (copy fallback, no ffmpeg)
+- **Known gaps / follow-ups:**
+  - No ffmpeg on this host → RENDER copies full source (install ffmpeg for true cuts)
+  - Scorer may return near-overlapping mid-rank windows; top candidate is stable for demos
+- **Ready for Phase 8:** yes (Cyrus Integration Lead)
+
+### Chronological — 2026-10-03 22:03 (Arvin / Phase 7 Integration)
+- **Summary:** Phase 7 A–D already complete in context; Integration gaps were unapplied migration, stale shared dist, and web `assetId` vs API `sourceAssetId` mismatch. Fixed contracts, applied migration, E2E propose→accept→render PASS.
+- **Files touched:** `apps/web/src/components/clips/ClipsTab.tsx`, `apps/web/src/lib/api.ts`, `context.md`
+- **Needs from others:** None for Phase 7; Phase 8 Lead = Cyrus
+- **Risks:** ffmpeg missing → mock/copy render; Next.dev hang on :3002

@@ -674,7 +674,7 @@ export type ClipCandidateStatus =
 export type ClipCandidateDto = {
   id: string;
   projectId: string;
-  /** Source footage asset (optional until API wires it). */
+  /** Source footage asset (`sourceAssetId` from API). */
   assetId?: string | null;
   title: string;
   startMs: number;
@@ -692,9 +692,12 @@ export type ClipCandidateListResponse = {
   items: ClipCandidateDto[];
 };
 
+/** Body for `POST /projects/:id/clips/propose` (matches shared proposeClipsRequestSchema). */
 export type ProposeClipsRequest = {
-  assetId?: string;
   scriptId?: string;
+  transcriptId?: string;
+  /** Long-form footage to cut from (API field name). */
+  sourceAssetId?: string;
 };
 
 export type UpdateClipCandidatePayload = {
@@ -729,10 +732,16 @@ function normalizeClipCandidate(raw: unknown): ClipCandidateDto {
   const scoreRaw = r.score ?? r.confidence;
   const score =
     typeof scoreRaw === "number" ? scoreRaw : Number(scoreRaw) || 0;
+  const sourceAssetId =
+    typeof r.sourceAssetId === "string"
+      ? r.sourceAssetId
+      : typeof r.assetId === "string"
+        ? r.assetId
+        : null;
   return {
     id: String(r.id ?? ""),
     projectId: String(r.projectId ?? ""),
-    assetId: typeof r.assetId === "string" ? r.assetId : null,
+    assetId: sourceAssetId,
     title:
       typeof r.title === "string"
         ? r.title

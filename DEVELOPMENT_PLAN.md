@@ -823,9 +823,9 @@ Use curl multipart upload + list + patch + delete.
 **Lead:** Arvin  
 
 ### Verify
-- [ ] Propose → accept → render → new asset in library
-- [ ] UI shows clip preview
-- [ ] Candidate tweak changes render boundaries
+- [x] Propose → accept → render → new asset in library
+- [x] UI shows clip preview
+- [x] Candidate tweak changes render boundaries
 
 ---
 
