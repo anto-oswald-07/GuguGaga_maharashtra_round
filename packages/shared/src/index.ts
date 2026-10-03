@@ -21,6 +21,10 @@ export {
   checkPasswordStrength,
 } from './validation/password';
 export type { PasswordStrengthResult } from './validation/password';
+export type {
+  VideoAssetMetadata,
+  ExtractedAssetMetadata,
+} from './types/assetMetadata';
 
 /** Response shape for `GET /api/v1/health`. */
 export type HealthResponse = {
