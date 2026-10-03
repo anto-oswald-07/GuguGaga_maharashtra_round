@@ -28,33 +28,51 @@
 
 | Field | Value |
 |-------|-------|
-| **Current phase** | Not started — Phase 1 next |
-| **Last completed tag** | _(none yet)_ |
-| **main status** | Docs only (`SRS.md`, `SDD.md`, `DEVELOPMENT_PLAN.md`, `context.md`, `README.md`) |
-| **Package manager** | Planned: `pnpm` (confirm in Phase 1 Integration) |
-| **Queue decision** | TBD (Redis+BullMQ vs DB queue) — decide Phase 1 Integration |
+| **Current phase** | Phase 1 complete — Phase 2 next |
+| **Last completed tag** | `phase-1-done` (pending push) |
+| **main status** | Monorepo foundation: `apps/web`, `services/api`, `services/worker`, `packages/shared`, media scripts, samples |
+| **Package manager** | **pnpm** workspaces (final) |
+| **Queue decision** | **DB-polling queue for MVP**; Redis remains optional in compose (`--profile redis`) for later BullMQ |
 | **Default AI provider** | `mock` until keys available |
-| **API base URL (local)** | `http://localhost:4000/api/v1` (planned) |
-| **Web app (local)** | `http://localhost:3000` (planned) |
-| **Who is Integration Lead next** | Anto (after Phase 1) |
+| **API base URL (local)** | `http://localhost:4000/api/v1` |
+| **Web app (local)** | `http://localhost:3000` |
+| **Who is Integration Lead next** | Brendan (after Phase 2) |
 
 ### 2.1 What Already Works
-- Nothing runnable yet (documentation phase complete).
+- `pnpm install` at root (workspace: web, api, worker, shared)
+- `GET /api/v1/health` → `{ status: 'ok', service: 'api' }`
+- `pnpm --filter web dev` (Next.js shell + nav stubs)
+- `pnpm --filter worker dev` → `worker skeleton started`
+- `./scripts/media/check-ffmpeg.sh` / `make-dummy-video.sh`
+- Sample script at `samples/scripts/sample_script.md`
 
 ### 2.2 Known Broken / Gaps
-- No monorepo code yet.
-- No database yet.
-- No FFmpeg scripts in repo yet (arrive Phase 1 — Cyrus).
+- Host `:5432` may already be occupied; use Podman/Docker mapped to `5433` and set `DATABASE_URL` accordingly (see `.env.example` note).
+- Arvin’s Phase 1 branch never shipped code; Integration Lead scaffolded worker + `docs/ai-contracts.md` + samples during mini-phase.
+- No auth / domain models yet (Phase 2).
 
 ### 2.3 Active Blockers
 - None.
 
 ### 2.4 Open NEED Items (from developers)
-- None yet.
+- None open for Phase 1.
 
 ### 2.5 Important Paths That Exist
 ```
 /
+├── apps/web/
+├── services/api/
+├── services/worker/
+├── packages/shared/
+├── samples/scripts/sample_script.md
+├── scripts/media/
+├── storage/.gitkeep
+├── docs/ffmpeg-notes.md
+├── docs/timeline-notes.md
+├── docs/ai-contracts.md
+├── docker-compose.yml
+├── pnpm-workspace.yaml
+├── .env.example
 ├── README.md
 ├── SRS.md
 ├── SDD.md
@@ -63,7 +81,7 @@
 ```
 
 ### 2.6 Env Vars In Use
-See Development Plan Appendix B. `.env.example` not created yet (Anto, Phase 1).
+Root `.env.example`: `DATABASE_URL`, `JWT_SECRET`, `PORT`, `STORAGE_ROOT`. Optional `REDIS_URL`. Web: `NEXT_PUBLIC_API_BASE_URL`.
 
 ---
 
@@ -268,6 +286,118 @@ Copy-paste this template every time:
 - **Depends on:** Anto Phase 2 Auth API matching assumed shapes (or Integration adapts)
 - **Needs from others:** Anto — implement `/auth/register`, `/auth/login`, `/auth/me`. If response keys differ (`accessToken` vs `token`, nested workspace, etc.), note mismatch at Integration.
 - **Risks:** End-to-end register/login cannot succeed until Auth API exists.
+### [2026-10-03 18:00] ROLE=B NAME=Anto Oswald PHASE=1 TYPE=INTEGRATION
+- **Summary:** Phase 1 Integration Lead closed gaps (worker skeleton, ai-contracts, samples, ffmpeg script fix), verified checklist, decided pnpm + DB-polling queue for MVP.
+- **Files touched:** `services/worker/**`, `docs/ai-contracts.md`, `samples/**`, `scripts/media/check-ffmpeg.sh`, `package.json`, `README.md`, `.env.example`, `context.md`
+- **APIs / types added:** None new (health already present)
+- **How to run / test what I did:** See INTEGRATION COMPLETE — Phase 1 in Section 7
+- **Depends on:** Merged Phase 1 PRs for Anto/Brendan/Cyrus
+- **Needs from others:** None for Phase 1 close
+- **Risks:** Local host Postgres may occupy `:5432`; use `:5433` mapping
+
+### [2026-10-03 17:56] ROLE=B NAME=Anto Oswald PHASE=2 TYPE=START
+- **Summary:** Started Phase 2 Dev B on `phase-02-anto` — Auth API + Prisma User/Workspace + shared Zod auth DTOs.
+- **Files touched:** (branch created from `main` @ `phase-1-done`)
+- **APIs / types added:** Planned `POST /auth/register`, `POST /auth/login`, `GET /auth/me`
+- **How to run / test what I did:** `git checkout phase-02-anto`
+- **Depends on:** Phase 1 integration complete; Postgres reachable via `DATABASE_URL`
+- **Needs from others:** None to start (Brendan builds UI against these shapes)
+- **Risks:** Host `:5432` conflict — this machine uses `:5433`
+
+### [2026-10-03 18:00] ROLE=B NAME=Anto Oswald PHASE=2 TYPE=DONE
+- **Summary:** Phase 2 Dev B complete — User/Workspace Prisma models, bcrypt+JWT auth routes, `requireAuth`, shared Zod auth schemas.
+- **Files touched:** `services/api/prisma/**`, `services/api/src/**`, `packages/shared/src/auth.ts`, `packages/shared/src/index.ts`, `packages/shared/package.json`, `services/api/package.json`, `README.md`, `context.md`, `pnpm-lock.yaml`
+- **APIs / types added:**
+  - `POST /api/v1/auth/register` → `{ token, user, workspace }` (201)
+  - `POST /api/v1/auth/login` → `{ token, user, workspace }` (200)
+  - `GET /api/v1/auth/me` → `{ user, workspace }` (Bearer JWT)
+  - Shared: `registerRequestSchema`, `loginRequestSchema`, `authTokenResponseSchema`, `meResponseSchema`, `JwtPayload`
+  - JWT claims: `{ userId, workspaceId }` (7d TTL)
+  - Password min length: 8
+- **How to run / test what I did:**
+  ```bash
+  pnpm install
+  pnpm --filter @creatorai/shared build
+  pnpm --filter api prisma:migrate   # or prisma migrate deploy
+  pnpm --filter api dev
+  curl -X POST localhost:4000/api/v1/auth/register -H 'content-type: application/json' \
+    -d '{"email":"a@b.com","password":"password123","name":"Test"}'
+  curl -X POST localhost:4000/api/v1/auth/login -H 'content-type: application/json' \
+    -d '{"email":"a@b.com","password":"password123"}'
+  curl localhost:4000/api/v1/auth/me -H "Authorization: Bearer TOKEN"
+  ```
+- **Depends on:** Postgres (`DATABASE_URL`); `JWT_SECRET` in `.env`
+- **Needs from others:** Brendan — wire Auth UI to these JSON shapes; Arvin — HTTP collection can mirror these paths
+- **Risks:** None remaining for Phase 2 B scope
+
+### [2026-10-03 12:30] ROLE=D NAME=Cyrus Selvaraj PHASE=2 TYPE=START
+- **Summary:** Started Phase 2 Dev D on branch `phase-02-cyrus` — auth security checklist + password policy helper.
+- **Files touched:** (branch created from updated `main`)
+- **APIs / types added:** None yet
+- **How to run / test what I did:** `git checkout phase-02-cyrus`
+- **Depends on:** `packages/shared` from Phase 1; Anto implements Auth API in parallel
+- **Needs from others:** None to start (`password.ts` did not exist)
+- **Risks:** Possible merge conflict on `packages/shared/src/index.ts` if Anto also exports auth DTOs there
+
+### [2026-10-03 12:32] ROLE=D NAME=Cyrus Selvaraj PHASE=2 TYPE=DONE
+- **Summary:** Phase 2 Dev D complete — auth security checklist, password rules doc, shared `checkPasswordStrength` / `isPasswordAcceptable` (min 8).
+- **Files touched:** `docs/security/auth-checklist.md`, `docs/security/password-rules.md`, `packages/shared/src/validation/password.ts`, `packages/shared/src/index.ts` (re-exports), `context.md`
+- **APIs / types added:** `MIN_PASSWORD_LENGTH`, `isPasswordAcceptable`, `checkPasswordStrength`, type `PasswordStrengthResult`
+- **How to run / test what I did:**
+  ```bash
+  cd packages/shared && npx tsc -p tsconfig.json
+  node -e "const m=require('./dist/index.js'); console.log(m.isPasswordAcceptable('short'), m.isPasswordAcceptable('longenough'), m.checkPasswordStrength('password1'));"
+  # expect: false true { acceptable:true, score:2, hints:[...] }
+  ```
+- **Depends on:** Anto should enforce min-8 server-side on register (see checklist)
+- **Needs from others:** Anto — wire password gate into register Zod; Brendan — optional UI hints; Integration — resolve `index.ts` export merge if needed
+- **Risks:** None for Phase 2 D scope
+### [2026-10-03 17:55] ROLE=C NAME=Arvin Almeida PHASE=1 TYPE=START
+- **Summary:** Started Phase 1 Dev C — samples pack, worker skeleton, AI contracts doc. Verified A/B/D deliverables already present on main; Dev C was the only Phase 1 gap.
+- **Files touched:** (starting)
+- **APIs / types added:** None
+- **How to run / test what I did:** N/A
+- **Depends on:** Root pnpm workspace globs already include `services/*` (Anto)
+- **Needs from others:** None for Phase 1 C scope
+- **Risks:** None
+
+### [2026-10-03 17:56] ROLE=C NAME=Arvin Almeida PHASE=1 TYPE=DONE
+- **Summary:** Phase 1 Dev C complete — demo samples, worker skeleton package, `docs/ai-contracts.md` listing SDD `AiProvider` methods (no implementation).
+- **Files touched:** `samples/README.md`, `samples/scripts/sample_script.md`, `services/worker/package.json`, `services/worker/tsconfig.json`, `services/worker/src/index.ts`, `services/worker/README.md`, `docs/ai-contracts.md`, `context.md`
+- **APIs / types added:** None (AI contracts documented only; `packages/ai-provider` is Phase 5)
+- **How to run / test what I did:**
+  ```bash
+  pnpm install
+  pnpm --filter worker start
+  # → prints: worker skeleton started
+  # sample script path: samples/scripts/sample_script.md
+  ```
+- **Depends on:** Workspace includes `services/*`
+- **Needs from others:** Integration may add root script alias for worker; no blockers
+- **Risks:** None remaining for Phase 1 C scope
+
+### [2026-10-03 17:58] ROLE=C NAME=Arvin Almeida PHASE=2 TYPE=START
+- **Summary:** Started Phase 2 Dev C — auth HTTP/Postman collections, testing guide, proposed auth types (Anto has not created `packages/shared` auth types yet).
+- **Files touched:** (starting)
+- **APIs / types added:** None yet
+- **How to run / test what I did:** N/A
+- **Depends on:** Anto Phase 2 auth API for live curl verification later; docs usable offline now
+- **Needs from others:** Anto — final register/login/me JSON field names (`token` vs `accessToken`) at Integration
+- **Risks:** Proposed types may differ slightly from Anto’s Zod schemas — prefer Anto’s at merge
+
+### [2026-10-03 18:00] ROLE=C NAME=Arvin Almeida PHASE=2 TYPE=DONE
+- **Summary:** Phase 2 Dev C complete — auth happy-path + negative HTTP examples, Postman collection, testing doc with SDD error JSON, proposed types under `docs/` to avoid colliding with Anto’s shared package.
+- **Files touched:** `docs/api/auth.http`, `docs/api/auth.postman.json`, `docs/testing/phase-2-auth.md`, `docs/proposed-auth-types.ts`, `context.md`
+- **APIs / types added:** Proposed only in `docs/proposed-auth-types.ts` (`RegisterRequest`, `LoginRequest`, `AuthSuccessResponse`, `MeResponse`, `ApiErrorBody`, …). Did **not** edit `packages/shared` or API code.
+- **How to run / test what I did:**
+  ```bash
+  # After Anto’s auth API is up:
+  # open docs/api/auth.http in REST Client, or import docs/api/auth.postman.json
+  # follow checklists in docs/testing/phase-2-auth.md
+  ```
+- **Depends on:** Auth routes from Anto (Phase 2 B) for live execution
+- **Needs from others:** Integration — reconcile proposed types vs Anto Zod; note Phase 1 flat `ApiError` vs SDD nested `{ error: { code, message, details } }`
+- **Risks:** Live curl cannot fully pass until Phase 2 B lands
 
 ---
 
@@ -359,6 +489,42 @@ _(Template above kept for other developers.)_
   ```
 - **Files I expect others to connect to:** `apps/web/src/lib/api.ts` (`Authorization: Bearer`), localStorage key `creatorai_token`
 - **Notes for next phase me:** Phase 3 Asset Library UI — reuse `apiFetch`; consider showing logged-in state in nav
+## Phase 2 Completion — Anto Oswald (Dev B)
+- **Date:** 2026-10-03
+- **Branch:** phase-02-anto
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (logout is client-side discard per MVP; no blacklist)
+- **Blockers handed to Integration:** Brendan must match `AuthTokenResponse` / `MeResponse` shapes; run `prisma migrate` before testing
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter api prisma:migrate
+  pnpm --filter api dev
+  curl -X POST localhost:4000/api/v1/auth/register -H 'content-type: application/json' -d '{"email":"a@b.com","password":"password123","name":"Test"}'
+  curl -X POST localhost:4000/api/v1/auth/login -H 'content-type: application/json' -d '{"email":"a@b.com","password":"password123"}'
+  curl localhost:4000/api/v1/auth/me -H "Authorization: Bearer TOKEN"
+  ```
+- **Files I expect others to connect to:**
+  - `@creatorai/shared` auth Zod schemas + types
+  - `services/api/src/auth/jwt.ts` (`requireAuth`)
+  - `POST/GET /api/v1/auth/*`
+- **Notes for next phase me:** Phase 3 = Assets API + storage adapter; reuse `request.auth.workspaceId`
+
+## Phase 2 Completion — Cyrus Selvaraj (Dev D)
+- **Date:** 2026-10-03
+- **Branch:** phase-02-cyrus
+- **All allowed tasks done:** yes
+- **Incomplete items:** none
+- **Blockers handed to Integration:** If Anto’s branch also edits `packages/shared/src/index.ts`, keep both auth DTO exports and password helper re-exports
+- **Commands to verify my work:**
+  ```bash
+  # read docs/security/auth-checklist.md and docs/security/password-rules.md
+  cd packages/shared && npx tsc -p tsconfig.json
+  node -e "const m=require('./dist/index.js'); console.log(m.MIN_PASSWORD_LENGTH, m.isPasswordAcceptable('abcdefgh'));"
+  ```
+- **Files I expect others to connect to:**
+  - `packages/shared/src/validation/password.ts` → Anto register validation
+  - `docs/security/auth-checklist.md` → Integration verify (JWT secret, no token logging, min-8)
+- **Notes for next phase me:** Phase 3 = thumbnail FFmpeg helper (`services/worker/src/media/thumbnail.ts` + shell script)
 
 ---
 
@@ -377,7 +543,28 @@ _(Template above kept for other developers.)_
 - **Follow-ups for Phase <N+1>:** 
 ```
 
-_(No integrations yet.)_
+## INTEGRATION COMPLETE — Phase 1
+- **Date:** 2026-10-03
+- **Lead:** Anto Oswald
+- **Branches merged (in order):** Anto (`phase-01-anto` via PR #1) → Brendan (`Brendan` via PR #2) → Cyrus (`phase-01-cyrus` via PR #3). Arvin (`origin/Arvin`) had **no Phase 1 code** (docs-only); Integration Lead filled P0 gaps.
+- **Conflicts & resolutions:** No content conflicts on PR merges. Integration fixes on `phase-01-integration`:
+  - Scaffolded `services/worker` (package + `src/index.ts` + README)
+  - Added `docs/ai-contracts.md` and tracked `samples/**`
+  - `chmod +x` on media scripts; fixed `check-ffmpeg.sh` SIGPIPE/`pipefail` exit 141 with `head`
+  - Root scripts: `dev:web`, `dev:worker`
+- **Verification checklist results:**
+  - [x] `pnpm install` at root succeeds (5 projects: web, api, worker, shared, root)
+  - [x] `curl` health OK → `{"status":"ok","service":"api"}`
+  - [x] `pnpm --filter web` resolves (package `web`)
+  - [x] `pnpm --filter worker dev` prints `worker skeleton started`
+  - [x] `scripts/media/check-ffmpeg.sh` OK
+  - [x] Decisions recorded below
+- **Decisions made:**
+  - Package manager: **pnpm** (final)
+  - Queue for MVP: **DB-polling** (Redis optional via compose profile for later BullMQ)
+- **Updated Current Snapshot:** yes
+- **Tag pushed:** `phase-1-done` (local; push when ready)
+- **Follow-ups for Phase 2:** Auth (Anto API + Brendan UI); Arvin docs/http collection; Cyrus security docs. Ensure Postgres reachable (if host `:5432` busy, map container to `5433`).
 
 ---
 
@@ -391,6 +578,7 @@ _(No integrations yet.)_
 | 2026-10-03 | Brendan | AuthResponse | `apps/web/src/lib/api.ts` | `packages/shared` (Anto Phase 2) | Assumed — awaiting Anto |
 | 2026-10-03 | Brendan | RegisterPayload | `apps/web/src/lib/api.ts` | `packages/shared` | Assumed `{ email, password, name }` |
 | 2026-10-03 | Brendan | LoginPayload | `apps/web/src/lib/api.ts` | `packages/shared` | Assumed `{ email, password }` |
+| 2026-10-03 | Arvin | Auth DTOs + ApiErrorBody | `docs/proposed-auth-types.ts` | `packages/shared` (prefer Anto’s Zod if present) | Proposed |
 
 ---
 
@@ -398,8 +586,8 @@ _(No integrations yet.)_
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Sample script | Planned Phase 1 (Arvin) | `samples/scripts/sample_script.md` |
-| Dummy video | Planned Phase 1 (Cyrus) | generate via script, don’t commit huge binaries |
+| Sample script | Done Phase 1 (Arvin) | `samples/scripts/sample_script.md` |
+| Dummy video | Done Phase 1 (Cyrus) | generate via script, don’t commit huge binaries |
 | Mock AI stable | Planned Phase 5/10 (Arvin) | |
 | Golden path judge script | Planned Phase 10 (Arvin) | `docs/demo/judge-script.md` |
 | Emergency pre-rendered clip | Planned Phase 10 (Cyrus) | |

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-ffmpeg.sh — verify ffmpeg and ffprobe are available on PATH.
 # Exit 0 on success; non-zero if either tool is missing.
-set -euo pipefail
+set -eu
 
 missing=0
 
@@ -11,7 +11,7 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
   missing=1
 else
   echo "OK: ffmpeg"
-  ffmpeg -version | head -n 1
+  ffmpeg -version 2>&1 | sed -n '1p'
 fi
 
 if ! command -v ffprobe >/dev/null 2>&1; then
@@ -20,7 +20,7 @@ if ! command -v ffprobe >/dev/null 2>&1; then
   missing=1
 else
   echo "OK: ffprobe"
-  ffprobe -version | head -n 1
+  ffprobe -version 2>&1 | sed -n '1p'
 fi
 
 if [[ "$missing" -ne 0 ]]; then

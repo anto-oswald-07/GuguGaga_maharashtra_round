@@ -47,4 +47,36 @@ curl http://localhost:4000/api/v1/health
 # → {"status":"ok","service":"api"}
 ```
 
-Web app (`apps/web`) and worker (`services/worker`) arrive from other Phase 1 branches; Integration wires the full monorepo.
+### 5b. Auth (Phase 2)
+```bash
+# migrate once
+pnpm --filter api prisma:migrate
+
+curl -X POST http://localhost:4000/api/v1/auth/register \
+  -H 'content-type: application/json' \
+  -d '{"email":"a@b.com","password":"password123","name":"Test"}'
+
+curl -X POST http://localhost:4000/api/v1/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"email":"a@b.com","password":"password123"}'
+
+curl http://localhost:4000/api/v1/auth/me -H "Authorization: Bearer TOKEN"
+```
+
+### 6. Web app
+```bash
+pnpm --filter web dev
+# → http://localhost:3000
+```
+
+### 7. Worker skeleton
+```bash
+pnpm --filter worker dev
+# → prints "worker skeleton started"
+```
+
+### 8. FFmpeg check / dummy video
+```bash
+./scripts/media/check-ffmpeg.sh
+./scripts/media/make-dummy-video.sh   # → storage/samples/dummy.mp4 (gitignored)
+```
