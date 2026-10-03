@@ -10,6 +10,7 @@ import {
   AssetHttpError,
   getAsset,
   getAssetForContent,
+  getAssetThumbnail,
   listAssets,
   softDeleteAsset,
   updateAsset,
@@ -198,6 +199,27 @@ export async function registerAssetRoutes(app: FastifyInstance): Promise<void> {
             'Content-Disposition',
             `inline; filename="${meta.name.replace(/"/g, '')}"`,
           )
+          .send(stream);
+      } catch (err) {
+        if (err instanceof AssetHttpError) {
+          return sendAssetError(reply, err);
+        }
+        throw err;
+      }
+    },
+  );
+
+  app.get(
+    `${API_PREFIX}/assets/:id/thumbnail`,
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      try {
+        const thumb = await getAssetThumbnail(request.auth!.workspaceId, id);
+        const stream = storage.openReadStream(thumb.path);
+        return reply
+          .header('Content-Type', thumb.mime)
+          .header('Cache-Control', 'private, max-age=3600')
           .send(stream);
       } catch (err) {
         if (err instanceof AssetHttpError) {

@@ -16,7 +16,8 @@ services:
     container_name: creatorai-postgres
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      # Override with POSTGRES_HOST_PORT=5433 in .env if host :5432 is taken
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     environment:
       POSTGRES_USER: creatorai
       POSTGRES_PASSWORD: creatorai

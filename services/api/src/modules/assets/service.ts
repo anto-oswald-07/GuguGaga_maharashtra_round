@@ -7,6 +7,7 @@ import type {
 import type { Asset, Prisma } from '@prisma/client';
 import { prisma } from '../../db/prisma';
 import { storage } from '../../storage/local';
+import { enrichVideoAsset } from './enrich';
 import { assetTypeFromMime } from './mime';
 
 export class AssetHttpError extends Error {
@@ -76,7 +77,7 @@ export async function uploadAsset(opts: {
   const displayName =
     (opts.name?.trim() || saved.filename).slice(0, 255) || saved.filename;
 
-  const row = await prisma.asset.create({
+  let row = await prisma.asset.create({
     data: {
       id: saved.assetId,
       workspaceId: opts.workspaceId,
@@ -90,6 +91,28 @@ export async function uploadAsset(opts: {
       metadata: {},
     },
   });
+
+  // Phase 3 Integration: sync MVP enrichment for videos (no Job table yet).
+  if (type === 'VIDEO') {
+    try {
+      const enriched = await enrichVideoAsset({
+        workspaceId: opts.workspaceId,
+        assetId: saved.assetId,
+        originalRelativePath: saved.relativePath,
+      });
+      row = await prisma.asset.update({
+        where: { id: saved.assetId },
+        data: { metadata: enriched },
+      });
+    } catch (err) {
+      // Upload succeeded; enrichment is best-effort for demos.
+      console.warn(
+        '[assets] video enrichment failed',
+        saved.assetId,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
 
   return toAssetDto(row);
 }
@@ -197,4 +220,33 @@ export async function getAssetForContent(
     throw new AssetHttpError(404, 'not_found', 'Asset file missing on disk');
   }
   return { mime: row.mime, name: row.name, path: row.path };
+}
+
+export async function getAssetThumbnail(
+  workspaceId: string,
+  assetId: string,
+): Promise<{ path: string; mime: string }> {
+  const row = await prisma.asset.findFirst({
+    where: { id: assetId, workspaceId, deletedAt: null },
+  });
+  if (!row) {
+    throw new AssetHttpError(404, 'not_found', 'Asset not found');
+  }
+
+  const meta =
+    row.metadata &&
+    typeof row.metadata === 'object' &&
+    !Array.isArray(row.metadata)
+      ? (row.metadata as Record<string, unknown>)
+      : {};
+  const thumb =
+    typeof meta.thumbnailPath === 'string' ? meta.thumbnailPath : null;
+  if (!thumb) {
+    throw new AssetHttpError(404, 'not_found', 'Thumbnail not available');
+  }
+  const exists = await storage.exists(thumb);
+  if (!exists) {
+    throw new AssetHttpError(404, 'not_found', 'Thumbnail file missing on disk');
+  }
+  return { path: thumb, mime: 'image/jpeg' };
 }

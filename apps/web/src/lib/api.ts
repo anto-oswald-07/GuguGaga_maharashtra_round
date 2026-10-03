@@ -146,8 +146,9 @@ export type Asset = {
   updatedAt?: string;
 };
 
+/** Matches `@creatorai/shared` `assetListResponseSchema` (`items`, not `assets`). */
 export type AssetListResponse = {
-  assets: Asset[];
+  items: Asset[];
 };
 
 export type ListAssetsParams = {
