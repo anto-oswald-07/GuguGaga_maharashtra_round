@@ -56,10 +56,26 @@ export type Transcript = {
   segments: TranscriptSegment[];
 };
 
+/** Input for Phase 6 STT (SDD §7.2). */
+export type TranscribeInput = {
+  /** Path to audio/video file (Whisper). */
+  filePath?: string;
+  /** In-memory audio (Whisper). */
+  audio?: { data: Uint8Array | Buffer; mimeType: string; filename?: string };
+  /**
+   * Mock / fallback source text — turned into timestamped word segments
+   * when no audio is available (demos + tests).
+   */
+  hintText?: string;
+  /** BCP-47 / ISO language hint (e.g. `en`). */
+  language?: string;
+};
+
 export type Alignment = {
   scriptExcerpt: string;
   startMs: number;
   endMs: number;
+  /** 0–1 fuzzy / model confidence. */
   confidence: number;
 };
 
@@ -96,7 +112,10 @@ export interface AiProvider {
     platforms: Platform[],
   ): Promise<SupportingContent>;
 
-  /** Phase 6 — stub until then. */
+  /** Phase 6 — STT → normalized TranscriptSegment[]. */
+  transcribe(input: TranscribeInput): Promise<Transcript>;
+
+  /** Phase 6 — fuzzy (or better) script↔transcript alignment. */
   alignScriptToTranscript(
     script: ScriptDoc,
     segments: TranscriptSegment[],

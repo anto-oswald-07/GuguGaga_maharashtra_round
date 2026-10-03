@@ -1425,3 +1425,31 @@ _(Template above kept for other developers.)_
   - `@creatorai/shared` mapping types
   - Job types `TRANSCRIBE` / `ALIGN_SCRIPT` via existing `/jobs/:id` poll
 - **Notes for next phase me:** Phase 7 Clips API — same job+persist pattern
+## Phase 6 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** `Arvin` (working tree; commit when ready)
+- **All allowed tasks done:** yes
+- **Incomplete items:** none for Phase 6 C scope (persist transcripts/mappings = Anto Phase 6 B; Mapping UI = Brendan Phase 6 A; FFmpeg extract = Cyrus Phase 6 D)
+- **Blockers handed to Integration:**
+  - Anto: wire `TRANSCRIBE` / `ALIGN_SCRIPT` Job types → consumers → persist Transcript / Mapping
+  - Brendan: Mapping UI consumes `Alignment[]` (`scriptExcerpt`, `startMs`, `endMs`, `confidence` 0–1) + transcript segments
+  - Cyrus: `extractAudio` output path → Whisper `filePath` input
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/ai-provider build
+  pnpm --filter @creatorai/ai-provider test
+  pnpm --filter worker build
+  AI_PROVIDER=mock pnpm --filter worker transcribe -- --hint-text "Stop filming one Reel a day. Pick one topic cluster for the week."
+  AI_PROVIDER=mock pnpm --filter worker align -- --fixture
+  ```
+- **Files I expect others to connect to:**
+  - `@creatorai/ai-provider` `transcribe` / `alignScriptToTranscript` (+ `fuzzyAlignScriptToTranscript`, `mockTranscribeFromText`)
+  - `services/worker/src/consumers/{transcribe,align}.ts` → Job runners
+  - Fixtures: `packages/ai-provider/test/fixtures/{sample_script.json,sample_spoken.txt}`
+- **Notes for next phase me:** Phase 7 C = clip scoring AI on same provider stubs
+
+### Chronological — 2026-10-03 20:59 (Arvin / Phase 6 Dev C)
+- **Summary:** Phase 6 C STT + fuzzy alignment complete. Added `AiProvider.transcribe` / real `alignScriptToTranscript`; mock word-timed segments; OpenAI Whisper (`verbose_json`); pure `fuzzyAlign` with confidence 0–1; fixtures + 7 unit tests; worker helpers + CLI consumers (`transcribe` / `align --fixture`). Docs + `.env.example` updated. Smoke SUCCEEDED (mock, no keys).
+- **Files touched:** `packages/ai-provider/src/{types,index,align/fuzzyAlign,stt/*,mock,openai,gemini}.ts`, `packages/ai-provider/test/**`, `packages/ai-provider/{package.json,README.md}`, `services/worker/src/{ai/{transcribe,align},consumers/{transcribe,align},index}.ts`, `services/worker/package.json`, `docs/ai-contracts.md`, `.env.example`, `context.md`
+- **Needs from others:** Anto Job/Transcript persistence; Brendan Mapping UI; Cyrus audio extract
+- **Risks:** Whisper untested without `OPENAI_API_KEY`; Gemini STT is mock-fallback only; fuzzy align can yield low-confidence short excerpts (UI should highlight / allow remapping)

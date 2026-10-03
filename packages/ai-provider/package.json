@@ -2,7 +2,7 @@
   "name": "@creatorai/ai-provider",
   "version": "0.0.1",
   "private": true,
-  "description": "CreatorAi LLM providers (mock + OpenAI + Gemini)",
+  "description": "CreatorAi LLM + STT providers (mock + OpenAI + Gemini)",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -14,13 +14,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "prepare": "tsc -p tsconfig.json"
+    "prepare": "tsc -p tsconfig.json",
+    "test": "tsx --test test/**/*.test.ts"
   },
   "dependencies": {
     "@creatorai/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.7",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }
 }
