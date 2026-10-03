@@ -74,13 +74,15 @@ Worker media helpers throw `MediaPipelineError` with stable `code` + human messa
 | `INPUT_EMPTY` | 0-byte file |
 | `ZERO_DURATION` | ffprobe duration unusable |
 | `RANGE_INVALID` | Zero/negative clip or timeline window |
-| `RANGE_OUT_OF_BOUNDS` | Cut past source EOF |
+| `RANGE_OUT_OF_BOUNDS` | Clip **start** past source EOF (or empty after clamp) |
 | `ASSET_UNMAPPED` | Timeline clip assetId has no `assetPaths` entry |
 | `FFMPEG_MISSING` | `ffmpeg`/`ffprobe` not on PATH |
 | `FFMPEG_FAILED` | ffmpeg exited non-zero (stderr tail included) |
 | `OUTPUT_MISSING` | Expected output file missing/empty after run |
 
-Module: `services/worker/src/media/mediaGuard.ts`.
+**Range policy:** `endMs` past source EOF is **clamped** to EOF (same as prior ffmpeg `-t` behavior). That keeps Phase 7/9 SCORE / mock windows working on short `dummy.mp4` (~5s) without forcing job `mock-copy` fallbacks. Only start-past-EOF and zero-length windows hard-fail.
+
+Module: `services/worker/src/media/mediaGuard.ts` (`normalizeCutRangeMs`).
 
 ---
 

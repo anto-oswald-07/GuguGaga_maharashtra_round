@@ -26,6 +26,7 @@ import {
   assertOutputWritten,
   assertPositiveDuration,
   ensureOutputDir,
+  normalizeCutRangeMs,
   runFfmpeg,
 } from './mediaGuard';
 
@@ -135,6 +136,46 @@ function collectCaptions(tl: EditTimeline): CaptionItem[] {
     }
   }
   return items;
+}
+
+/**
+ * Clamp each video clip's [srcStartMs, srcEndMs] to the probed source duration.
+ * Matches cutClip / prior ffmpeg trim behavior so mock SCORE windows that
+ * overshoot short demo media (e.g. 5s dummy.mp4) still render.
+ */
+export function clampTimelineToSourceDurations(
+  timeline: EditTimeline,
+  durationSecByAssetId: Map<string, number>,
+): EditTimeline {
+  return {
+    ...timeline,
+    tracks: timeline.tracks.map((track) => {
+      if (track.type !== 'video') return track;
+      return {
+        ...track,
+        clips: track.clips.map((clip) => {
+          const dur = durationSecByAssetId.get(clip.assetId);
+          if (dur == null) return clip;
+          const range = normalizeCutRangeMs(
+            clip.srcStartMs,
+            clip.srcEndMs,
+            dur,
+          );
+          if (
+            range.startMs === clip.srcStartMs &&
+            range.endMs === clip.srcEndMs
+          ) {
+            return clip;
+          }
+          return {
+            ...clip,
+            srcStartMs: range.startMs,
+            srcEndMs: range.endMs,
+          };
+        }),
+      };
+    }),
+  };
 }
 
 function formatSrtTime(ms: number): string {
@@ -318,6 +359,7 @@ export async function renderTimeline(
   const textItems = collectTextItems(timeline);
   const captionItems = collectCaptions(timeline);
 
+  const durationSecByAssetId = new Map<string, number>();
   for (const clip of clips) {
     const path = options.assetPaths[clip.assetId];
     if (!path) {
@@ -327,12 +369,22 @@ export async function renderTimeline(
       );
     }
     await assertInputReadable(path, `asset ${clip.assetId}`);
-    await assertPositiveDuration(path, { kind: `asset ${clip.assetId}` });
+    const durationSec = await assertPositiveDuration(path, {
+      kind: `asset ${clip.assetId}`,
+    });
+    durationSecByAssetId.set(clip.assetId, durationSec);
   }
+
+  // Clamp overshooting SCORE/mock windows to source EOF (hard-fail only when
+  // start is past EOF or the window collapses).
+  const clampedTimeline = clampTimelineToSourceDurations(
+    timeline,
+    durationSecByAssetId,
+  );
 
   await ensureOutputDir(options.outputPath);
 
-  const plan = buildFfmpegPlan(timeline, options);
+  const plan = buildFfmpegPlan(clampedTimeline, options);
 
   if (plan.softsubsPath && plan.softsubsContent != null) {
     await writeFile(plan.softsubsPath, plan.softsubsContent, 'utf8');

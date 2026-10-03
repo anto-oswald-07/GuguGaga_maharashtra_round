@@ -93,7 +93,7 @@ if [[ -n "$NODE" && -f "$TSC" ]]; then
     bad "cutClip empty input guard"
   fi
 
-  # Out of bounds vs 5s dummy
+  # Start past EOF vs 5s dummy → hard fail
   if "$NODE" -e "
     const {cutClip}=require('$OUTDIR/media/cutClip.js');
     cutClip('$SAMPLES/dummy.mp4','$TMP/oob.mp4',9000,10000).then(()=>{console.error('should throw');process.exit(2)}).catch(e=>{
@@ -101,9 +101,25 @@ if [[ -n "$NODE" && -f "$TSC" ]]; then
       console.log(e.code);
     });
   "; then
-    ok "cutClip out-of-bounds → RANGE_OUT_OF_BOUNDS"
+    ok "cutClip start-past-EOF → RANGE_OUT_OF_BOUNDS"
   else
-    bad "cutClip out-of-bounds guard"
+    bad "cutClip start-past-EOF guard"
+  fi
+
+  # End past EOF is clamped (SCORE windows often exceed short demo media)
+  if "$NODE" -e "
+    const {cutClip}=require('$OUTDIR/media/cutClip.js');
+    cutClip('$SAMPLES/dummy.mp4','$TMP/clamp.mp4',0,15000).then((r)=>{
+      if(!(r.endMs > r.startMs) || r.endMs > 5100) {
+        console.error('expected endMs clamped near 5s, got', r);
+        process.exit(1);
+      }
+      console.log('clamped endMs='+r.endMs);
+    });
+  "; then
+    ok "cutClip end-past-EOF → clamped (still cuts)"
+  else
+    bad "cutClip end-past-EOF clamp"
   fi
 
   # Zero-duration window

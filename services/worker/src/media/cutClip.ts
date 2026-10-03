@@ -13,11 +13,11 @@
  */
 
 import {
-  assertCutRangeMs,
   assertInputReadable,
   assertOutputWritten,
   assertPositiveDuration,
   ensureOutputDir,
+  normalizeCutRangeMs,
   runFfmpeg,
 } from './mediaGuard';
 
@@ -70,7 +70,11 @@ export async function cutClip(
   const sourceDurationSec = await assertPositiveDuration(inputPath, {
     kind: 'video',
   });
-  assertCutRangeMs(startMs, endMs, sourceDurationSec);
+  // Clamp endMs to EOF so Phase 7 SCORE windows that overshoot short demo media
+  // still cut with ffmpeg (jobs catch → mock-copy only on hard failures).
+  const range = normalizeCutRangeMs(startMs, endMs, sourceDurationSec);
+  startMs = range.startMs;
+  endMs = range.endMs;
   await ensureOutputDir(outputPath);
 
   const mode: CutClipMode = options.mode ?? 'reencode';

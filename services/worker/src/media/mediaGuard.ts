@@ -157,13 +157,15 @@ export async function assertPositiveDuration(
 
 /**
  * Validate cut window against source duration (ms).
- * Rejects zero-length and start past EOF; end past EOF is also rejected (clearer than silent clamp).
+ * - Rejects zero-length and start past EOF.
+ * - Clamps endMs to source EOF when it overshoots (matches prior ffmpeg `-t` behavior
+ *   and Phase 7/9 demos where score windows can exceed short `dummy.mp4`).
  */
-export function assertCutRangeMs(
+export function normalizeCutRangeMs(
   startMs: number,
   endMs: number,
   sourceDurationSec: number,
-): void {
+): { startMs: number; endMs: number; clamped: boolean } {
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
     throw new MediaPipelineError(
       'RANGE_INVALID',
@@ -191,14 +193,29 @@ export function assertCutRangeMs(
         `Pick a window inside the source media.`,
     );
   }
-  if (endMs > sourceMs + 1) {
-    // +1ms tolerance for float → ms rounding
+  let end = endMs;
+  let clamped = false;
+  if (end > sourceMs + 1) {
+    end = sourceMs;
+    clamped = true;
+  }
+  if (end <= startMs) {
     throw new MediaPipelineError(
       'RANGE_OUT_OF_BOUNDS',
-      `Clip endMs=${endMs} exceeds source duration ${sourceMs.toFixed(0)}ms (${sourceDurationSec.toFixed(3)}s). ` +
-        `Shorten the clip window.`,
+      `After clamping to source duration ${sourceMs.toFixed(0)}ms, clip window is empty ` +
+        `(startMs=${startMs}). Source is too short for this cut.`,
     );
   }
+  return { startMs, endMs: end, clamped };
+}
+
+/** @deprecated Prefer normalizeCutRangeMs — kept name for call-site clarity in docs. */
+export function assertCutRangeMs(
+  startMs: number,
+  endMs: number,
+  sourceDurationSec: number,
+): void {
+  normalizeCutRangeMs(startMs, endMs, sourceDurationSec);
 }
 
 /** Ensure parent dir exists before ffmpeg write. */
