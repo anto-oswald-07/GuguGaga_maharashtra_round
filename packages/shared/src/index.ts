@@ -213,10 +213,22 @@ export {
   type PackDownloadResponse,
 } from './packs';
 
+export {
+  insightsOverviewSchema,
+  postEngagementRequestSchema,
+  insightMetricSchema,
+  type InsightsOverview,
+  type PostEngagementRequest,
+  type InsightMetricDto,
+} from './insights';
+
 /** Response shape for `GET /api/v1/health`. */
 export type HealthResponse = {
-  status: 'ok';
+  status: 'ok' | 'degraded';
   service: 'api';
+  /** Postgres reachability (Phase 10 health polish). */
+  db?: 'up' | 'down';
+  checkedAt?: string;
 };
 
 /** Standard API error payload. */
