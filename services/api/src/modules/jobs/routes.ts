@@ -33,7 +33,9 @@ export async function registerJobRoutes(app: FastifyInstance): Promise<void> {
       if (!parsed.success) {
         return reply.status(400).send({
           error: 'validation_error',
-          message: parsed.error.issues.map((i) => i.message).join('; '),
+          message: parsed.error.issues
+            .map((i) => `${i.path.join('.') || 'query'}: ${i.message}`)
+            .join('; '),
           statusCode: 400,
         });
       }
@@ -98,7 +100,9 @@ export async function registerJobRoutes(app: FastifyInstance): Promise<void> {
       if (!parsed.success) {
         return reply.status(400).send({
           error: 'validation_error',
-          message: parsed.error.issues.map((i) => i.message).join('; '),
+          message: parsed.error.issues
+            .map((i) => `${i.path.join('.') || 'body'}: ${i.message}`)
+            .join('; '),
           statusCode: 400,
         });
       }

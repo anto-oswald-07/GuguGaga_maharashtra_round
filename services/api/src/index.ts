@@ -7,6 +7,7 @@ import {
   API_PREFIX,
   type HealthResponse,
 } from '@creatorai/shared';
+import { prisma } from './db/prisma';
 import { registerAuthRoutes } from './modules/auth/routes';
 import { registerAssetRoutes } from './modules/assets/routes';
 import { registerProjectRoutes } from './modules/projects/routes';
@@ -16,6 +17,7 @@ import { registerMappingRoutes } from './modules/mapping/routes';
 import { registerClipsRoutes } from './modules/clips/routes';
 import { registerTimelinesRoutes } from './modules/timelines/routes';
 import { registerPacksRoutes } from './modules/packs/routes';
+import { registerInsightsRoutes } from './modules/insights/routes';
 import { startJobPoller } from './modules/jobs/processor';
 
 loadEnv({ path: path.resolve(__dirname, '../../../.env') });
@@ -40,8 +42,34 @@ async function main() {
     limits: { fileSize: MAX_FILE_BYTES, files: 1 },
   });
 
-  app.get(`${API_PREFIX}/health`, async (): Promise<HealthResponse> => {
-    return { status: 'ok', service: 'api' };
+  app.get(`${API_PREFIX}/health`, async (_request, reply) => {
+    const checkedAt = new Date().toISOString();
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      const body: HealthResponse = {
+        status: 'ok',
+        service: 'api',
+        db: 'up',
+        checkedAt,
+      };
+      return reply.status(200).send(body);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Database unreachable';
+      app.log.error({ err }, 'Health check DB failed');
+      const body: HealthResponse = {
+        status: 'degraded',
+        service: 'api',
+        db: 'down',
+        checkedAt,
+      };
+      return reply.status(503).send({
+        ...body,
+        error: 'db_unavailable',
+        message: `API is up but Postgres is unreachable: ${message}`,
+        statusCode: 503,
+      });
+    }
   });
 
   await registerAuthRoutes(app);
@@ -52,6 +80,7 @@ async function main() {
   await registerClipsRoutes(app);
   await registerTimelinesRoutes(app);
   await registerPacksRoutes(app);
+  await registerInsightsRoutes(app);
   await registerJobRoutes(app);
 
   await app.listen({ port, host });
