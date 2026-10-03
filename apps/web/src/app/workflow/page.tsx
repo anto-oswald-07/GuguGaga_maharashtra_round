@@ -1,10 +1,5 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { KanbanBoard } from "@/components/workflow/KanbanBoard";
 
 export default function WorkflowPage() {
-  return (
-    <ComingSoon
-      title="Workflow"
-      description="Coming soon — kanban board."
-    />
-  );
+  return <KanbanBoard />;
 }

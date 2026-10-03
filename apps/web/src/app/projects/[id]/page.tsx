@@ -1,4 +1,4 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { ProjectDetail } from "@/components/projects/ProjectDetail";
 
 type ProjectPageProps = {
   params: Promise<{ id: string }>;
@@ -6,11 +6,5 @@ type ProjectPageProps = {
 
 export default async function ProjectPage({ params }: ProjectPageProps) {
   const { id } = await params;
-
-  return (
-    <ComingSoon
-      title={`Project ${id}`}
-      description="Coming soon — project hub."
-    />
-  );
+  return <ProjectDetail projectId={id} />;
 }
