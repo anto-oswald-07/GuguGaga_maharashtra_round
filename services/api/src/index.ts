@@ -15,6 +15,7 @@ import { registerJobRoutes } from './modules/jobs/routes';
 import { registerMappingRoutes } from './modules/mapping/routes';
 import { registerClipsRoutes } from './modules/clips/routes';
 import { registerTimelinesRoutes } from './modules/timelines/routes';
+import { registerPacksRoutes } from './modules/packs/routes';
 import { startJobPoller } from './modules/jobs/processor';
 
 loadEnv({ path: path.resolve(__dirname, '../../../.env') });
@@ -50,6 +51,7 @@ async function main() {
   await registerMappingRoutes(app);
   await registerClipsRoutes(app);
   await registerTimelinesRoutes(app);
+  await registerPacksRoutes(app);
   await registerJobRoutes(app);
 
   await app.listen({ port, host });

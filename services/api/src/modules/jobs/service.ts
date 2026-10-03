@@ -43,6 +43,12 @@ import {
   persistTimelinePreview,
   persistTimelineProposal,
 } from '../timelines/service';
+import {
+  adaptPackOutputPath,
+  loadAdaptPlatformContext,
+  mockPackCopy,
+  persistAdaptedPack,
+} from '../packs/service';
 import { appendAiScriptVersion } from '../scripts/service';
 import { enqueueJob } from './queue';
 
@@ -910,6 +916,152 @@ export async function completeJobWithAi(
         clipCount,
         textOverlayCount,
         mode: renderMode,
+      };
+    } else if (job.type === 'ADAPT_PLATFORM') {
+      if (!job.projectId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'ADAPT_PLATFORM job missing projectId',
+        );
+      }
+      const sourceAssetId = strField(input, 'sourceAssetId', '');
+      if (!sourceAssetId) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'ADAPT_PLATFORM job missing sourceAssetId',
+        );
+      }
+      const packIds = (
+        Array.isArray(input.packIds)
+          ? input.packIds.filter((p): p is string => typeof p === 'string')
+          : []
+      );
+      if (packIds.length === 0) {
+        throw new JobHttpError(
+          400,
+          'validation_error',
+          'ADAPT_PLATFORM job missing packIds',
+        );
+      }
+
+      const ctx = await loadAdaptPlatformContext(
+        job.workspaceId,
+        job.projectId,
+        packIds,
+        sourceAssetId,
+      );
+
+      const platforms = ctx.packs.map((p) => p.platform) as Platform[];
+      let byPlatform: Partial<
+        Record<
+          string,
+          { titles: string[]; captions: string[]; hashtags: string[] }
+        >
+      > = {};
+      let copyProvider = 'mock-fallback';
+
+      try {
+        const supporting = await provider.generateSupporting(
+          ctx.scriptHint || 'Creator tip for multi-platform pack',
+          platforms,
+        );
+        byPlatform = supporting.byPlatform ?? {};
+        copyProvider = supporting.provider ?? provider.name;
+      } catch {
+        // Fall through to mockPackCopy per platform below.
+      }
+
+      const packResults: Array<Record<string, unknown>> = [];
+
+      for (const pack of ctx.packs) {
+        const platform = pack.platform as Platform;
+        const item = byPlatform[platform];
+        const mock = mockPackCopy(platform, ctx.scriptHint.split('\n')[0]);
+        const title =
+          item?.titles?.[0]?.trim() || mock.title;
+        const caption =
+          item?.captions?.[0]?.trim() || mock.caption;
+        const hashtags =
+          item?.hashtags && item.hashtags.length > 0
+            ? item.hashtags
+            : mock.hashtags;
+
+        const absOutput = adaptPackOutputPath(
+          storage.getRoot(),
+          job.workspaceId,
+          jobId,
+          platform,
+        );
+
+        // Cyrus Phase 9 D (`worker/media/adaptAspect`) not on main yet —
+        // mock-copy so packs still get an output Asset for demos.
+        // Integration: swap in adaptAspect(source, out, { aspectRatio }).
+        const adaptMode = 'mock-copy';
+        {
+          const { copyFile, mkdir } = await import('node:fs/promises');
+          const { dirname } = await import('node:path');
+          await mkdir(dirname(absOutput), { recursive: true });
+          await copyFile(ctx.sourcePath, absOutput);
+        }
+
+        const persisted = await persistAdaptedPack({
+          workspaceId: job.workspaceId,
+          projectId: job.projectId,
+          packId: pack.id,
+          outputPath: absOutput,
+          jobId,
+          title,
+          caption,
+          hashtags,
+          aspectRatio: pack.aspectRatio,
+        });
+
+        packResults.push({
+          packId: pack.id,
+          platform,
+          aspectRatio: pack.aspectRatio,
+          assetId: persisted.assetId,
+          outputPath: persisted.relativePath,
+          title,
+          caption,
+          hashtags,
+          mode: adaptMode,
+        });
+      }
+
+      // Nudge stage toward ADAPTED when still earlier (demo convenience).
+      const project = await prisma.project.findFirst({
+        where: { id: job.projectId, workspaceId: job.workspaceId },
+        select: { stage: true },
+      });
+      if (
+        project &&
+        ['IDEA', 'SCRIPT', 'RECORDED', 'EDITING', 'CLIPS'].includes(
+          project.stage,
+        )
+      ) {
+        await prisma.project.update({
+          where: { id: job.projectId },
+          data: { stage: 'ADAPTED' },
+        });
+        await prisma.stageEvent.create({
+          data: {
+            projectId: job.projectId,
+            fromStage: project.stage,
+            toStage: 'ADAPTED',
+          },
+        });
+      }
+
+      output = {
+        ...output,
+        packIds,
+        sourceAssetId,
+        packs: packResults,
+        count: packResults.length,
+        copyProvider,
       };
     } else {
       output = {
