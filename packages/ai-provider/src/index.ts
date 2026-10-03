@@ -47,6 +47,17 @@ export {
   stableDemoTimeline,
   validateTimeline,
 } from './timeline/proposeTimeline';
+export {
+  PLATFORM_COPY_LIMITS,
+  buildPlatformCopyItem,
+  clampCopy,
+  clampSupportingItem,
+  extractTopicBit,
+  generatePlatformCopyFromScript,
+  limitsForPlatform,
+  normalizeHashtag,
+} from './platform/generatePlatformCopy';
+export type { PlatformCopyLimits } from './platform/copyLimits';
 export type {
   TimelineAcceptedClip,
   TimelineCaptionItem,

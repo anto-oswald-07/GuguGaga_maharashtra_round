@@ -1,6 +1,7 @@
 import type { Platform } from '@creatorai/shared';
 import { fuzzyAlignScriptToTranscript } from '../align/fuzzyAlign';
 import { scoreClipWindowsFromTranscript } from '../clips/scoreClipWindows';
+import { generatePlatformCopyFromScript } from '../platform/generatePlatformCopy';
 import { proposeTimelineFromContext } from '../timeline/proposeTimeline';
 import { mockTranscribeFromText } from '../stt/mockTranscribe';
 import {
@@ -102,33 +103,15 @@ export class MockAiProvider implements AiProvider {
     return out;
   }
 
+  /**
+   * Phase 9 — platform-tuned titles/captions/hashtags (length-clamped,
+   * distinct demo labels per Platform). Deterministic for identical inputs.
+   */
   async generateSupporting(
     script: string,
     platforms: Platform[],
   ): Promise<SupportingContent> {
-    const topicBit =
-      script.match(/topic[:\s]+([^\n.]+)/i)?.[1]?.trim() ||
-      script.slice(0, 40).replace(/\s+/g, ' ').trim() ||
-      'Creator tip';
-    const byPlatform: SupportingContent['byPlatform'] = {};
-    const list = platforms.length > 0 ? platforms : (['YOUTUBE_SHORTS'] as Platform[]);
-
-    for (const p of list) {
-      byPlatform[p] = {
-        titles: [
-          `${topicBit} (quick tip)`,
-          `How I actually do ${topicBit}`,
-          `${topicBit} — no fluff`,
-        ],
-        captions: [
-          `${topicBit}. Save this for later. #creator`,
-          `Tried ${topicBit}? Drop a comment with your biggest blocker.`,
-        ],
-        hashtags: ['#creator', '#contentbatch', '#shorts', `#${p.toLowerCase()}`],
-      };
-    }
-
-    return { byPlatform, provider: this.name, model: 'mock' };
+    return generatePlatformCopyFromScript(script, platforms);
   }
 
   /**

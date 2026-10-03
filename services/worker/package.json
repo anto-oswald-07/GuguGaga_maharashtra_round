@@ -16,11 +16,13 @@
     "./consumers/scoreClips": "./src/consumers/scoreClips.ts",
     "./consumers/generateTimeline": "./src/consumers/generateTimeline.ts",
     "./consumers/renderTimeline": "./src/consumers/renderTimeline.ts",
+    "./consumers/generatePlatformCopy": "./src/consumers/generatePlatformCopy.ts",
     "./ai/provider": "./src/ai/provider.ts",
     "./ai/transcribe": "./src/ai/transcribe.ts",
     "./ai/align": "./src/ai/align.ts",
     "./ai/scoreClips": "./src/ai/scoreClips.ts",
-    "./ai/proposeTimeline": "./src/ai/proposeTimeline.ts"
+    "./ai/proposeTimeline": "./src/ai/proposeTimeline.ts",
+    "./ai/generatePlatformCopy": "./src/ai/generatePlatformCopy.ts"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -33,7 +35,8 @@
     "render-clip": "tsx src/consumers/renderClip.ts",
     "score-clips": "tsx src/consumers/scoreClips.ts",
     "generate-timeline": "tsx src/consumers/generateTimeline.ts",
-    "render-timeline": "tsx src/consumers/renderTimeline.ts"
+    "render-timeline": "tsx src/consumers/renderTimeline.ts",
+    "generate-platform-copy": "tsx src/consumers/generatePlatformCopy.ts"
   },
   "dependencies": {
     "@creatorai/ai-provider": "workspace:*",
