@@ -28,3 +28,12 @@ export {
   tokenize,
 } from './align/fuzzyAlign';
 export { mockTranscribeFromText } from './stt/mockTranscribe';
+export {
+  CLIP_MAX_MS,
+  CLIP_MIN_MS,
+  CLIP_TARGET_MS,
+  buildCandidateWindows,
+  scoreClipWindowsFromTranscript,
+  stableDemoClipIdeas,
+  windowText,
+} from './clips/scoreClipWindows';

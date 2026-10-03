@@ -1,6 +1,6 @@
 # `@creatorai/ai-provider`
 
-LLM + STT provider package for CreatorAi (Phases 5–6 — Dev C / Arvin).
+LLM + STT + clip scoring provider package for CreatorAi (Phases 5–7 — Dev C / Arvin).
 
 ## Providers
 
@@ -56,6 +56,13 @@ const alignments = await ai.alignScriptToTranscript(
   segments,
 );
 // alignments[].confidence ∈ [0, 1]
+
+// Phase 7 — rank 15–60s clip windows (always 3 stable candidates for mock)
+const clipIdeas = await ai.scoreClipWindows(
+  { segments },
+  { hook: script.hook, body: script.body, cta: script.cta },
+);
+// clipIdeas[].score ∈ [0, 1]; titleSuggestion + rationale
 ```
 
 ## Worker consumers
@@ -65,13 +72,22 @@ const alignments = await ai.alignScriptToTranscript(
 | `GENERATE_SCRIPT` | `pnpm --filter worker generate-script` |
 | `TRANSCRIBE` | `pnpm --filter worker transcribe -- --hint-text "..."` |
 | `ALIGN_SCRIPT` | `pnpm --filter worker align -- --fixture` |
+| `SCORE_CLIPS` | `pnpm --filter worker score-clips -- --fixture` |
 
-Helpers: `services/worker/src/ai/{provider,transcribe,align}.ts`
+Helpers: `services/worker/src/ai/{provider,transcribe,align,scoreClips}.ts`
 
 ## Alignment (MVP)
 
 Pure fuzzy match in `src/align/fuzzyAlign.ts` (token Jaccard + ordered overlap).  
 Used by mock / openai / gemini so confidence scores stay consistent without an embed API.
+
+## Clip scoring (MVP)
+
+Pure heuristic in `src/clips/scoreClipWindows.ts`:
+- Candidate windows 15 / 30 / 45 / 60s stepped across transcript
+- Score = script cue overlap + duration fit (~30s) + spoken hook/list cues
+- Returns top 3 non-overlapping ideas (stable for identical inputs)
+- Empty/short transcript → 3 stable demo windows
 
 ## Fixtures / tests
 
@@ -81,4 +97,4 @@ Used by mock / openai / gemini so confidence scores stay consistent without an e
 
 ## Phase stubs
 
-`scoreClipWindows` (7), `proposeTimeline` (8) still throw `not_implemented`.
+`proposeTimeline` (8) still throws `not_implemented`.

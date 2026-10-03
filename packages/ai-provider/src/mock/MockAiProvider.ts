@@ -1,5 +1,6 @@
 import type { Platform } from '@creatorai/shared';
 import { fuzzyAlignScriptToTranscript } from '../align/fuzzyAlign';
+import { scoreClipWindowsFromTranscript } from '../clips/scoreClipWindows';
 import { mockTranscribeFromText } from '../stt/mockTranscribe';
 import {
   AiProviderError,
@@ -159,14 +160,16 @@ export class MockAiProvider implements AiProvider {
     return fuzzyAlignScriptToTranscript(script, segments);
   }
 
+  /**
+   * Phase 7 — rank 15–60s windows; always returns 3 stable candidates for demos.
+   */
   async scoreClipWindows(
-    _transcript: Transcript,
-    _script: ScriptDoc,
+    transcript: Transcript,
+    script: ScriptDoc,
   ): Promise<ClipIdea[]> {
-    throw new AiProviderError(
-      'scoreClipWindows is Phase 7 — not implemented in Phase 6',
-      'not_implemented',
-    );
+    return scoreClipWindowsFromTranscript(transcript, script, {
+      maxCandidates: 3,
+    });
   }
 
   async proposeTimeline(_ctx: TimelineContext): Promise<EditTimeline> {
