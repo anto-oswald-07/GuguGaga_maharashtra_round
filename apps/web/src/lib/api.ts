@@ -471,3 +471,182 @@ export function getJob(jobId: string) {
 export function listJobs() {
   return apiFetch<{ items: Job[] }>("/jobs");
 }
+
+/* -------------------------------------------------------------------------- */
+/* Mapping + Transcription (Phase 6) — SDD §5.5                               */
+/* TODO_SHARED: replace with `@creatorai/shared` once Anto lands Zod DTOs     */
+/* -------------------------------------------------------------------------- */
+
+export type TranscriptSegmentDto = {
+  id?: string;
+  startMs: number;
+  endMs: number;
+  text: string;
+};
+
+export type TranscriptDto = {
+  id: string;
+  projectId: string;
+  assetId: string;
+  segments: TranscriptSegmentDto[];
+  createdAt: string;
+  updatedAt?: string;
+};
+
+export type TranscriptListResponse = {
+  items: TranscriptDto[];
+};
+
+export type ScriptFootageMapDto = {
+  id: string;
+  projectId: string;
+  scriptId?: string | null;
+  transcriptId?: string | null;
+  /** Script section label or excerpt (SDD scriptRef). */
+  scriptRef: string;
+  startMs: number;
+  endMs: number;
+  /** 0–1 confidence; UI highlights low values. */
+  confidence: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type MappingListResponse = {
+  items: ScriptFootageMapDto[];
+};
+
+export type TranscribeRequest = {
+  assetId: string;
+};
+
+export type AlignRequest = {
+  scriptId: string;
+  transcriptId?: string;
+  assetId?: string;
+};
+
+export type UpdateMappingPayload = {
+  scriptRef?: string;
+  startMs?: number;
+  endMs?: number;
+  confidence?: number;
+};
+
+const LOW_CONFIDENCE_THRESHOLD = 0.5;
+
+export function isLowConfidence(confidence: number): boolean {
+  return confidence < LOW_CONFIDENCE_THRESHOLD;
+}
+
+export { LOW_CONFIDENCE_THRESHOLD };
+
+function normalizeSegment(raw: unknown): TranscriptSegmentDto {
+  const r = asRecord(raw) ?? {};
+  return {
+    ...(typeof r.id === "string" ? { id: r.id } : {}),
+    startMs: typeof r.startMs === "number" ? r.startMs : Number(r.startMs) || 0,
+    endMs: typeof r.endMs === "number" ? r.endMs : Number(r.endMs) || 0,
+    text: typeof r.text === "string" ? r.text : String(r.text ?? ""),
+  };
+}
+
+function normalizeTranscript(raw: unknown): TranscriptDto {
+  const r = asRecord(raw) ?? {};
+  const segmentsRaw = Array.isArray(r.segments) ? r.segments : [];
+  return {
+    id: String(r.id ?? ""),
+    projectId: String(r.projectId ?? ""),
+    assetId: String(r.assetId ?? ""),
+    segments: segmentsRaw.map(normalizeSegment),
+    createdAt: String(r.createdAt ?? ""),
+    updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : undefined,
+  };
+}
+
+function normalizeMapping(raw: unknown): ScriptFootageMapDto {
+  const r = asRecord(raw) ?? {};
+  const confidenceRaw = r.confidence;
+  const confidence =
+    typeof confidenceRaw === "number"
+      ? confidenceRaw
+      : Number(confidenceRaw) || 0;
+  return {
+    id: String(r.id ?? ""),
+    projectId: String(r.projectId ?? ""),
+    scriptId: typeof r.scriptId === "string" ? r.scriptId : null,
+    transcriptId: typeof r.transcriptId === "string" ? r.transcriptId : null,
+    scriptRef:
+      typeof r.scriptRef === "string"
+        ? r.scriptRef
+        : typeof r.scriptExcerpt === "string"
+          ? r.scriptExcerpt
+          : "",
+    startMs: typeof r.startMs === "number" ? r.startMs : Number(r.startMs) || 0,
+    endMs: typeof r.endMs === "number" ? r.endMs : Number(r.endMs) || 0,
+    confidence: confidence > 1 ? confidence / 100 : confidence,
+    createdAt: typeof r.createdAt === "string" ? r.createdAt : undefined,
+    updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : undefined,
+  };
+}
+
+export function transcribeProjectAsset(
+  projectId: string,
+  payload: TranscribeRequest,
+) {
+  return apiFetch<EnqueueJobResponse>(`/projects/${projectId}/transcribe`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listProjectTranscripts(projectId: string) {
+  const raw = await apiFetch<{ items?: unknown[] } | unknown[]>(
+    `/projects/${projectId}/transcripts`,
+  );
+  const items = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw.items)
+      ? raw.items
+      : [];
+  return { items: items.map(normalizeTranscript) } satisfies TranscriptListResponse;
+}
+
+export function alignProjectScript(projectId: string, payload: AlignRequest) {
+  return apiFetch<EnqueueJobResponse>(`/projects/${projectId}/align`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listProjectMappings(projectId: string) {
+  const raw = await apiFetch<{ items?: unknown[] } | unknown[]>(
+    `/projects/${projectId}/mappings`,
+  );
+  const items = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw.items)
+      ? raw.items
+      : [];
+  return { items: items.map(normalizeMapping) } satisfies MappingListResponse;
+}
+
+export async function updateMapping(
+  mappingId: string,
+  payload: UpdateMappingPayload,
+) {
+  const raw = await apiFetch<unknown>(`/mappings/${mappingId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+  return normalizeMapping(raw);
+}
+
+/** Format milliseconds as m:ss.mmm for transcript/mapping UI. */
+export function formatTimecode(ms: number): string {
+  const safe = Math.max(0, Math.floor(ms));
+  const minutes = Math.floor(safe / 60000);
+  const seconds = Math.floor((safe % 60000) / 1000);
+  const millis = safe % 1000;
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
+}

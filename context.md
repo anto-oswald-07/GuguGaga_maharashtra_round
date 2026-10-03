@@ -1364,3 +1364,57 @@ _(Template above kept for other developers.)_
 - **Files touched:** `services/api/src/modules/jobs/{service,processor}.ts`, `services/api/src/modules/scripts/{routes,service}.ts`, `services/api/src/index.ts`, `services/api/package.json`, `packages/shared/src/{scripts,index}.ts`, `apps/web/src/lib/api.ts`, `docs/jobs/queue.md`, `.env.example`, `context.md`
 - **Needs from others:** None for Phase 5; Phase 6 Lead = Brendan
 - **Risks:** Next.dev hang on :3002; real LLM keys untested
+
+### [2026-10-03 21:00] ROLE=A NAME=Brendan Rodrigues PHASE=6 TYPE=START
+- **Summary:** Synced `main` (`48d925b` Phase 5 Integration). Created `phase-06-brendan`. Starting Mapping UI against SDD §5.5 / FR-STV-* (Phase 6 B mapping API not on main yet).
+- **Files touched:** (branch created; work in progress)
+- **APIs / types added:** None yet
+- **How to run / test what I did:** `git checkout phase-06-brendan`
+- **Depends on:** Phase 5 complete on main
+- **Needs from others:** Anto Phase 6 B endpoints; Arvin TRANSCRIBE/ALIGN_SCRIPT jobs
+- **Risks:** UI will 404 until Phase 6 B lands
+
+### [2026-10-03 21:06] ROLE=A NAME=Brendan Rodrigues PHASE=6 TYPE=DONE
+- **Summary:** Phase 6 Dev A complete — Footage & Mapping tab on project hub: select attached VIDEO/AUDIO → Transcribe (job poll) → transcript segments list (click shows seek timecode) → Align script → mapping table with low-confidence highlight + manual PATCH edit form.
+- **Files touched:**
+  - `apps/web/src/lib/api.ts` (transcribe/align/transcripts/mappings client + normalizers + `formatTimecode` / `isLowConfidence`)
+  - `apps/web/src/components/mapping/**` (MappingTab, MappingTable, MappingEditForm, TranscriptSegmentList)
+  - `apps/web/src/components/projects/ProjectDetail.tsx` (Overview | Script | Footage & Mapping | Editor hub wiring)
+  - `context.md`
+- **APIs / types added (client assumptions — TODO_SHARED until Anto Zod lands):**
+  - `POST /projects/:id/transcribe` body `{ assetId }` → `{ jobId }`
+  - `GET /projects/:id/transcripts` → `{ items: TranscriptDto[] }` (`segments: [{ startMs, endMs, text }]`)
+  - `POST /projects/:id/align` body `{ scriptId, transcriptId?, assetId? }` → `{ jobId }`
+  - `GET /projects/:id/mappings` → `{ items: ScriptFootageMapDto[] }` (`scriptRef`, `startMs`, `endMs`, `confidence` 0–1)
+  - `PATCH /mappings/:id` body `{ scriptRef?, startMs?, endMs?, confidence? }` → ScriptFootageMapDto
+  - Low confidence threshold UI: `< 0.5` (amber row highlight)
+  - Accepts `scriptExcerpt` as alias for `scriptRef`; confidence >1 treated as percent
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web exec eslint src/components/mapping src/lib/api.ts src/components/projects/ProjectDetail.tsx
+  pnpm --filter web dev
+  # After Anto API: /projects/:id → Footage & Mapping → Transcribe → Align → Edit low-confidence row
+  ```
+- **Depends on:** Phase 6 B mapping/transcript API + Phase 6 C job consumers (mock OK)
+- **Needs from others:**
+  - Anto: confirm list envelopes `{ items }`; PATCH mapping shape; authz on project assets
+  - Arvin: mock TRANSCRIBE/ALIGN_SCRIPT write TranscriptSegment + ScriptFootageMap so poll SUCCEEDED refreshes UI
+- **Risks:** Until API exists, Transcribe/Align show API errors (expected)
+
+## Phase 6 Completion — Brendan Rodrigues (Dev A)
+- **Date:** 2026-10-03
+- **Branch:** phase-06-brendan
+- **All allowed tasks done:** yes
+- **Incomplete items:** e2e blocked on Anto/Arvin (expected mid-phase); no media player seek yet (shows timecode hint per plan)
+- **Blockers handed to Integration:** Align client contracts above; optional import `@creatorai/shared` mapping DTOs when Anto lands them
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter web exec tsc --noEmit
+  pnpm --filter web dev
+  # Manual UI smoke without API: Footage & Mapping tab renders; Transcribe fails with network/API error
+  ```
+- **Files I expect others to connect to:**
+  - `apps/web/src/lib/api.ts` mapping helpers
+  - `components/mapping/MappingTab.tsx`
+- **Notes for next phase me:** Phase 6 Integration Lead — verify transcribe→align→PATCH mapping E2E after B/C/D land
