@@ -10,6 +10,8 @@ import {
 import { registerAuthRoutes } from './modules/auth/routes';
 import { registerAssetRoutes } from './modules/assets/routes';
 import { registerProjectRoutes } from './modules/projects/routes';
+import { registerScriptRoutes } from './modules/scripts/routes';
+import { registerJobRoutes } from './modules/jobs/routes';
 
 loadEnv({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -40,6 +42,8 @@ async function main() {
   await registerAuthRoutes(app);
   await registerAssetRoutes(app);
   await registerProjectRoutes(app);
+  await registerScriptRoutes(app);
+  await registerJobRoutes(app);
 
   await app.listen({ port, host });
   app.log.info(`API listening on http://${host}:${port}${API_PREFIX}`);

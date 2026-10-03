@@ -1197,6 +1197,14 @@ _(Template above kept for other developers.)_
 - **Needs from others:** None for Phase 4; Phase 5 Lead = Anto
 - **Risks:** Next sometimes hangs on :3002 (listening, no response) — restart `next dev` if UI spins
 
+### [2026-10-03 20:14] ROLE=B NAME=Anto Oswald PHASE=5 TYPE=START
+- **Summary:** Started Phase 5 Dev B on `phase-05-anto` — Scripts API + Jobs table wiring (DB-polling queue).
+- **Files touched:** (branch `phase-05-anto` created from `main` after Phase 4 Integration @ `7eb0e26`)
+- **APIs / types added:** Planned SDD §5.4 + §5.9 — script CRUD/versions, `POST .../scripts/generate` → Job `GENERATE_SCRIPT`, job status endpoints, mock-complete for UI until worker lands
+- **How to run / test what I did:** `git checkout phase-05-anto`
+- **Depends on:** Phase 4 Projects (`projectId` ownership via workspace); shared Platform enum; queue decision = DB-polling
+- **Needs from others:** Arvin — worker consumer claims QUEUED jobs + writes ScriptVersion; Cyrus — `scriptSchema` should align with Anto content shape `{ hook, body, cta }`; Brendan — Script tab polls `/jobs/:id`
+- **Risks:** Collision with Cyrus `packages/shared/src/schemas/scriptSchema.ts` — Anto will put API DTOs in `scripts.ts` / `jobs.ts`; content shape duplicated intentionally for Integration merge
 ## Phase 5 Completion — Arvin Almeida (Dev C)
 - **Date:** 2026-10-03
 - **Branch:** `Arvin` (working tree; commit when ready)
