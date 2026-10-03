@@ -436,6 +436,65 @@ Copy-paste this template every time:
 - **Depends on:** Commit `f05b2a3` already on branch
 - **Needs from others:** Push/PR of `phase-03-cyrus` if not done yet
 - **Risks:** Branch has no remote tracking yet
+### [2026-10-03 18:30] ROLE=A NAME=Brendan Rodrigues PHASE=3 TYPE=START
+- **Summary:** Verified Phase 1–2 state on `main` (`e040e83`) before Phase 3 Asset Library UI.
+- **Files touched:** _(read-only verification)_
+- **APIs / types added:** None
+- **How to run / test what I did:** `git log origin/main`, tags, Section 2/7 of `context.md`, tree for auth + assets modules.
+- **Depends on:** —
+- **Needs from others:** Phase 2 Integration Lead (Brendan) still owes formal Phase 2 close-out OR current Integration Lead should record it.
+- **Verification results:**
+  - **Phase 1:** Deliverables present; `INTEGRATION COMPLETE — Phase 1` recorded; worker/samples filled in by Anto. Tag `phase-1-done` claimed local-only — **not present in remote `git tag -l`**.
+  - **Phase 2 code on main:** Yes — Auth UI, Auth API + Prisma User, Arvin auth docs/http, Cyrus security docs. Snapshot Section 2 still says “Phase 1 complete — Phase 2 next” and “No auth yet” (stale).
+  - **Phase 2 Integration:** **Not done correctly / incomplete** — no `INTEGRATION COMPLETE — Phase 2`; no `phase-2-done` tag; merge order on main was Arvin → Cyrus → Anto → Brendan (plan: Anto → Arvin → Cyrus → Brendan). Auth shape mismatch: shared Zod returns `{ token, user, workspace }` while early web types used flat `user.workspaceId` (login still works — only `token` used).
+  - **Phase 3 Assets API:** Not on main yet (Anto Phase 3) — UI will target SDD 5.2 shapes.
+
+### [2026-10-03 18:35] ROLE=A NAME=Brendan Rodrigues PHASE=3 TYPE=DONE
+- **Summary:** Phase 3 Asset Library UI on `phase-03-brendan`: multipart upload, grid (name/type/date/tags), type+name filters, detail drawer (edit tags/description, soft-delete), empty state. Extended `api.ts` with FormData support + asset helpers.
+- **Files touched:**
+  - `apps/web/src/app/assets/page.tsx`
+  - `apps/web/src/components/assets/*` (AssetLibrary, AssetUpload, AssetFilters, AssetCard, AssetDetailDrawer)
+  - `apps/web/src/lib/api.ts` (multipart + asset methods)
+  - `context.md`
+- **APIs / types added (client-assumed until Anto ships):**
+  - `POST /assets` multipart field `file` (+ optional `name`, `tags` string)
+  - `GET /assets?type=&q=&tag=` → `{ assets: Asset[] }`
+  - `PATCH /assets/:id` `{ name?, tags?, description? }`
+  - `DELETE /assets/:id`
+  - `Asset` fields per SDD (type enum VIDEO|IMAGE|AUDIO|DOCUMENT|OTHER)
+- **How to run / test what I did:**
+  ```bash
+  cd apps/web && pnpm install && pnpm dev
+  # login first, open /assets
+  # upload image + storage/samples/dummy.mp4 once Assets API exists
+  ```
+- **Depends on:** Anto Phase 3 Assets API + storage adapter
+- **Needs from others:** Anto — implement SDD 5.2; if list response is not `{ assets: [...] }`, adapt at Integration. Also close Phase 2 Integration record/tag if still open.
+- **Risks:** Upload/list fail until Assets API exists (UI shows API error messages).
+### [2026-10-03 18:30] ROLE=C NAME=Arvin Almeida PHASE=3 TYPE=START
+- **Summary:** Audited Phase 1+2 completeness — all Dev A/B/C/D deliverables present. Starting Phase 3 Dev C (asset metadata types + worker extract stub + docs). No Phase 1/2 gaps to fill.
+- **Files touched:** (starting)
+- **APIs / types added:** None yet
+- **How to run / test what I did:** N/A
+- **Depends on:** `@creatorai/shared` workspace; optional ffprobe on PATH
+- **Needs from others:** Anto — enqueue `EXTRACT_METADATA` after upload (documented; not implemented here)
+- **Risks:** This machine may lack ffprobe — function must mock-fallback (by design)
+
+### [2026-10-03 18:32] ROLE=C NAME=Arvin Almeida PHASE=3 TYPE=DONE
+- **Summary:** Phase 3 Dev C complete — `VideoAssetMetadata` type, `extractMetadata(filePath)` with ffprobe + mock fallback, enqueue docs for Integration.
+- **Files touched:** `packages/shared/src/types/assetMetadata.ts`, `packages/shared/src/index.ts`, `services/worker/src/jobs/extractMetadata.ts`, `services/worker/package.json`, `docs/assets/metadata.md`, `context.md`, `pnpm-lock.yaml`
+- **APIs / types added:**
+  - Shared: `VideoAssetMetadata`, `ExtractedAssetMetadata`
+  - Worker: `extractMetadata(filePath)` → `{ durationMs, width, height, codec, source }`
+- **How to run / test what I did:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter worker extract-meta -- "$(pwd)/storage/samples/dummy.mp4"
+  # with ffprobe: source=ffprobe; without: source=mock (verified on this laptop)
+  ```
+- **Depends on:** Dummy mp4 optional; ffprobe optional
+- **Needs from others:** Anto/Integration wire job enqueue after asset upload; Cyrus thumbnails can share path
+- **Risks:** None for Phase 3 C scope (API routes intentionally untouched)
 
 ---
 
@@ -580,6 +639,49 @@ _(Template above kept for other developers.)_
   - `scripts/media/generate-thumb.sh` → manual smoke
   - `docs/ffmpeg-notes.md` §5 derivative path convention
 - **Notes for next phase me:** Phase 4 = sample project seed fixtures + golden-path prep doc
+## Phase 3 Completion — Brendan Rodrigues (Dev A)
+- **Date:** 2026-10-03
+- **Branch:** phase-03-brendan
+- **All allowed tasks done:** yes
+- **Incomplete items:** E2E upload/list blocked until Anto Assets API (expected parallel)
+- **Blockers handed to Integration:** Confirm list envelope `{ assets }`, multipart field name `file`, and soft-delete list exclusion; optionally reconcile Phase 2 auth types + write Phase 2 Integration record
+- **Commands to verify my work:**
+  ```bash
+  cd apps/web && pnpm install && pnpm dev
+  # /assets — upload, filter, open drawer, tag, delete
+  ```
+- **Files I expect others to connect to:** `apps/web/src/lib/api.ts` asset helpers; `/assets` UI
+- **Notes for next phase me:** Phase 4 Projects UI + Kanban — multi-select attach from library
+## Phase 2 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** _(local; no git ops this session)_
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (auth API live verification belongs to Phase 2 Integration)
+- **Blockers handed to Integration:** Prefer Anto’s `packages/shared` auth Zod over `docs/proposed-auth-types.ts`
+- **Commands to verify my work:**
+  ```bash
+  test -f docs/api/auth.http && test -f docs/api/auth.postman.json
+  test -f docs/testing/phase-2-auth.md
+  ```
+- **Files I expect others to connect to:** auth HTTP collections for Integration curl checks
+- **Notes for next phase me:** Phase 3 C = asset metadata worker stub
+
+## Phase 3 Completion — Arvin Almeida (Dev C)
+- **Date:** 2026-10-03
+- **Branch:** _(local; no git ops this session)_
+- **All allowed tasks done:** yes
+- **Incomplete items:** none
+- **Blockers handed to Integration:** Add `EXTRACT_METADATA` job type + enqueue after video upload (see `docs/assets/metadata.md`)
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter worker extract-meta -- "$(pwd)/storage/samples/dummy.mp4"
+  ```
+- **Files I expect others to connect to:**
+  - `VideoAssetMetadata` → Asset.metadata JSON (Anto)
+  - `extractMetadata` → worker consumer / optional sync upload path
+  - `docs/assets/metadata.md` → Integration wiring
+- **Notes for next phase me:** Phase 4 C = workflow stage helpers
 
 ---
 
@@ -634,6 +736,7 @@ _(Template above kept for other developers.)_
 | 2026-10-03 | Brendan | RegisterPayload | `apps/web/src/lib/api.ts` | `packages/shared` | Assumed `{ email, password, name }` |
 | 2026-10-03 | Brendan | LoginPayload | `apps/web/src/lib/api.ts` | `packages/shared` | Assumed `{ email, password }` |
 | 2026-10-03 | Arvin | Auth DTOs + ApiErrorBody | `docs/proposed-auth-types.ts` | `packages/shared` (prefer Anto’s Zod if present) | Proposed |
+| 2026-10-03 | Brendan | Asset + AssetListResponse | `apps/web/src/lib/api.ts` | `packages/shared` (Anto Phase 3) | Assumed — `{ assets: Asset[] }`, multipart `file` |
 
 ---
 
@@ -662,3 +765,89 @@ _(Template above kept for other developers.)_
 ---
 
 **Remember:** If it is not in `context.md`, the rest of the team does not know it exists.
+
+### [2026-10-03 18:30] ROLE=B NAME=Anto Oswald PHASE=3 TYPE=START
+- **Summary:** Started Phase 3 Dev B on `phase-03-anto` — Assets API + local filesystem storage adapter + shared asset DTOs.
+- **Files touched:** (branch created from `main` @ Phase 2 merges)
+- **APIs / types added:** Planned `POST/GET/PATCH/DELETE /assets`, `GET /assets/:id/content`
+- **How to run / test what I did:** `git checkout phase-03-anto`
+- **Depends on:** Phase 2 auth (`requireAuth` + `workspaceId` in JWT); Postgres via `DATABASE_URL`; `STORAGE_ROOT`
+- **Needs from others:** Brendan builds Asset Library UI against these endpoints; Arvin metadata type optional later; Cyrus thumbnails wire at Integration
+- **Risks:** Multipart + large uploads; host path resolution for `STORAGE_ROOT=./storage`
+
+### [2026-10-03 18:34] ROLE=B NAME=Anto Oswald PHASE=3 TYPE=PROGRESS
+- **Summary:** Implemented Asset Prisma model, local FS storage adapter, shared asset Zod DTOs, and full assets REST module (upload/list/get/patch/soft-delete/content) with MIME allowlist + workspace auth.
+- **Files touched:** `services/api/prisma/schema.prisma`, `services/api/prisma/migrations/20261003130341_phase3_assets/**`, `services/api/src/storage/local.ts`, `services/api/src/modules/assets/**`, `services/api/src/index.ts`, `services/api/package.json`, `packages/shared/src/assets.ts`, `packages/shared/src/index.ts`, `pnpm-lock.yaml`, `context.md`
+- **APIs / types added:**
+  - `POST /api/v1/assets` multipart (`file` + optional `name`/`description`/`tags`) → AssetDto 201
+  - `GET /api/v1/assets?type=&q=&tag=` → `{ items: AssetDto[] }`
+  - `GET /api/v1/assets/:id` → AssetDto
+  - `PATCH /api/v1/assets/:id` body `{ name?, description?, tags? }` → AssetDto
+  - `DELETE /api/v1/assets/:id` soft-delete → `{ id, deletedAt }`
+  - `GET /api/v1/assets/:id/content` stream file
+  - Shared: `assetTypeSchema`, `assetSchema`, `assetListQuerySchema`, `updateAssetRequestSchema`, `AssetDto`, …
+  - Storage path: `storage/workspaces/{workspaceId}/originals/{assetId}/{filename}`
+- **How to run / test what I did:**
+  ```bash
+  pnpm install
+  pnpm --filter @creatorai/shared build
+  pnpm --filter api prisma:migrate   # applies phase3_assets
+  pnpm --filter api dev
+  # register/login → TOKEN
+  curl -X POST localhost:4000/api/v1/assets -H "Authorization: Bearer TOKEN" \
+    -F "file=@storage/samples/dummy.mp4;type=video/mp4" -F "name=Dummy" -F "tags=demo,video"
+  curl "localhost:4000/api/v1/assets?type=VIDEO" -H "Authorization: Bearer TOKEN"
+  curl -X PATCH localhost:4000/api/v1/assets/ASSET_ID -H "Authorization: Bearer TOKEN" \
+    -H 'content-type: application/json' -d '{"tags":["demo"],"description":"x"}'
+  curl -X DELETE localhost:4000/api/v1/assets/ASSET_ID -H "Authorization: Bearer TOKEN"
+  ```
+- **Depends on:** Phase 2 `requireAuth` / JWT `workspaceId`; Postgres; `STORAGE_ROOT` (resolved to monorepo root)
+- **Needs from others:** Brendan — wire Asset Library UI; Integration — optional metadata/thumbnail enqueue after video upload
+- **Risks:** Max upload 100 MiB; soft-delete leaves file on disk (intentional MVP)
+
+### [2026-10-03 18:34] ROLE=B NAME=Anto Oswald PHASE=3 TYPE=DONE
+- **Summary:** Phase 3 Dev B complete — Assets API + local storage adapter verified via curl (image + dummy.mp4 upload, filter, patch, content stream, MIME reject, soft-delete).
+- **Files touched:** Same as PROGRESS + this completion block
+- **APIs / types added:** (unchanged from PROGRESS)
+- **How to run / test what I did:** See PROGRESS + Phase Completion block below
+- **Depends on:** Postgres on `DATABASE_URL`; auth token
+- **Needs from others:** Brendan Asset UI; Arvin metadata stub optional at Integration; Cyrus thumbs optional at Integration
+- **Risks:** None remaining for Phase 3 B scope
+
+## Phase 3 Completion — Anto Oswald (Dev B)
+- **Date:** 2026-10-03
+- **Branch:** phase-03-anto
+- **All allowed tasks done:** yes
+- **Incomplete items:** none (metadata enrichment / thumbnails are Arvin/Cyrus + Integration wiring)
+- **Blockers handed to Integration:** Decide sync vs enqueue for EXTRACT_METADATA / thumbnail after video upload
+- **Commands to verify my work:**
+  ```bash
+  pnpm --filter @creatorai/shared build
+  pnpm --filter api prisma:migrate
+  pnpm --filter api dev
+  curl -X POST localhost:4000/api/v1/auth/register -H 'content-type: application/json' \
+    -d '{"email":"a3@b.com","password":"password123","name":"A3"}'
+  # use TOKEN from response:
+  curl -X POST localhost:4000/api/v1/assets -H "Authorization: Bearer TOKEN" \
+    -F "file=@storage/samples/dummy.mp4;type=video/mp4" -F "name=Dummy" -F "tags=demo"
+  curl "localhost:4000/api/v1/assets?type=VIDEO&tag=demo" -H "Authorization: Bearer TOKEN"
+  curl -X PATCH localhost:4000/api/v1/assets/ASSET_ID -H "Authorization: Bearer TOKEN" \
+    -H 'content-type: application/json' -d '{"description":"phase3"}'
+  curl -X DELETE localhost:4000/api/v1/assets/ASSET_ID -H "Authorization: Bearer TOKEN"
+  ls storage/workspaces/*/originals/*/
+  ```
+- **Files I expect others to connect to:**
+  - `@creatorai/shared` asset Zod schemas / `AssetDto`
+  - `POST/GET/PATCH/DELETE /api/v1/assets*` (Bearer auth)
+  - `services/api/src/storage/local.ts` (`STORAGE_ROOT` layout)
+  - Files under `storage/workspaces/{workspaceId}/originals/...`
+- **Notes for next phase me:** Phase 4 = Projects API + stages; reuse workspace scoping pattern from assets
+
+### [2026-10-03 18:35] ROLE=B NAME=Anto Oswald PHASE=3 TYPE=FIX
+- **Summary:** Root `.gitignore` `storage/` was also ignoring `services/api/src/storage/**`; added negation so the local FS adapter source is tracked (binaries under repo `storage/` still ignored).
+- **Files touched:** `.gitignore`, `context.md`
+- **APIs / types added:** None
+- **How to run / test what I did:** `git check-ignore -v services/api/src/storage/local.ts` → should not match / not ignored
+- **Depends on:** —
+- **Needs from others:** Integration — keep the negation when merging
+- **Risks:** None
