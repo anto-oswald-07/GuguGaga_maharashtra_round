@@ -6,6 +6,7 @@
   "exports": {
     "./jobs/extractMetadata": "./src/jobs/extractMetadata.ts",
     "./media/thumbnail": "./src/media/thumbnail.ts",
+    "./media/extractAudio": "./src/media/extractAudio.ts",
     "./consumers/generateScript": "./src/consumers/generateScript.ts",
     "./consumers/transcribe": "./src/consumers/transcribe.ts",
     "./consumers/align": "./src/consumers/align.ts",
