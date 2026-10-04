@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { ApiError, Asset, deleteAsset, updateAsset } from "@/lib/api";
+import { ClipPlayer } from "@/components/assets/ClipPlayer";
 
 type AssetDetailDrawerProps = {
   asset: Asset | null;
@@ -126,6 +127,15 @@ export function AssetDetailDrawer({
           >
             Close
           </button>
+        </div>
+
+        <div className="mb-4">
+          <ClipPlayer
+            assetId={asset.id}
+            title={asset.name}
+            type={asset.type}
+            mime={asset.mime}
+          />
         </div>
 
         <form onSubmit={onSave} className="space-y-3">

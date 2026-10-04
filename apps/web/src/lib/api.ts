@@ -737,6 +737,7 @@ export type FulfillScenePayload = {
 export type GenerateScenePayload = {
   scriptId: string;
   sceneId: string;
+  prompt?: string;
 };
 
 export type ScenePipelinePayload = {
@@ -1339,6 +1340,18 @@ export async function saveTimeline(
   });
 }
 
+export async function createProjectTimeline(
+  projectId: string,
+  content: TimelineJson,
+  title?: string,
+): Promise<TimelineDocument> {
+  const raw = await apiFetch<unknown>(`/projects/${projectId}/timelines`, {
+    method: "POST",
+    body: { title, timeline: content },
+  });
+  return normalizeTimelineDocument(raw);
+}
+
 export function renderTimeline(timelineId: string) {
   return apiFetch<EnqueueJobResponse>(`/timelines/${timelineId}/render`, {
     method: "POST",
@@ -1390,6 +1403,8 @@ export type GeneratePacksRequest = {
   platforms: PackPlatform[];
   /** Optional explicit aspects; API may default per platform. */
   aspectRatios?: PackAspectRatio[];
+  sourceAssetId?: string;
+  timelineId?: string;
 };
 
 export type UpdatePackCopyPayload = {
@@ -1411,6 +1426,7 @@ export type PackDownloadResponse = {
     label?: string;
     url: string;
     assetId?: string;
+    mime?: string;
   }>;
 };
 
@@ -1564,3 +1580,121 @@ export function deletePack(packId: string) {
     method: "DELETE",
   });
 }
+
+export function getPackDownloadUrl(packId: string): string {
+  const token = getToken();
+  return `${API_BASE_URL}/packs/${packId}/download-file${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+}
+
+export function getAssetDownloadUrl(assetId: string): string {
+  const token = getToken();
+  return `${API_BASE_URL}/assets/${assetId}/content${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+}
+
+export async function downloadAssetFile(
+  assetId: string,
+  suggestedName?: string,
+): Promise<void> {
+  const token = getToken();
+  const url = getAssetDownloadUrl(assetId);
+  let filename = suggestedName || `asset-${assetId}.mp4`;
+
+  try {
+    const headers = new Headers();
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+    }
+    const disposition = response.headers.get("content-disposition");
+    if (disposition) {
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      if (match?.[1]) filename = match[1];
+    }
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 15_000);
+  } catch {
+    // Direct link fallback
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+}
+
+export async function downloadPackFile(
+  packId: string,
+  suggestedName?: string,
+): Promise<void> {
+  const token = getToken();
+  const url = getPackDownloadUrl(packId);
+  let filename = suggestedName || `pack-${packId}.mp4`;
+
+  try {
+    const headers = new Headers();
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+    }
+    const disposition = response.headers.get("content-disposition");
+    if (disposition) {
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      if (match?.[1]) filename = match[1];
+    }
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 15_000);
+  } catch {
+    // Direct link fallback
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+}
+
+export function downloadTextFile(filename: string, text: string): void {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const blobUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10_000);
+}
+
+export {
+  buildClipPrompt,
+  formatAllScenePrompts,
+  STYLE_LABELS,
+  CAMERA_LABELS,
+  type ClipPromptStyle,
+  type ClipPromptCamera,
+  type ClipPromptOptions,
+} from "@/components/mapping/clip-prompt";

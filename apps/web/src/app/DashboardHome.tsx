@@ -137,7 +137,7 @@ export function DashboardHome() {
       <div>
         <h2 className="text-sm font-semibold">Golden path</h2>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Jump into the demo flow — script → footage → clips → editor → packs.
+          Jump into the demo flow — script → footage &amp; scenes → editor → packs.
         </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {QUICK_LINKS.map((link) => (

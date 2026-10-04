@@ -39,9 +39,12 @@ export function KanbanCard({
       >
         {project.title}
       </Link>
-      <p className="mt-2 text-xs text-[var(--muted)]">
-        {project.assetIds.length} asset
-        {project.assetIds.length === 1 ? "" : "s"}
+      <p className="mt-2 inline-flex items-center gap-1 text-xs text-[var(--muted)]">
+        <span>📁</span>
+        <span>
+          {project.assetIds?.length ?? 0} asset
+          {(project.assetIds?.length ?? 0) === 1 ? "" : "s"}
+        </span>
       </p>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button

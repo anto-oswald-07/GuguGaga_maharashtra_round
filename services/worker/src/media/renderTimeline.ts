@@ -379,23 +379,37 @@ export function buildFfmpegPlan(
     position?: 'top' | 'center' | 'bottom';
     fontColor?: string;
   }> = [
-    ...textItems.map((t) => ({
-      text: t.text,
-      startMs: t.startMs,
-      endMs: t.endMs,
-      fontSize: t.style?.fontSize ?? 48,
-      position: t.style?.position,
-      fontColor: t.style?.fontColor ?? 'white',
-    })),
+    ...textItems.map((t) => {
+      const reqSize = t.style?.fontSize ?? 32;
+      const restrainedSize = Math.max(
+        16,
+        Math.min(reqSize, Math.floor(width / 32), 34),
+      );
+      const restrainedText =
+        t.text.length > 55 ? `${t.text.slice(0, 52).trimEnd()}…` : t.text;
+      return {
+        text: restrainedText,
+        startMs: t.startMs,
+        endMs: t.endMs,
+        fontSize: restrainedSize,
+        position: t.style?.position,
+        fontColor: t.style?.fontColor ?? 'white',
+      };
+    }),
   ];
 
   if (burnCaptions) {
     for (const c of captionItems) {
+      // Restrain caption size based on frame width so it never overflows or congests
+      const maxLen = width <= 720 ? 32 : 40;
+      const capFontSize = Math.max(14, Math.min(22, Math.floor(width / 42)));
+      const restrainedText =
+        c.text.length > maxLen ? `${c.text.slice(0, maxLen - 3).trimEnd()}…` : c.text;
       overlays.push({
-        text: c.text,
+        text: restrainedText,
         startMs: c.startMs,
         endMs: c.endMs,
-        fontSize: 36,
+        fontSize: capFontSize,
         position: 'bottom',
         fontColor: 'yellow',
       });
@@ -409,7 +423,7 @@ export function buildFfmpegPlan(
     const escaped = escapeDrawtext(ov.text);
     filterParts.push(
       `[${inLabel}]drawtext=text='${escaped}':fontsize=${ov.fontSize}:` +
-        `fontcolor=${ov.fontColor ?? 'white'}:borderw=2:bordercolor=black:` +
+        `fontcolor=${ov.fontColor ?? 'white'}:box=1:boxcolor=black@0.6:boxborderw=6:borderw=1:bordercolor=black:` +
         `x=(w-text_w)/2:y=${yForPosition(ov.position)}:enable='${enable}'[${outLabel}]`,
     );
     videoLabel = outLabel;

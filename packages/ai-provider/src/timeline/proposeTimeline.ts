@@ -12,6 +12,7 @@ import type {
   EditTimeline,
   ScriptDoc,
   TimelineAcceptedClip,
+  TimelineAudioClip,
   TimelineCaptionItem,
   TimelineContext,
   TimelineTextItem,
@@ -21,6 +22,9 @@ import type {
 /** Hook overlay window (plan: 0–3s). */
 export const HOOK_OVERLAY_START_MS = 0;
 export const HOOK_OVERLAY_END_MS = 3_000;
+
+/** Maximum character length per caption cue to prevent frame congestion. */
+export const MAX_CAPTION_CHARS_PER_FRAME = 38;
 
 /** Placeholder asset when context has no sourceAssetId (valid UUID shape). */
 export const DEMO_SOURCE_ASSET_ID = '00000000-0000-4000-8000-0000000000a1';
@@ -34,9 +38,9 @@ function clipDuration(c: { startMs: number; endMs: number }): number {
 function hookText(script: ScriptDoc): string {
   const hook = (script.hook ?? '').trim();
   if (hook.length > 0) {
-    // First sentence / ~80 chars for overlay readability
+    // First sentence / ~50 chars for overlay readability without frame congestion
     const cut = hook.split(/(?<=[.!?])\s+/)[0] ?? hook;
-    return cut.length > 90 ? `${cut.slice(0, 87).trimEnd()}…` : cut;
+    return cut.length > 55 ? `${cut.slice(0, 52).trimEnd()}…` : cut;
   }
   return (script.title ?? 'Hook').trim() || 'Hook';
 }
@@ -114,13 +118,40 @@ function buildHookOverlay(script: ScriptDoc): TimelineTextItem {
     text: hookText(script),
     startMs: HOOK_OVERLAY_START_MS,
     endMs: HOOK_OVERLAY_END_MS,
-    style: { position: 'bottom', fontSize: 48 },
+    style: { position: 'bottom', fontSize: 32 },
   };
 }
 
 /**
+ * Split long sentence/alignment excerpts into short, uncluttered cues
+ * so frame captions never congest or overflow the display.
+ */
+function splitIntoReadableCues(
+  text: string,
+  maxLen = MAX_CAPTION_CHARS_PER_FRAME,
+): string[] {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxLen) return [trimmed];
+  const words = trimmed.split(/\s+/);
+  const chunks: string[] = [];
+  let current = '';
+  for (const word of words) {
+    if (!current) {
+      current = word;
+    } else if (`${current} ${word}`.length <= maxLen) {
+      current += ` ${word}`;
+    } else {
+      chunks.push(current);
+      current = word;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks.length > 0 ? chunks : [trimmed.slice(0, maxLen)];
+}
+
+/**
  * Map high-confidence alignments onto the timeline as caption cues.
- * Uses source times as timeline times (MVP); clipped to durationMs later.
+ * Restrains caption cue length to <= 45 chars per frame to avoid congestion.
  */
 function buildCaptionsFromAlignments(
   alignments: Alignment[] | undefined,
@@ -132,18 +163,33 @@ function buildCaptionsFromAlignments(
     .sort((a, b) => a.startMs - b.startMs || b.confidence - a.confidence);
 
   const out: TimelineCaptionItem[] = [];
-  for (let i = 0; i < sorted.length && out.length < 12; i += 1) {
+  for (let i = 0; i < sorted.length && out.length < 16; i += 1) {
     const a = sorted[i]!;
     const startMs = Math.max(0, Math.min(a.startMs, durationMs));
     const endMs = Math.max(startMs + 200, Math.min(a.endMs, durationMs));
     if (endMs <= startMs || startMs >= durationMs) continue;
     const text = a.scriptExcerpt.trim();
     if (!text) continue;
-    out.push({
-      id: `s${out.length + 1}`,
-      text: text.length > 120 ? `${text.slice(0, 117).trimEnd()}…` : text,
-      startMs,
-      endMs,
+
+    const chunks = splitIntoReadableCues(text, MAX_CAPTION_CHARS_PER_FRAME);
+    const totalSpan = endMs - startMs;
+    const stepMs = Math.floor(totalSpan / chunks.length);
+
+    chunks.forEach((chunk, cIdx) => {
+      if (out.length >= 16) return;
+      const cStart = startMs + cIdx * stepMs;
+      const cEnd =
+        cIdx === chunks.length - 1 ? endMs : Math.min(endMs, cStart + stepMs);
+      const cleaned =
+        chunk.length > MAX_CAPTION_CHARS_PER_FRAME
+          ? `${chunk.slice(0, MAX_CAPTION_CHARS_PER_FRAME - 3).trimEnd()}…`
+          : chunk;
+      out.push({
+        id: `s${out.length + 1}`,
+        text: cleaned,
+        startMs: cStart,
+        endMs: cEnd,
+      });
     });
   }
   return out;
@@ -228,6 +274,33 @@ export function proposeTimelineFromContext(ctx: TimelineContext): EditTimeline {
   const hookItem = buildHookOverlay(ctx.script);
   const captions = buildCaptionsFromAlignments(ctx.alignments, durationMs);
 
+  const audioClips: TimelineAudioClip[] = [];
+  if (ctx.audioClips && ctx.audioClips.length > 0) {
+    audioClips.push(
+      ...ctx.audioClips.map((c, i) => ({
+        ...c,
+        id: c.id ?? `a${i + 1}`,
+      })),
+    );
+  } else if (ctx.assets && ctx.assets.length > 0) {
+    const audioAssets = ctx.assets.filter((a) => a.type === 'AUDIO');
+    if (audioAssets.length > 0) {
+      audioClips.push(
+        ...audioAssets.map((a, i) => ({
+          id: `a${i + 1}`,
+          assetId: a.id,
+          srcStartMs: 0,
+          srcEndMs: Math.min(
+            Math.max(1000, a.durationMs ?? durationMs),
+            durationMs,
+          ),
+          timelineStartMs: 0,
+          label: a.name || 'Background Music',
+        })),
+      );
+    }
+  }
+
   const usedIdeas = Boolean(ctx.acceptedClips?.length || ctx.clipIdeas?.length);
   const timeline: EditTimeline = {
     schemaVersion: '1.0',
@@ -238,6 +311,11 @@ export function proposeTimelineFromContext(ctx: TimelineContext): EditTimeline {
         id: 'v1',
         type: 'video',
         clips: videoClips,
+      },
+      {
+        id: 'a1',
+        type: 'audio',
+        clips: audioClips,
       },
       {
         id: 't1',

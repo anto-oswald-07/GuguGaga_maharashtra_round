@@ -847,6 +847,7 @@ export async function completeJobWithAi(
         assetId: ctx.assetId,
         hookText: ctx.hook,
         clipWindows: ctx.clipWindows,
+        audioClips: ctx.audioClips,
       });
 
       let timelineJson = fallback;
@@ -1178,6 +1179,7 @@ export async function completeJobWithAi(
         throw new JobHttpError(404, 'not_found', 'Scene not found on script');
       }
 
+      const customPrompt = strField(input, 'prompt', '');
       const assetId = randomUUID();
       const outDir = storage.absoluteFromRelative(
         path.posix.join('workspaces', job.workspaceId, 'originals', assetId),
@@ -1188,6 +1190,7 @@ export async function completeJobWithAi(
         title: scene.title,
         spokenText: scene.spokenText,
         durationMs: scene.targetDurationMs,
+        prompt: customPrompt || undefined,
       });
 
       const filename = `scene-${scene.ordinal + 1}-${scene.title
@@ -1224,6 +1227,7 @@ export async function completeJobWithAi(
             scriptId,
             durationMs: media.durationMs,
             generateMode: media.mode,
+            ...(customPrompt ? { prompt: customPrompt } : {}),
           },
         },
       });
@@ -1246,8 +1250,10 @@ export async function completeJobWithAi(
         fulfillment: {
           mode: 'AI_GENERATED',
           assetId,
-          opinion: `AI placeholder generated (${media.mode}) for “${scene.title}”. Replace with real footage when ready.`,
-          matchConfidence: media.mode === 'ffmpeg' ? 0.55 : 0.3,
+          opinion: customPrompt
+            ? `AI clip generated with prompt: "${customPrompt.slice(0, 60)}${customPrompt.length > 60 ? '...' : ''}" (${media.mode}). Replace with real footage when ready.`
+            : `AI placeholder generated (${media.mode}) for “${scene.title}”. Replace with real footage when ready.`,
+          matchConfidence: media.mode === 'ffmpeg' ? 0.6 : 0.3,
         },
       });
 

@@ -7,6 +7,7 @@ import {
 import { requireAuth } from '../../auth/jwt';
 import {
   TimelinesHttpError,
+  createTimeline,
   enqueueGenerateTimeline,
   enqueueRenderTimeline,
   getTimeline,
@@ -70,6 +71,31 @@ export async function registerTimelinesRoutes(
           projectId,
         );
         return reply.status(200).send(result);
+      } catch (err) {
+        if (err instanceof TimelinesHttpError) {
+          return sendTimelinesError(reply, err);
+        }
+        throw err;
+      }
+    },
+  );
+
+  app.post(
+    `${API_PREFIX}/projects/:id/timelines`,
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { id: projectId } = request.params as { id: string };
+      const body = (request.body as Record<string, unknown>) ?? {};
+      try {
+        const result = await createTimeline(
+          request.auth!.workspaceId,
+          projectId,
+          {
+            title: typeof body.title === 'string' ? body.title : undefined,
+            timeline: body.timeline ?? body,
+          },
+        );
+        return reply.status(201).send(result);
       } catch (err) {
         if (err instanceof TimelinesHttpError) {
           return sendTimelinesError(reply, err);

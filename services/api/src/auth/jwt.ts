@@ -44,18 +44,17 @@ export async function requireAuth(
   reply: FastifyReply,
 ): Promise<void> {
   const header = request.headers.authorization;
-  if (!header?.startsWith('Bearer ')) {
-    return reply.status(401).send({
-      error: 'unauthorized',
-      message: 'Missing or invalid Authorization header',
-      statusCode: 401,
-    });
+  let token: string | undefined;
+  if (header?.startsWith('Bearer ')) {
+    token = header.slice('Bearer '.length).trim();
+  } else if (request.query && typeof (request.query as Record<string, unknown>).token === 'string') {
+    token = ((request.query as Record<string, unknown>).token as string).trim();
   }
-  const token = header.slice('Bearer '.length).trim();
+
   if (!token) {
     return reply.status(401).send({
       error: 'unauthorized',
-      message: 'Missing bearer token',
+      message: 'Missing bearer token in Authorization header or token query parameter',
       statusCode: 401,
     });
   }

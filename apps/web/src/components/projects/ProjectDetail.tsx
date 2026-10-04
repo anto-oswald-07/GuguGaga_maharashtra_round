@@ -20,8 +20,8 @@ import {
   type Project,
   type StageEvent,
 } from "@/components/projects/project-api";
-import { ClipsTab } from "@/components/clips/ClipsTab";
 import { MappingTab } from "@/components/mapping/MappingTab";
+import { ClipsTab } from "@/components/clips/ClipsTab";
 import { PacksTab } from "@/components/packs/PacksTab";
 import { ScriptTab } from "@/components/scripts/ScriptTab";
 import type { ScriptPlatform } from "@/lib/api";
@@ -30,7 +30,7 @@ type ProjectDetailProps = {
   projectId: string;
 };
 
-type HubTab = "overview" | "script" | "mapping" | "clips" | "packs";
+type HubTab = "overview" | "script" | "clips" | "mapping" | "packs";
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -180,7 +180,11 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
                   {project.description}
                 </p>
               ) : null}
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-[var(--muted)]">
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+                <span className="rounded border border-[var(--brand)]/30 bg-[var(--brand)]/5 px-2 py-0.5 font-medium text-[var(--brand)]">
+                  📁 {project.assetIds?.length ?? 0} asset
+                  {(project.assetIds?.length ?? 0) === 1 ? "" : "s"}
+                </span>
                 {project.targetPlatforms.length > 0 ? (
                   project.targetPlatforms.map((p: Platform) => (
                     <span
@@ -231,17 +235,6 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
               </button>
               <button
                 type="button"
-                onClick={() => setTab("mapping")}
-                className={
-                  tab === "mapping"
-                    ? "border-b-2 border-[var(--brand)] px-1 py-2 font-medium text-[var(--brand)]"
-                    : "px-1 py-2 text-[var(--muted)] hover:text-[var(--foreground)]"
-                }
-              >
-                Footage &amp; Scenes
-              </button>
-              <button
-                type="button"
                 onClick={() => setTab("clips")}
                 className={
                   tab === "clips"
@@ -249,7 +242,18 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
                     : "px-1 py-2 text-[var(--muted)] hover:text-[var(--foreground)]"
                 }
               >
-                Clips
+                Auto-Trim Clips
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("mapping")}
+                className={
+                  tab === "mapping"
+                    ? "border-b-2 border-[var(--brand)] px-1 py-2 font-medium text-[var(--brand)]"
+                    : "px-1 py-2 text-[var(--muted)] hover:text-[var(--foreground)]"
+                }
+              >
+                Footage &amp; Scenes ({project.assetIds?.length ?? 0})
               </button>
               <Link
                 href={`/projects/${project.id}/editor`}
@@ -323,6 +327,14 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
                 null
               }
             />
+          ) : tab === "clips" ? (
+            <ClipsTab
+              projectId={project.id}
+              assetIds={project.assetIds ?? []}
+              onAssetsChanged={() => {
+                void refresh();
+              }}
+            />
           ) : tab === "mapping" ? (
             <MappingTab
               projectId={project.id}
@@ -331,8 +343,6 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
                 void refresh();
               }}
             />
-          ) : tab === "clips" ? (
-            <ClipsTab projectId={project.id} assetIds={project.assetIds} />
           ) : (
             <PacksTab
               projectId={project.id}

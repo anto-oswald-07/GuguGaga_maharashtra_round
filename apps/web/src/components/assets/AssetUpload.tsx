@@ -1,7 +1,8 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useState } from "react";
-import { ApiError, uploadAsset } from "@/lib/api";
+import { ApiError, Asset, uploadAsset } from "@/lib/api";
+import { ClipPlayer } from "@/components/assets/ClipPlayer";
 
 type AssetUploadProps = {
   onUploaded: () => void;
@@ -16,10 +17,12 @@ export function AssetUpload({ onUploaded }: AssetUploadProps) {
   const [tags, setTags] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [uploadedAsset, setUploadedAsset] = useState<Asset | null>(null);
 
   function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const next = event.target.files?.[0] ?? null;
     setFile(next);
+    setUploadedAsset(null);
     if (next && !name) setName(next.name);
   }
 
@@ -33,7 +36,8 @@ export function AssetUpload({ onUploaded }: AssetUploadProps) {
     setError(null);
     setPending(true);
     try {
-      await uploadAsset(file, { name, tags });
+      const uploaded = await uploadAsset(file, { name, tags });
+      setUploadedAsset(uploaded);
       setFile(null);
       setName("");
       setTags("");
@@ -64,15 +68,60 @@ export function AssetUpload({ onUploaded }: AssetUploadProps) {
         </p>
       </div>
 
-      <label className="block space-y-1 text-sm">
-        <span className="font-medium">File</span>
-        <input
-          type="file"
-          accept={ACCEPT}
-          onChange={onFileChange}
-          className="block w-full text-sm"
-        />
-      </label>
+      <div className="space-y-1.5 text-sm">
+        <label htmlFor="asset-file-upload-input" className="block font-medium">
+          Choose Media File
+        </label>
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <label
+              htmlFor="asset-file-upload-input"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-[var(--brand)] bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white shadow-xs transition hover:bg-[var(--brand)]/90 active:scale-95"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                />
+              </svg>
+              Choose File
+            </label>
+            <input
+              id="asset-file-upload-input"
+              type="file"
+              accept={ACCEPT}
+              onChange={onFileChange}
+              className="block w-full max-w-md text-sm text-[var(--foreground)] file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[var(--brand)] file:text-white hover:file:bg-[var(--brand)]/90 cursor-pointer border border-[var(--border)] rounded-md bg-white p-1"
+            />
+          </div>
+          <span className="text-xs text-[var(--muted)] truncate max-w-sm">
+            {file ? (
+              <span className="font-medium text-emerald-700">
+                Selected file: {file.name} ({(file.size / (1024 * 1024)).toFixed(2)} MB)
+              </span>
+            ) : (
+              "No file chosen yet"
+            )}
+          </span>
+        </div>
+      </div>
+
+      {file ? (
+        <div className="space-y-1.5 rounded-md border border-[var(--border)] bg-slate-50 p-2.5">
+          <div className="flex items-center justify-between text-xs text-[var(--muted)]">
+            <span className="font-medium text-[var(--foreground)]">Selected Clip Preview</span>
+            <span>{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
+          </div>
+          <ClipPlayer file={file} title={name || file.name} />
+        </div>
+      ) : null}
 
       <label className="block space-y-1 text-sm">
         <span className="font-medium">Display name</span>
@@ -108,6 +157,27 @@ export function AssetUpload({ onUploaded }: AssetUploadProps) {
       >
         {pending ? "Uploading…" : "Upload"}
       </button>
+
+      {uploadedAsset ? (
+        <div className="space-y-2 rounded-md border border-emerald-200 bg-emerald-50/70 p-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-emerald-950">Successfully uploaded clip</span>
+            <button
+              type="button"
+              onClick={() => setUploadedAsset(null)}
+              className="text-xs text-emerald-700 hover:text-emerald-900 underline"
+            >
+              Dismiss
+            </button>
+          </div>
+          <ClipPlayer
+            assetId={uploadedAsset.id}
+            title={uploadedAsset.name}
+            type={uploadedAsset.type}
+            mime={uploadedAsset.mime}
+          />
+        </div>
+      ) : null}
     </form>
   );
 }

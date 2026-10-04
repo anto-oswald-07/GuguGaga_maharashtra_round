@@ -205,6 +205,7 @@ export async function enqueueGenerateScene(
     input: {
       scriptId: input.scriptId,
       sceneId: input.sceneId,
+      ...(input.prompt ? { prompt: input.prompt } : {}),
     },
   });
   return { jobId: job.id };

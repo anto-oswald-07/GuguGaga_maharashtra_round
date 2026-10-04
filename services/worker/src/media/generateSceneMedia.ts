@@ -62,17 +62,27 @@ export async function generateScenePlaceholderMedia(opts: {
   title: string;
   spokenText: string;
   durationMs: number;
+  prompt?: string;
 }): Promise<GenerateSceneMediaResult> {
   await mkdir(opts.outputDir, { recursive: true });
   const durationSec = Math.max(1, Math.min(45, Math.round(opts.durationMs / 1000) || 5));
   const label = escapeDrawtext(opts.title || 'Scene');
-  const sub = escapeDrawtext(opts.spokenText || '');
+  const spokenTrimmed = (opts.spokenText || '').trim();
+  const subText =
+    spokenTrimmed.length > 40
+      ? `${spokenTrimmed.slice(0, 37).trimEnd()}…`
+      : spokenTrimmed;
+  const sub = escapeDrawtext(subText);
+  const promptDraw = opts.prompt ? escapeDrawtext(`Prompt: ${opts.prompt.slice(0, 45)}`) : '';
 
   if (await hasFfmpeg()) {
     const absolutePath = path.join(opts.outputDir, `scene-${opts.sceneId}.mp4`);
     const filter = [
-      `drawtext=text='${label}':fontsize=48:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2-40`,
-      `drawtext=text='${sub}':fontsize=28:fontcolor=white@0.85:x=(w-text_w)/2:y=(h-text_h)/2+40`,
+      `drawtext=text='${label}':fontsize=40:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2-${promptDraw ? 50 : 35}`,
+      `drawtext=text='${sub}':fontsize=24:fontcolor=white@0.9:box=1:boxcolor=black@0.5:boxborderw=4:x=(w-text_w)/2:y=(h-text_h)/2+${promptDraw ? 10 : 35}`,
+      ...(promptDraw
+        ? [`drawtext=text='${promptDraw}':fontsize=18:fontcolor=0xffd700@0.9:x=(w-text_w)/2:y=(h-text_h)/2+60`]
+        : []),
     ].join(',');
     try {
       await runFfmpeg([

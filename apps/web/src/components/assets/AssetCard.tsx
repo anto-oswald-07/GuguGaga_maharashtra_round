@@ -90,14 +90,24 @@ export function AssetCard({ asset, onOpen }: AssetCardProps) {
               Video placeholder
             </div>
           )}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition">
+            <span className="rounded-full bg-black/70 px-2.5 py-1 text-xs font-medium text-white shadow">
+              ▶ Play Clip
+            </span>
+          </div>
         </div>
       ) : null}
 
-      <span
-        className={`rounded px-2 py-0.5 text-xs font-medium ${TYPE_STYLES[asset.type]}`}
-      >
-        {asset.type}
-      </span>
+      <div className="flex items-center justify-between w-full">
+        <span
+          className={`rounded px-2 py-0.5 text-xs font-medium ${TYPE_STYLES[asset.type]}`}
+        >
+          {asset.type}
+        </span>
+        <span className="text-xs font-medium text-[var(--brand)]">
+          ▶ View
+        </span>
+      </div>
       <span className="line-clamp-2 text-sm font-semibold text-[var(--foreground)]">
         {asset.name}
       </span>

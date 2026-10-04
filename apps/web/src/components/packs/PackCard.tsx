@@ -8,9 +8,10 @@ import {
   PLATFORM_LABELS,
   type PackStatus,
 } from "@/components/packs/constants";
-import type {
+import {
   PlatformPackDto,
   UpdatePackCopyPayload,
+  getAssetDownloadUrl,
 } from "@/lib/api";
 
 type PackCardProps = {
@@ -19,6 +20,7 @@ type PackCardProps = {
   onSaveCopy: (packId: string, payload: UpdatePackCopyPayload) => void;
   onStatusChange: (packId: string, status: PackStatus) => void;
   onDownload: (packId: string) => void;
+  onDownloadCopy?: (packId: string) => void;
   onDelete: (packId: string) => void;
 };
 
@@ -40,6 +42,7 @@ export function PackCard({
   onSaveCopy,
   onStatusChange,
   onDownload,
+  onDownloadCopy,
   onDelete,
 }: PackCardProps) {
   const [title, setTitle] = useState(pack.title);
@@ -110,6 +113,39 @@ export function PackCard({
         </label>
       </div>
 
+      {pack.outputAssetIds.length > 0 ? (
+        <div className="space-y-1.5 rounded-lg border border-[var(--border)] bg-slate-900/95 p-2.5 text-white">
+          <div className="flex items-center justify-between text-xs text-slate-300">
+            <span className="font-medium flex items-center gap-1.5">
+              <span>🎬</span> Rendered {ASPECT_RATIO_LABELS[pack.aspectRatio] ?? pack.aspectRatio} Video
+            </span>
+            <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-300 font-mono">
+              {ASPECT_RATIO_LABELS[pack.aspectRatio] ?? pack.aspectRatio}
+            </span>
+          </div>
+          <div className="flex justify-center items-center overflow-hidden rounded bg-black">
+            <video
+              key={pack.outputAssetIds[0]}
+              controls
+              playsInline
+              preload="metadata"
+              src={getAssetDownloadUrl(pack.outputAssetIds[0])}
+              className={`rounded object-contain ${
+                pack.aspectRatio === "R_9_16"
+                  ? "aspect-[9/16] max-h-[340px] w-auto"
+                  : pack.aspectRatio === "R_1_1"
+                    ? "aspect-square max-h-[300px] w-auto"
+                    : "aspect-video max-h-[260px] w-full"
+              }`}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-[var(--border)] bg-slate-50/70 p-3 text-center text-xs text-[var(--muted)]">
+          Output video pending. Click <strong>Generate packs</strong> to render the saved timeline into {ASPECT_RATIO_LABELS[pack.aspectRatio] ?? pack.aspectRatio}.
+        </div>
+      )}
+
       <label className="block space-y-1 text-sm">
         <span className="font-medium">Title</span>
         <input
@@ -173,10 +209,22 @@ export function PackCard({
           type="button"
           disabled={busy}
           onClick={() => onDownload(pack.id)}
-          className="rounded-md bg-[var(--brand)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+          className="rounded-md bg-[var(--brand)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40 hover:opacity-90"
+          title="Download adapted video MP4"
         >
-          Download
+          Download MP4
         </button>
+        {onDownloadCopy ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onDownloadCopy(pack.id)}
+            className="rounded-md border border-[var(--border)] bg-white px-3 py-1.5 text-sm disabled:opacity-40 hover:bg-slate-50"
+            title="Download copy & hashtags as .txt"
+          >
+            Download Copy (.txt)
+          </button>
+        ) : null}
         <button
           type="button"
           disabled={busy}

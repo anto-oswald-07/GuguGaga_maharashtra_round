@@ -37,6 +37,15 @@ type EditorAction =
   | { type: "hydrate"; timelineId: string | null; draft: TimelineJson }
   | { type: "setProposal"; proposal: TimelineJson | null }
   | { type: "applyProposal" }
+  | {
+      type: "applyAudioSuggestion";
+      options?: {
+        fallbackAssetId?: string;
+        fallbackLabel?: string;
+        fallbackClips?: TimelineAudioClip[];
+      };
+    }
+  | { type: "applyCaptionsAndTextSuggestion" }
   | { type: "dismissProposal" }
   | { type: "select"; selected: EditorSelection }
   | { type: "markClean"; timelineId?: string }
@@ -79,6 +88,16 @@ type EditorAction =
       trackId: string;
       clipId: string;
       trackType: "video" | "audio";
+    }
+  | {
+      type: "removeTrackItem";
+      trackId: string;
+      itemId: string;
+      trackType: "text" | "captions";
+    }
+  | {
+      type: "clearTrack";
+      trackId: string;
     }
   | { type: "replaceDraft"; draft: TimelineJson };
 
@@ -164,6 +183,112 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         proposal: null,
         dirty: true,
         selected: null,
+      };
+    }
+    case "applyAudioSuggestion": {
+      const draft = cloneTimeline(state.draft);
+      const audioIdx = draft.tracks.findIndex((t) => t.type === "audio");
+      const proposalAudioTrack = state.proposal?.tracks.find(
+        (t) => t.type === "audio",
+      );
+
+      let newAudioClips: TimelineAudioClip[] = [];
+
+      if (
+        proposalAudioTrack &&
+        proposalAudioTrack.type === "audio" &&
+        proposalAudioTrack.clips &&
+        proposalAudioTrack.clips.length > 0 &&
+        proposalAudioTrack.clips.some((c) => Boolean(c.assetId))
+      ) {
+        newAudioClips = proposalAudioTrack.clips.map((c) => ({ ...c }));
+      } else if (
+        action.options?.fallbackClips &&
+        action.options.fallbackClips.length > 0
+      ) {
+        newAudioClips = action.options.fallbackClips.map((c) => ({ ...c }));
+      } else if (action.options?.fallbackAssetId) {
+        const dur = Math.max(5000, draft.durationMs || 30_000);
+        newAudioClips = [
+          {
+            id: `aud-${Date.now()}`,
+            assetId: action.options.fallbackAssetId,
+            srcStartMs: 0,
+            srcEndMs: dur,
+            timelineStartMs: 0,
+            label: action.options.fallbackLabel || "Background Music",
+          },
+        ];
+      }
+
+      if (newAudioClips.length === 0) return state;
+
+      if (audioIdx >= 0) {
+        draft.tracks[audioIdx] = {
+          ...draft.tracks[audioIdx],
+          type: "audio",
+          clips: newAudioClips,
+        };
+      } else {
+        draft.tracks.push({
+          id: "a1",
+          type: "audio",
+          clips: newAudioClips,
+        });
+      }
+      return {
+        ...state,
+        draft: recomputeDuration(draft),
+        dirty: true,
+      };
+    }
+    case "applyCaptionsAndTextSuggestion": {
+      if (!state.proposal) return state;
+      const proposalTextTrack = state.proposal.tracks.find(
+        (t) => t.type === "text",
+      );
+      const proposalCapTrack = state.proposal.tracks.find(
+        (t) => t.type === "captions",
+      );
+      const draft = cloneTimeline(state.draft);
+      if (proposalTextTrack && proposalTextTrack.type === "text") {
+        const textIdx = draft.tracks.findIndex((t) => t.type === "text");
+        const newTextItems = (proposalTextTrack.items ?? []).map((i) => ({ ...i }));
+        if (textIdx >= 0) {
+          draft.tracks[textIdx] = {
+            ...draft.tracks[textIdx],
+            type: "text",
+            items: newTextItems,
+          };
+        } else {
+          draft.tracks.push({
+            id: "t1",
+            type: "text",
+            items: newTextItems,
+          });
+        }
+      }
+      if (proposalCapTrack && proposalCapTrack.type === "captions") {
+        const capIdx = draft.tracks.findIndex((t) => t.type === "captions");
+        const newCapItems = (proposalCapTrack.items ?? []).map((i) => ({ ...i }));
+        if (capIdx >= 0) {
+          draft.tracks[capIdx] = {
+            ...draft.tracks[capIdx],
+            type: "captions",
+            items: newCapItems,
+          };
+        } else {
+          draft.tracks.push({
+            id: "cap1",
+            type: "captions",
+            items: newCapItems,
+          });
+        }
+      }
+      return {
+        ...state,
+        draft: recomputeDuration(draft),
+        dirty: true,
       };
     }
     case "dismissProposal":
@@ -365,6 +490,46 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
         selected: clearSelected ? null : state.selected,
       };
     }
+    case "removeTrackItem": {
+      const draft = cloneTimeline(state.draft);
+      const track = draft.tracks.find(
+        (t) =>
+          t.id === action.trackId &&
+          (t.type === "text" || t.type === "captions") &&
+          t.type === action.trackType,
+      );
+      if (!track || (track.type !== "text" && track.type !== "captions")) {
+        return state;
+      }
+      track.items = track.items.filter((i) => i.id !== action.itemId);
+      const clearSelected =
+        state.selected &&
+        (state.selected.kind === "text" || state.selected.kind === "caption") &&
+        state.selected.itemId === action.itemId;
+      return {
+        ...state,
+        draft: recomputeDuration(draft),
+        dirty: true,
+        selected: clearSelected ? null : state.selected,
+      };
+    }
+    case "clearTrack": {
+      const draft = cloneTimeline(state.draft);
+      const track = draft.tracks.find((t) => t.id === action.trackId);
+      if (!track) return state;
+      if (track.type === "text" || track.type === "captions") {
+        track.items = [];
+      } else if (track.type === "video" || track.type === "audio") {
+        track.clips = [];
+      }
+      const clearSelected = state.selected?.trackId === action.trackId;
+      return {
+        ...state,
+        draft: recomputeDuration(draft),
+        dirty: true,
+        selected: clearSelected ? null : state.selected,
+      };
+    }
     default:
       return state;
   }
@@ -375,6 +540,12 @@ type EditorStoreValue = {
   hydrate: (timelineId: string | null, draft: TimelineJson) => void;
   setProposal: (proposal: TimelineJson | null) => void;
   applyProposal: () => void;
+  applyAudioSuggestion: (options?: {
+    fallbackAssetId?: string;
+    fallbackLabel?: string;
+    fallbackClips?: TimelineAudioClip[];
+  }) => void;
+  applyCaptionsAndTextSuggestion: () => void;
   dismissProposal: () => void;
   select: (selected: EditorSelection) => void;
   markClean: (timelineId?: string) => void;
@@ -416,6 +587,12 @@ type EditorStoreValue = {
     clipId: string,
     trackType: "video" | "audio",
   ) => void;
+  removeTrackItem: (
+    trackId: string,
+    itemId: string,
+    trackType: "text" | "captions",
+  ) => void;
+  clearTrack: (trackId: string) => void;
   replaceDraft: (draft: TimelineJson) => void;
   makeClipId: (prefix?: string) => string;
 };
@@ -442,6 +619,19 @@ export function EditorStoreProvider({ children }: { children: ReactNode }) {
   }, []);
   const applyProposal = useCallback(() => {
     dispatch({ type: "applyProposal" });
+  }, []);
+  const applyAudioSuggestion = useCallback(
+    (options?: {
+      fallbackAssetId?: string;
+      fallbackLabel?: string;
+      fallbackClips?: TimelineAudioClip[];
+    }) => {
+      dispatch({ type: "applyAudioSuggestion", options });
+    },
+    [],
+  );
+  const applyCaptionsAndTextSuggestion = useCallback(() => {
+    dispatch({ type: "applyCaptionsAndTextSuggestion" });
   }, []);
   const dismissProposal = useCallback(() => {
     dispatch({ type: "dismissProposal" });
@@ -529,6 +719,15 @@ export function EditorStoreProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+  const removeTrackItem = useCallback(
+    (trackId: string, itemId: string, trackType: "text" | "captions") => {
+      dispatch({ type: "removeTrackItem", trackId, itemId, trackType });
+    },
+    [],
+  );
+  const clearTrack = useCallback((trackId: string) => {
+    dispatch({ type: "clearTrack", trackId });
+  }, []);
   const replaceDraft = useCallback((draft: TimelineJson) => {
     dispatch({ type: "replaceDraft", draft });
   }, []);
@@ -540,6 +739,8 @@ export function EditorStoreProvider({ children }: { children: ReactNode }) {
       hydrate,
       setProposal,
       applyProposal,
+      applyAudioSuggestion,
+      applyCaptionsAndTextSuggestion,
       dismissProposal,
       select,
       markClean,
@@ -553,6 +754,8 @@ export function EditorStoreProvider({ children }: { children: ReactNode }) {
       addVisualClip,
       addAudioClip,
       removeClip,
+      removeTrackItem,
+      clearTrack,
       replaceDraft,
       makeClipId,
     }),
@@ -561,6 +764,8 @@ export function EditorStoreProvider({ children }: { children: ReactNode }) {
       hydrate,
       setProposal,
       applyProposal,
+      applyAudioSuggestion,
+      applyCaptionsAndTextSuggestion,
       dismissProposal,
       select,
       markClean,
@@ -574,6 +779,8 @@ export function EditorStoreProvider({ children }: { children: ReactNode }) {
       addVisualClip,
       addAudioClip,
       removeClip,
+      removeTrackItem,
+      clearTrack,
       replaceDraft,
       makeClipId,
     ],

@@ -9,6 +9,7 @@ import {
   type Asset,
   type Project,
 } from "@/components/projects/project-api";
+import { ClipPlayer } from "@/components/assets/ClipPlayer";
 
 type AttachAssetsPanelProps = {
   project: Project;
@@ -21,6 +22,7 @@ export function AttachAssetsPanel({
 }: AttachAssetsPanelProps) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [pending, setPending] = useState(false);
@@ -123,8 +125,35 @@ export function AttachAssetsPanel({
 
   return (
     <div className="space-y-4">
+      {previewAsset ? (
+        <div className="rounded-lg border border-[var(--brand)]/30 bg-slate-50 p-3">
+          <div className="mb-2 flex items-center justify-between text-xs">
+            <span className="font-semibold text-[var(--foreground)]">Preview Clip</span>
+            <button
+              type="button"
+              onClick={() => setPreviewAsset(null)}
+              className="text-xs text-[var(--muted)] hover:text-[var(--foreground)]"
+            >
+              ✕ Close
+            </button>
+          </div>
+          <ClipPlayer
+            assetId={previewAsset.id}
+            title={previewAsset.name}
+            type={previewAsset.type}
+            mime={previewAsset.mime}
+            onClose={() => setPreviewAsset(null)}
+          />
+        </div>
+      ) : null}
+
       <div>
-        <h3 className="text-sm font-semibold">Attached assets</h3>
+        <h3 className="flex items-center justify-between text-sm font-semibold">
+          <span>Attached assets</span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-700">
+            {project.assetIds?.length ?? 0}
+          </span>
+        </h3>
         {loading ? (
           <p className="mt-2 text-sm text-[var(--muted)]">Loading library…</p>
         ) : null}
@@ -144,14 +173,25 @@ export function AttachAssetsPanel({
                     {asset.type}
                   </span>
                 </span>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => void onDetach(asset.id)}
-                  className="shrink-0 text-xs text-red-700 hover:underline disabled:opacity-40"
-                >
-                  Detach
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewAsset((curr) => (curr?.id === asset.id ? null : asset))
+                    }
+                    className="text-xs font-medium text-[var(--brand)] hover:underline"
+                  >
+                    {previewAsset?.id === asset.id ? "Hide" : "▶ View"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void onDetach(asset.id)}
+                    className="text-xs text-red-700 hover:underline disabled:opacity-40"
+                  >
+                    Detach
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -173,8 +213,11 @@ export function AttachAssetsPanel({
             {available.map((asset) => {
               const checked = selected.includes(asset.id);
               return (
-                <li key={asset.id}>
-                  <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-[var(--background)]">
+                <li
+                  key={asset.id}
+                  className="flex items-center justify-between gap-2 rounded px-2 py-1.5 hover:bg-[var(--background)]"
+                >
+                  <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       checked={checked}
@@ -185,6 +228,16 @@ export function AttachAssetsPanel({
                       {asset.type}
                     </span>
                   </label>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setPreviewAsset((curr) => (curr?.id === asset.id ? null : asset));
+                    }}
+                    className="shrink-0 text-xs font-medium text-[var(--brand)] hover:underline"
+                  >
+                    {previewAsset?.id === asset.id ? "Hide" : "▶ View"}
+                  </button>
                 </li>
               );
             })}

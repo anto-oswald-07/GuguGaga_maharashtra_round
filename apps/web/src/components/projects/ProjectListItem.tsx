@@ -59,9 +59,9 @@ export function ProjectListItem({
         ) : (
           <span>No platforms</span>
         )}
-        <span className="ml-auto">
-          {project.assetIds.length} asset
-          {project.assetIds.length === 1 ? "" : "s"}
+        <span className="ml-auto inline-flex items-center gap-1 font-medium text-[var(--foreground)]">
+          📁 {project.assetIds?.length ?? 0} asset
+          {(project.assetIds?.length ?? 0) === 1 ? "" : "s"}
         </span>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">

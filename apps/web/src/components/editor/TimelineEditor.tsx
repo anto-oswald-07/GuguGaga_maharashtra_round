@@ -8,19 +8,27 @@ import {
   emptyTimelineJson,
   getTimeline,
   listAssets,
+  listProjectScripts,
   listProjectTimelines,
   previewAssetIdFromJob,
   proposeGenerateTimeline,
   renderTimeline,
   saveTimeline,
+  createProjectTimeline,
   timelineFromJobOutput,
   timelineIdFromJob,
   type Asset,
   type Job,
+  type ScriptScene,
   type TimelineDocument,
+  type TimelineJson,
+  type TimelineVideoClip,
 } from "@/lib/api";
 import { hasToken } from "@/lib/auth-storage";
-import { getProject } from "@/components/projects/project-api";
+import {
+  attachProjectAssets,
+  getProject,
+} from "@/components/projects/project-api";
 import { AiSuggestPanel } from "@/components/editor/AiSuggestPanel";
 import {
   EditorStoreProvider,
@@ -31,6 +39,68 @@ import { MediaBin } from "@/components/editor/MediaBin";
 import { PreviewPane } from "@/components/editor/PreviewPane";
 import { TracksPanel } from "@/components/editor/TracksPanel";
 import { useJobPoll } from "@/components/scripts/useJobPoll";
+
+function getAssetDurationMs(asset?: Asset | null, fallback = 5000): number {
+  if (!asset) return fallback;
+  if (typeof (asset.metadata as { durationMs?: number } | null)?.durationMs === "number") {
+    return Math.max(500, (asset.metadata as { durationMs: number }).durationMs);
+  }
+  if (typeof (asset.metadata as { durationSec?: number } | null)?.durationSec === "number") {
+    return Math.max(500, Math.round(Number((asset.metadata as { durationSec: number }).durationSec) * 1000));
+  }
+  return fallback;
+}
+
+function buildSceneSequenceDraft(
+  fulfilledScenes: ScriptScene[],
+  allAssets: Asset[],
+  existingDraft?: TimelineJson,
+): TimelineJson {
+  let cursor = 0;
+  const videoClips: TimelineVideoClip[] = [];
+
+  for (let i = 0; i < fulfilledScenes.length; i++) {
+    const scene = fulfilledScenes[i]!;
+    const asset = allAssets.find((a) => a.id === scene.fulfillment.assetId);
+    const dur = getAssetDurationMs(asset, scene.targetDurationMs || 5000);
+    const start = cursor;
+    const isImage = asset?.type === "IMAGE";
+    videoClips.push({
+      id: `c${i + 1}`,
+      assetId: scene.fulfillment.assetId!,
+      srcStartMs: 0,
+      srcEndMs: dur,
+      timelineStartMs: start,
+      mediaKind: isImage ? "image" : "video",
+      label: scene.title || asset?.name || `Scene ${scene.ordinal + 1}`,
+    });
+    cursor += dur;
+  }
+
+  const existingAudio =
+    existingDraft?.tracks?.find((t) => t.type === "audio")?.clips ?? [];
+  const existingText =
+    existingDraft?.tracks?.find((t) => t.type === "text")?.items ?? [];
+  const existingCaptions =
+    existingDraft?.tracks?.find((t) => t.type === "captions")?.items ?? [];
+
+  return {
+    schemaVersion: "1.0",
+    fps: 30,
+    durationMs: Math.max(cursor, 0),
+    tracks: [
+      { id: "v1", type: "video", clips: videoClips },
+      { id: "a1", type: "audio", clips: existingAudio },
+      { id: "t1", type: "text", items: existingText },
+      { id: "cap1", type: "captions", items: existingCaptions },
+    ],
+    transitions: [],
+    meta: {
+      generatedBy: "scene_sequencer",
+      notes: `Auto-sequenced ${videoClips.length} clip(s) from script scenes.`,
+    },
+  };
+}
 
 type TimelineEditorProps = {
   projectId: string;
@@ -45,12 +115,14 @@ function TimelineEditorInner({ projectId }: TimelineEditorProps) {
     applyProposal,
     markClean,
     setPreviewAssetId,
+    replaceDraft,
   } = useEditorStore();
 
   const [ready, setReady] = useState(false);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetIds, setAssetIds] = useState<string[]>([]);
   const [timelines, setTimelines] = useState<TimelineDocument[]>([]);
+  const [fulfilledScenes, setFulfilledScenes] = useState<ScriptScene[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionPending, setActionPending] = useState(false);
@@ -84,30 +156,76 @@ function TimelineEditorInner({ projectId }: TimelineEditorProps) {
     setLoading(true);
     setError(null);
     try {
-      const [project, assetResult, timelineResult] = await Promise.all([
-        getProject(projectId),
-        listAssets(),
-        listProjectTimelines(projectId),
-      ]);
-      setAssetIds(project.assetIds ?? []);
-      setAssets(assetResult.items ?? []);
+      const [project, assetResult, timelineResult, scriptResult] =
+        await Promise.all([
+          getProject(projectId),
+          listAssets(),
+          listProjectTimelines(projectId),
+          listProjectScripts(projectId).catch(() => ({ items: [] })),
+        ]);
+      const currentAssetIds = project.assetIds ?? [];
+      const allAssets = assetResult.items ?? [];
+      setAssetIds(currentAssetIds);
+      setAssets(allAssets);
       const items = timelineResult.items ?? [];
       setTimelines(items);
 
+      const scripts = scriptResult.items ?? [];
+      const activeScript = scripts[0] ?? null;
+      const scenes = (activeScript?.content?.scenes ?? [])
+        .slice()
+        .sort((a, b) => a.ordinal - b.ordinal);
+      const readyScenes = scenes.filter(
+        (s) =>
+          Boolean(s.fulfillment?.assetId) && s.fulfillment.mode !== "EMPTY",
+      );
+      setFulfilledScenes(readyScenes);
+
       const preferred =
         items.find((t) => t.id === state.timelineId) ?? items[0] ?? null;
-      if (preferred) {
-        let doc = preferred;
-        if (!doc.content) {
-          try {
-            doc = await getTimeline(preferred.id);
-          } catch {
-            // keep list payload
-          }
+      let doc = preferred;
+      if (preferred && (!preferred.content || !preferred.versions)) {
+        try {
+          doc = await getTimeline(preferred.id);
+        } catch {
+          // keep list payload
         }
-        hydrate(doc.id, doc.content ?? emptyTimelineJson());
+      }
+
+      const existingVideoClips =
+        doc?.content?.tracks?.find((t) => t.type === "video")?.clips ?? [];
+
+      if (existingVideoClips.length > 0) {
+        // Saved timeline with clips already exists — load it
+        hydrate(doc!.id, doc!.content!);
+        const proposalVersion = [...(doc!.versions ?? [])]
+          .filter((v) => v.source && /ai_proposal|proposal/i.test(v.source))
+          .sort((a, b) => b.version - a.version)[0];
+        if (proposalVersion && !state.proposal) {
+          setProposal(proposalVersion.content);
+        } else if (doc!.pendingProposal && !state.proposal) {
+          setProposal(doc!.pendingProposal);
+        } else {
+          setProposal(null);
+        }
+      } else if (readyScenes.length > 0) {
+        // Auto-add clips to sequence that were generated by script and attached in Footage & Scenes!
+        const autoDraft = buildSceneSequenceDraft(
+          readyScenes,
+          allAssets,
+          doc?.content ?? undefined,
+        );
+        hydrate(doc?.id ?? null, autoDraft);
+        setProposal(null);
+      } else if (doc && doc.content) {
+        hydrate(doc.id, doc.content);
+        setProposal(null);
+      } else if (doc && !doc.content) {
+        hydrate(doc.id, emptyTimelineJson({ generatedBy: "user", empty: true }));
+        setProposal(null);
       } else if (!state.dirty) {
         hydrate(null, emptyTimelineJson({ generatedBy: "user", empty: true }));
+        setProposal(null);
       }
     } catch (err) {
       setError(
@@ -120,7 +238,7 @@ function TimelineEditorInner({ projectId }: TimelineEditorProps) {
     } finally {
       setLoading(false);
     }
-  }, [projectId, hydrate, state.timelineId, state.dirty]);
+  }, [projectId, hydrate, setProposal, state.timelineId, state.dirty, state.proposal]);
 
   useEffect(() => {
     if (!ready) return;
@@ -243,21 +361,24 @@ function TimelineEditorInner({ projectId }: TimelineEditorProps) {
   }
 
   async function onSave() {
-    if (!state.timelineId) {
-      setError(
-        "No timeline document yet — run AI Suggest first (API creates the timeline), then Apply / Save.",
-      );
-      return;
-    }
     setActionPending(true);
     setError(null);
     try {
-      const saved = await saveTimeline(state.timelineId, state.draft);
-      markClean(saved.id || state.timelineId);
-      setTimelines((prev) => {
-        const others = prev.filter((t) => t.id !== saved.id);
-        return [saved, ...others];
-      });
+      let timelineId = state.timelineId;
+      if (!timelineId) {
+        const created = await createProjectTimeline(projectId, state.draft);
+        timelineId = created.id;
+        hydrate(timelineId, created.content ?? state.draft);
+        markClean(timelineId);
+        setTimelines((prev) => [created, ...prev]);
+      } else {
+        const saved = await saveTimeline(timelineId, state.draft);
+        markClean(saved.id || timelineId);
+        setTimelines((prev) => {
+          const others = prev.filter((t) => t.id !== saved.id);
+          return [saved, ...others];
+        });
+      }
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -271,31 +392,236 @@ function TimelineEditorInner({ projectId }: TimelineEditorProps) {
     }
   }
 
+  async function onApplyAudio(suggestedAsset?: Asset) {
+    let audioAsset = suggestedAsset;
+    if (!audioAsset) {
+      audioAsset = assets.find(
+        (a) => (a.type === "AUDIO" || a.mime?.startsWith("audio/")) && !a.deletedAt,
+      );
+    }
+    const audioTrack = state.proposal?.tracks.find((t) => t.type === "audio");
+    const proposalAudioClip =
+      audioTrack && audioTrack.type === "audio" ? audioTrack.clips[0] : null;
+
+    const targetAssetId = proposalAudioClip?.assetId || audioAsset?.id;
+    const targetLabel =
+      proposalAudioClip?.label || audioAsset?.name || "Background Music";
+
+    if (!targetAssetId) {
+      setError("No audio track found. Upload an audio file in the Assets library first.");
+      return;
+    }
+
+    // Attach to project if not yet attached so counts and mapping are consistent
+    if (!assetIds.includes(targetAssetId)) {
+      try {
+        await attachProjectAssets(projectId, [targetAssetId]);
+        setAssetIds((prev) => [...prev, targetAssetId]);
+      } catch {
+        // ignore if already linked
+      }
+    }
+
+    const dur = Math.max(5000, state.draft.durationMs || 30_000);
+    const audioClip = {
+      id: `aud-${Date.now()}`,
+      assetId: targetAssetId,
+      srcStartMs: 0,
+      srcEndMs: dur,
+      timelineStartMs: 0,
+      label: targetLabel,
+    };
+
+    const currentDraft = state.draft;
+    const audioIdx = currentDraft.tracks.findIndex((t) => t.type === "audio");
+    const updatedTracks = [...currentDraft.tracks];
+    if (audioIdx >= 0) {
+      updatedTracks[audioIdx] = {
+        ...updatedTracks[audioIdx]!,
+        type: "audio",
+        clips: [audioClip],
+      };
+    } else {
+      updatedTracks.push({
+        id: "a1",
+        type: "audio",
+        clips: [audioClip],
+      });
+    }
+
+    const nextDraft: TimelineJson = {
+      ...currentDraft,
+      tracks: updatedTracks,
+    };
+
+    let timelineId = state.timelineId ?? pendingTimelineId;
+    setActionPending(true);
+    setError(null);
+    try {
+      if (!timelineId) {
+        const created = await createProjectTimeline(projectId, nextDraft);
+        timelineId = created.id;
+        hydrate(timelineId, created.content ?? nextDraft);
+        markClean(timelineId);
+        setTimelines((prev) => [created, ...prev]);
+      } else {
+        const saved = await saveTimeline(timelineId, nextDraft);
+        hydrate(saved.id || timelineId, saved.content ?? nextDraft);
+        markClean(saved.id || timelineId);
+        setTimelines((prev) => {
+          const others = prev.filter((t) => t.id !== (saved.id || timelineId));
+          return [saved, ...others];
+        });
+      }
+    } catch (err) {
+      hydrate(timelineId ?? null, nextDraft);
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Applied audio locally, but save failed",
+      );
+    } finally {
+      setActionPending(false);
+    }
+  }
+
+  async function onApplyCaptionsAndText() {
+    const proposal = state.proposal;
+    if (!proposal) return;
+
+    const propCapTrack = proposal.tracks.find((t) => t.type === "captions");
+    const propTextTrack = proposal.tracks.find((t) => t.type === "text");
+
+    const currentDraft = state.draft;
+    const updatedTracks = currentDraft.tracks.map((t) => {
+      if (t.type === "captions" && propCapTrack && propCapTrack.type === "captions") {
+        return { ...t, items: propCapTrack.items.map((i) => ({ ...i })) };
+      }
+      if (t.type === "text" && propTextTrack && propTextTrack.type === "text") {
+        return { ...t, items: propTextTrack.items.map((i) => ({ ...i })) };
+      }
+      return t;
+    });
+
+    if (!updatedTracks.some((t) => t.type === "captions") && propCapTrack && propCapTrack.type === "captions") {
+      updatedTracks.push({
+        id: "cap1",
+        type: "captions",
+        items: propCapTrack.items.map((i) => ({ ...i })),
+      });
+    }
+    if (!updatedTracks.some((t) => t.type === "text") && propTextTrack && propTextTrack.type === "text") {
+      updatedTracks.push({
+        id: "t1",
+        type: "text",
+        items: propTextTrack.items.map((i) => ({ ...i })),
+      });
+    }
+
+    const nextDraft: TimelineJson = {
+      ...currentDraft,
+      tracks: updatedTracks,
+    };
+
+    let timelineId = state.timelineId ?? pendingTimelineId;
+    setActionPending(true);
+    setError(null);
+    try {
+      if (!timelineId) {
+        const created = await createProjectTimeline(projectId, nextDraft);
+        timelineId = created.id;
+        hydrate(timelineId, created.content ?? nextDraft);
+        markClean(timelineId);
+        setTimelines((prev) => [created, ...prev]);
+      } else {
+        const saved = await saveTimeline(timelineId, nextDraft);
+        hydrate(saved.id || timelineId, saved.content ?? nextDraft);
+        markClean(saved.id || timelineId);
+        setTimelines((prev) => {
+          const others = prev.filter((t) => t.id !== (saved.id || timelineId));
+          return [saved, ...others];
+        });
+      }
+    } catch (err) {
+      hydrate(timelineId ?? null, nextDraft);
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Applied captions & text locally, but save failed",
+      );
+    } finally {
+      setActionPending(false);
+    }
+  }
+
   async function onApplyProposal() {
     const proposal = state.proposal;
     if (!proposal) return;
 
-    // Apply → local draft (FR-ED-006); then save if timeline exists
-    applyProposal();
-
-    const timelineId = state.timelineId ?? pendingTimelineId;
-    if (!timelineId) {
-      setError(null);
-      return;
+    let proposalToApply = proposal;
+    const audioTrack = proposal.tracks.find((t) => t.type === "audio");
+    const audioAsset = (assets).find(
+      (a) => (a.type === "AUDIO" || a.mime?.startsWith("audio/")) && !a.deletedAt,
+    );
+    if (
+      audioTrack &&
+      audioTrack.type === "audio" &&
+      audioTrack.clips.length === 0 &&
+      audioAsset
+    ) {
+      const dur = Math.max(5000, proposal.durationMs || 30_000);
+      proposalToApply = {
+        ...proposal,
+        tracks: proposal.tracks.map((t) =>
+          t.type === "audio"
+            ? {
+                ...t,
+                clips: [
+                  {
+                    id: `aud-${Date.now()}`,
+                    assetId: audioAsset.id,
+                    srcStartMs: 0,
+                    srcEndMs: dur,
+                    timelineStartMs: 0,
+                    label: audioAsset.name || "Background Music",
+                  },
+                ],
+              }
+            : t,
+        ),
+      };
     }
 
+    // Apply → local draft (FR-ED-006); then save if timeline exists
+    hydrate(state.timelineId ?? pendingTimelineId, proposalToApply);
+
+    let timelineId = state.timelineId ?? pendingTimelineId;
     setActionPending(true);
     setError(null);
     try {
-      const saved = await saveTimeline(timelineId, proposal);
-      hydrate(saved.id || timelineId, saved.content ?? proposal);
-      markClean(saved.id || timelineId);
-      setTimelines((prev) => {
-        const others = prev.filter((t) => t.id !== (saved.id || timelineId));
-        return [saved, ...others];
-      });
+      if (!timelineId) {
+        const created = await createProjectTimeline(projectId, proposalToApply);
+        timelineId = created.id;
+        hydrate(timelineId, created.content ?? proposalToApply);
+        markClean(timelineId);
+        setProposal(null);
+        setTimelines((prev) => [created, ...prev]);
+      } else {
+        const saved = await saveTimeline(timelineId, proposalToApply);
+        hydrate(saved.id || timelineId, saved.content ?? proposalToApply);
+        markClean(saved.id || timelineId);
+        setProposal(null);
+        setTimelines((prev) => {
+          const others = prev.filter((t) => t.id !== (saved.id || timelineId));
+          return [saved, ...others];
+        });
+      }
     } catch (err) {
-      hydrate(timelineId, proposal);
+      hydrate(timelineId ?? null, proposalToApply);
       setError(
         err instanceof ApiError
           ? err.message
@@ -322,6 +648,21 @@ function TimelineEditorInner({ projectId }: TimelineEditorProps) {
     );
   }
 
+  const onSequenceSceneClips = useCallback(() => {
+    if (fulfilledScenes.length === 0) {
+      setError(
+        "No clips are attached to script scenes yet. Upload footage in Footage & Scenes first.",
+      );
+      return;
+    }
+    const autoSequenced = buildSceneSequenceDraft(
+      fulfilledScenes,
+      assets,
+      state.draft,
+    );
+    replaceDraft(autoSequenced);
+  }, [fulfilledScenes, assets, state.draft, replaceDraft]);
+
   const busy = actionPending || polling;
 
   if (!ready) {
@@ -344,6 +685,9 @@ function TimelineEditorInner({ projectId }: TimelineEditorProps) {
               ← Project
             </Link>
             <span className="text-[var(--muted)]">Editor</span>
+            <span className="rounded bg-[var(--brand)]/5 border border-[var(--brand)]/20 px-2 py-0.5 text-xs font-medium text-[var(--brand)]">
+              {assetIds.length} attached asset{assetIds.length === 1 ? "" : "s"}
+            </span>
           </div>
           <h1 className="mt-1 text-xl font-semibold tracking-tight">
             Timeline editor
@@ -354,9 +698,21 @@ function TimelineEditorInner({ projectId }: TimelineEditorProps) {
               : "No timeline document yet"}
             {state.dirty ? " · unsaved changes" : ""}
             {timelines.length > 1 ? ` · ${timelines.length} docs` : ""}
+            {" · "}{assetIds.length} asset{assetIds.length === 1 ? "" : "s"}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {fulfilledScenes.length > 0 ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onSequenceSceneClips}
+              className="rounded-md border border-[var(--brand)] bg-[var(--brand)]/10 px-3 py-1.5 text-sm font-medium text-[var(--brand)] hover:bg-[var(--brand)]/20 transition disabled:opacity-40"
+              title="Auto-sequence clips from script scenes onto the video track"
+            >
+              Auto-sequence scene clips ({fulfilledScenes.length})
+            </button>
+          ) : null}
           <button
             type="button"
             disabled={busy}
@@ -396,14 +752,22 @@ function TimelineEditorInner({ projectId }: TimelineEditorProps) {
 
       <AiSuggestPanel
         pending={busy}
+        assets={assets}
         onSuggest={() => void onSuggest()}
         onApply={() => void onApplyProposal()}
+        onApplyAudio={(audioAsset) => void onApplyAudio(audioAsset)}
+        onApplyCaptionsAndText={() => void onApplyCaptionsAndText()}
       />
 
       {/* Layout: bin | preview | tracks | inspector */}
       <div className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1.2fr)_minmax(0,1fr)_16rem] lg:items-stretch">
         <div className="min-h-[16rem] lg:min-h-[28rem]">
-          <MediaBin assets={projectMedia} loading={loading} />
+          <MediaBin
+            assets={projectMedia}
+            loading={loading}
+            fulfilledScenesCount={fulfilledScenes.length}
+            onSequenceScenes={onSequenceSceneClips}
+          />
         </div>
         <div className="min-h-[16rem] lg:min-h-[28rem]">
           <PreviewPane
@@ -414,7 +778,10 @@ function TimelineEditorInner({ projectId }: TimelineEditorProps) {
           />
         </div>
         <div className="min-h-[16rem] lg:min-h-[28rem]">
-          <TracksPanel />
+          <TracksPanel
+            fulfilledScenesCount={fulfilledScenes.length}
+            onSequenceScenes={onSequenceSceneClips}
+          />
         </div>
         <div className="min-h-[16rem] lg:min-h-[28rem]">
           <InspectorPanel />
