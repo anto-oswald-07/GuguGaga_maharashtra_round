@@ -20,9 +20,14 @@ import type {
 import { randomUUID } from 'node:crypto';
 import { copyFile, mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { renderTimeline, renderTimelinePath } from 'worker/media/renderTimeline';
 import { prisma } from '../../db/prisma';
 import { storage } from '../../storage/local';
 import { enqueueJob } from '../jobs/queue';
+import {
+  loadTimelineRenderContext,
+  persistTimelinePreview,
+} from '../timelines/service';
 
 export class PacksHttpError extends Error {
   constructor(
@@ -104,7 +109,87 @@ async function findOwnedPack(
 }
 
 /**
- * Prefer: explicit source → timeline preview → latest rendered clip → project VIDEO.
+ * Render the saved timeline preview if missing or stale so platform packs
+ * always adapt what was saved on the edit page.
+ */
+async function ensureTimelineRendered(
+  workspaceId: string,
+  projectId: string,
+  timelineId: string,
+): Promise<string> {
+  const timeline = await prisma.editTimeline.findFirst({
+    where: {
+      id: timelineId,
+      projectId,
+      project: { workspaceId, deletedAt: null },
+    },
+    include: {
+      currentVersion: true,
+      versions: { orderBy: { version: 'desc' }, take: 1 },
+      previewAsset: true,
+    },
+  });
+  if (!timeline) {
+    throw new PacksHttpError(404, 'not_found', 'Timeline not found');
+  }
+
+  // If already rendered and preview is up-to-date with timeline edits and file exists on disk
+  if (
+    timeline.previewAssetId &&
+    timeline.previewAsset &&
+    timeline.previewAsset.createdAt >= timeline.updatedAt &&
+    (await storage.exists(timeline.previewAsset.path))
+  ) {
+    return timeline.previewAssetId;
+  }
+
+  // Ensure currentVersionId is set if versions exist
+  if (!timeline.currentVersionId && timeline.versions[0]) {
+    await prisma.editTimeline.update({
+      where: { id: timeline.id },
+      data: { currentVersionId: timeline.versions[0].id },
+    });
+  }
+
+  try {
+    const ctx = await loadTimelineRenderContext(workspaceId, timeline.id);
+    const renderJobId = randomUUID();
+    const absOutput = renderTimelinePath(
+      storage.getRoot(),
+      workspaceId,
+      renderJobId,
+    );
+
+    try {
+      await renderTimeline(ctx.timeline, {
+        assetPaths: ctx.assetPaths,
+        outputPath: absOutput,
+        burnCaptions: true,
+      });
+    } catch {
+      const firstPath = Object.values(ctx.assetPaths)[0];
+      if (firstPath) {
+        await mkdir(path.dirname(absOutput), { recursive: true });
+        await copyFile(firstPath, absOutput);
+      }
+    }
+
+    const persisted = await persistTimelinePreview({
+      workspaceId,
+      projectId,
+      timelineId: timeline.id,
+      outputPath: absOutput,
+      jobId: renderJobId,
+    });
+    return persisted.assetId;
+  } catch (err) {
+    if (timeline.previewAssetId) return timeline.previewAssetId;
+    throw err;
+  }
+}
+
+/**
+ * Prefer: explicit source → rendered saved edit timeline → latest rendered clip → project VIDEO.
  */
 async function resolveSourceAssetId(
   workspaceId: string,
@@ -131,33 +216,30 @@ async function resolveSourceAssetId(
     return link.assetId;
   }
 
-  if (input.timelineId) {
-    const timeline = await prisma.editTimeline.findFirst({
-      where: {
-        id: input.timelineId,
+  // Check if timeline is provided, or find the project's saved EditTimeline
+  const targetTimelineId =
+    input.timelineId ??
+    (
+      await prisma.editTimeline.findFirst({
+        where: {
+          projectId,
+          project: { workspaceId, deletedAt: null },
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true },
+      })
+    )?.id;
+
+  if (targetTimelineId) {
+    try {
+      const renderedAssetId = await ensureTimelineRendered(
+        workspaceId,
         projectId,
-        project: { workspaceId, deletedAt: null },
-      },
-      select: { previewAssetId: true },
-    });
-    if (!timeline) {
-      throw new PacksHttpError(404, 'not_found', 'Timeline not found');
-    }
-    if (timeline.previewAssetId) {
-      return timeline.previewAssetId;
-    }
-  } else {
-    const withPreview = await prisma.editTimeline.findFirst({
-      where: {
-        projectId,
-        previewAssetId: { not: null },
-        project: { workspaceId, deletedAt: null },
-      },
-      orderBy: { updatedAt: 'desc' },
-      select: { previewAssetId: true },
-    });
-    if (withPreview?.previewAssetId) {
-      return withPreview.previewAssetId;
+        targetTimelineId,
+      );
+      if (renderedAssetId) return renderedAssetId;
+    } catch {
+      // Fall through to clip / project video fallback if render fails
     }
   }
 
@@ -216,18 +298,15 @@ export async function enqueueGeneratePacks(
 ): Promise<EnqueueJobResponse> {
   const project = await assertOwnedProject(workspaceId, projectId);
 
-  const platforms: Platform[] =
+  const rawPlatforms =
     input.platforms && input.platforms.length > 0
       ? input.platforms
       : (project.targetPlatforms as Platform[]);
 
-  if (platforms.length === 0) {
-    throw new PacksHttpError(
-      400,
-      'validation_error',
-      'No platforms specified — pass platforms[] or set project targetPlatforms',
-    );
-  }
+  const platforms: Platform[] =
+    rawPlatforms.length > 0
+      ? rawPlatforms
+      : (['YOUTUBE', 'TIKTOK', 'LINKEDIN'] as Platform[]);
 
   const sourceAssetId = await resolveSourceAssetId(
     workspaceId,
@@ -386,23 +465,35 @@ export async function getPackDownload(
   const pack = await findOwnedPack(workspaceId, packId);
 
   const files: PackDownloadResponse['files'] = [];
+  const candidates: Array<{ id: string; isAdapted: boolean }> = [];
   if (pack.outputAssetId) {
+    candidates.push({ id: pack.outputAssetId, isAdapted: true });
+  }
+  if (pack.sourceAssetId && pack.sourceAssetId !== pack.outputAssetId) {
+    candidates.push({ id: pack.sourceAssetId, isAdapted: false });
+  }
+
+  for (const cand of candidates) {
     const asset = await prisma.asset.findFirst({
       where: {
-        id: pack.outputAssetId,
+        id: cand.id,
         workspaceId,
         deletedAt: null,
       },
-      select: { id: true, name: true, mime: true },
+      select: { id: true, name: true, mime: true, path: true },
     });
-    if (asset) {
+    if (asset && (await storage.exists(asset.path))) {
+      const filename = cand.isAdapted
+        ? `pack-${pack.platform.toLowerCase()}-${pack.aspectRatio.toLowerCase().replace(/^r_/, '')}.mp4`
+        : (asset.name || `pack-${pack.platform.toLowerCase()}.mp4`);
       files.push({
         assetId: asset.id,
-        name: asset.name,
+        name: filename,
         mime: asset.mime,
-        url: `${API_PREFIX}/assets/${asset.id}/content`,
+        url: `${API_PREFIX}/packs/${pack.id}/download-file`,
         kind: 'video',
       });
+      break;
     }
   }
 
@@ -416,6 +507,58 @@ export async function getPackDownload(
     hashtags: pack.hashtags,
     files,
   };
+}
+
+export async function getPackFileToDownload(
+  workspaceId: string,
+  packId: string,
+): Promise<{
+  path: string;
+  name: string;
+  mime: string;
+}> {
+  const pack = await findOwnedPack(workspaceId, packId);
+  const candidates: Array<{ id: string; isAdapted: boolean }> = [];
+  if (pack.outputAssetId) {
+    candidates.push({ id: pack.outputAssetId, isAdapted: true });
+  }
+  if (pack.sourceAssetId && pack.sourceAssetId !== pack.outputAssetId) {
+    candidates.push({ id: pack.sourceAssetId, isAdapted: false });
+  }
+  if (candidates.length === 0) {
+    throw new PacksHttpError(
+      404,
+      'not_found',
+      'This pack has no output video or source video available for download. Generate packs first.',
+    );
+  }
+
+  for (const cand of candidates) {
+    const asset = await prisma.asset.findFirst({
+      where: {
+        id: cand.id,
+        workspaceId,
+        deletedAt: null,
+      },
+      select: { id: true, name: true, mime: true, path: true },
+    });
+    if (asset && (await storage.exists(asset.path))) {
+      const filename = cand.isAdapted
+        ? `pack-${pack.platform.toLowerCase()}-${pack.aspectRatio.toLowerCase().replace(/^r_/, '')}.mp4`
+        : (asset.name || `pack-${pack.platform.toLowerCase()}.mp4`);
+      return {
+        path: asset.path,
+        name: filename,
+        mime: asset.mime || 'video/mp4',
+      };
+    }
+  }
+
+  throw new PacksHttpError(
+    404,
+    'not_found',
+    'Video file for this pack is missing from storage disk. Please click Generate packs to recreate.',
+  );
 }
 
 export async function deletePack(

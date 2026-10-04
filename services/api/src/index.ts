@@ -37,6 +37,7 @@ async function main() {
     origin: true,
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    exposedHeaders: ['Content-Disposition', 'Content-Length', 'Content-Type'],
   });
 
   await app.register(multipart, {

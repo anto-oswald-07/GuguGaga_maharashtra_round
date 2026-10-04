@@ -3,9 +3,24 @@
 import { formatTimecode } from "@/lib/api";
 import { useEditorStore } from "@/components/editor/editor-store";
 
-export function TracksPanel() {
-  const { state, select, reorderClip, reorderAudioClip, removeClip } =
-    useEditorStore();
+type TracksPanelProps = {
+  fulfilledScenesCount?: number;
+  onSequenceScenes?: () => void;
+};
+
+export function TracksPanel({
+  fulfilledScenesCount,
+  onSequenceScenes,
+}: TracksPanelProps = {}) {
+  const {
+    state,
+    select,
+    reorderClip,
+    reorderAudioClip,
+    removeClip,
+    removeTrackItem,
+    clearTrack,
+  } = useEditorStore();
   const { draft, selected } = state;
 
   return (
@@ -25,8 +40,21 @@ export function TracksPanel() {
             key={track.id}
             className="rounded-md border border-[var(--border)] bg-white"
           >
-            <div className="border-b border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-              {track.type} · {track.id}
+            <div className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+              <span>
+                {track.type} · {track.id}
+              </span>
+              {(track.type === "text" || track.type === "captions") &&
+              (track.items ?? []).length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => clearTrack(track.id)}
+                  className="text-[11px] font-normal lowercase tracking-normal text-red-600 hover:text-red-800 hover:underline"
+                  title={`Clear all ${track.type === "text" ? "text overlays" : "captions"}`}
+                >
+                  Clear all ({(track.items ?? []).length})
+                </button>
+              ) : null}
             </div>
             <ul className="divide-y divide-[var(--border)]">
               {track.type === "video"
@@ -186,7 +214,7 @@ export function TracksPanel() {
                       selected.trackId === track.id &&
                       selected.itemId === item.id;
                     return (
-                      <li key={item.id}>
+                      <li key={item.id} className="flex items-center gap-1 p-1">
                         <button
                           type="button"
                           onClick={() =>
@@ -196,7 +224,7 @@ export function TracksPanel() {
                               itemId: item.id,
                             })
                           }
-                          className={`w-full px-2 py-1.5 text-left text-xs ${
+                          className={`min-w-0 flex-1 rounded px-2 py-1.5 text-left text-xs ${
                             active
                               ? "bg-teal-50 text-teal-900"
                               : "hover:bg-[var(--background)]"
@@ -211,14 +239,40 @@ export function TracksPanel() {
                             {formatTimecode(item.endMs)}
                           </p>
                         </button>
+                        <button
+                          type="button"
+                          aria-label={`Remove ${kind}`}
+                          title={`Remove ${kind}`}
+                          onClick={() =>
+                            removeTrackItem(
+                              track.id,
+                              item.id,
+                              track.type as "text" | "captions",
+                            )
+                          }
+                          className="rounded border border-red-200 px-1.5 py-1 text-[10px] text-red-700 hover:bg-red-50 transition"
+                        >
+                          ×
+                        </button>
                       </li>
                     );
                   })
                 : null}
 
               {track.type === "video" && (track.clips ?? []).length === 0 ? (
-                <li className="px-2 py-2 text-xs text-[var(--muted)]">
-                  No video/image clips — add from the bin.
+                <li className="space-y-1.5 px-3 py-2.5 text-xs text-[var(--muted)]">
+                  <p>No video/image clips on timeline.</p>
+                  {fulfilledScenesCount && onSequenceScenes ? (
+                    <button
+                      type="button"
+                      onClick={onSequenceScenes}
+                      className="rounded border border-[var(--brand)] bg-[var(--brand)]/10 px-2 py-1 text-xs font-medium text-[var(--brand)] hover:bg-[var(--brand)]/20 transition flex items-center"
+                    >
+                      Auto-sequence {fulfilledScenesCount} scene clips
+                    </button>
+                  ) : (
+                    <p className="text-[11px]">Add clips from the bin.</p>
+                  )}
                 </li>
               ) : null}
               {track.type === "audio" && (track.clips ?? []).length === 0 ? (

@@ -136,6 +136,10 @@ export {
   type FulfillSceneRequest,
   type GenerateSceneRequest,
   type ScenePipelineRequest,
+  type ClipPromptStyle,
+  type ClipPromptCamera,
+  type ClipPromptOptions,
+  buildClipPrompt,
 } from './scenes';
 export {
   jobTypeSchema,

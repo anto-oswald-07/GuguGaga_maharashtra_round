@@ -10,6 +10,7 @@ export function InspectorPanel() {
     updateText,
     updateCaption,
     removeClip,
+    removeTrackItem,
   } = useEditorStore();
   const { draft, selected } = state;
 
@@ -334,22 +335,33 @@ export function InspectorPanel() {
             </select>
           </label>
           <label className="block space-y-1">
-            <span className="font-medium">Font size</span>
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-slate-800">Font size</span>
+              <span className="text-[var(--muted)]">Recommended 20–34</span>
+            </div>
             <input
               type="number"
-              min={8}
-              value={item.style?.fontSize ?? 48}
+              min={12}
+              max={36}
+              value={item.style?.fontSize ?? 32}
               onChange={(e) =>
                 updateText(selected.trackId, item.id, {
                   style: {
                     ...item.style,
-                    fontSize: Number(e.target.value),
+                    fontSize: Math.min(36, Math.max(12, Number(e.target.value) || 28)),
                   },
                 })
               }
               className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1.5 text-sm"
             />
           </label>
+          <button
+            type="button"
+            onClick={() => removeTrackItem(selected.trackId, item.id, "text")}
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-100 transition"
+          >
+            Remove from timeline
+          </button>
         </div>
       </aside>
     );
@@ -377,17 +389,32 @@ export function InspectorPanel() {
       </div>
       <div className="space-y-3 overflow-y-auto p-3 text-sm">
         <label className="block space-y-1">
-          <span className="font-medium">Text</span>
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-medium text-slate-800">Caption Text</span>
+            <span
+              className={
+                item.text.length > 45
+                  ? "font-medium text-amber-700"
+                  : "text-[var(--muted)]"
+              }
+            >
+              {item.text.length}/45 chars {item.text.length > 45 ? "(congested)" : ""}
+            </span>
+          </div>
           <textarea
             rows={3}
+            maxLength={45}
             value={item.text}
             onChange={(e) =>
               updateCaption(selected.trackId, item.id, {
-                text: e.target.value,
+                text: e.target.value.slice(0, 45),
               })
             }
             className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1.5 text-sm"
           />
+          <p className="text-[11px] text-[var(--muted)]">
+            Restrained to ≤45 characters so text never overcrowds or congests the video frame.
+          </p>
         </label>
         <div className="grid grid-cols-2 gap-2">
           <label className="block space-y-1">
@@ -418,6 +445,15 @@ export function InspectorPanel() {
               className="w-full rounded-md border border-[var(--border)] bg-white px-2 py-1.5 text-sm"
             />
           </label>
+          <button
+            type="button"
+            onClick={() =>
+              removeTrackItem(selected.trackId, item.id, "captions")
+            }
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-100 transition"
+          >
+            Remove from timeline
+          </button>
         </div>
       </div>
     </aside>

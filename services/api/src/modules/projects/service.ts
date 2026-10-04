@@ -55,6 +55,7 @@ function toStageEventDto(row: StageEvent): StageEventDto {
 
 const projectInclude = {
   assets: {
+    where: { asset: { deletedAt: null } },
     select: { assetId: true },
     orderBy: { attachedAt: 'asc' as const },
   },

@@ -153,73 +153,151 @@ async function findOwnedTimeline(
 export function mockTimelineJson(params: {
   assetId: string;
   hookText?: string;
-  clipWindows?: Array<{ startMs: number; endMs: number; title?: string }>;
+  clipWindows?: Array<{
+    startMs: number;
+    endMs: number;
+    title?: string;
+    assetId?: string;
+    spokenText?: string;
+  }>;
+  audioClips?: Array<{
+    id?: string;
+    assetId: string;
+    srcStartMs?: number;
+    srcEndMs: number;
+    timelineStartMs?: number;
+    label?: string;
+  }>;
 }): EditTimelineJson {
   const windows =
     params.clipWindows && params.clipWindows.length > 0
-      ? params.clipWindows.slice(0, 3)
+      ? params.clipWindows
       : [{ startMs: 0, endMs: 15_000, title: 'Hook' }];
 
   let cursor = 0;
+  const captionItems: Array<{ id: string; text: string; startMs: number; endMs: number }> = [];
+  const textItems: Array<{
+    id: string;
+    text: string;
+    startMs: number;
+    endMs: number;
+    style?: { position: 'top' | 'center' | 'bottom'; fontSize: number };
+  }> = [];
+
   const clips = windows.map((w, i) => {
     const srcStart = Math.max(0, Math.floor(w.startMs));
     const srcEnd = Math.max(srcStart + 1, Math.floor(w.endMs));
     const duration = srcEnd - srcStart;
+    const clipStart = cursor;
     const clip = {
       id: `c${i + 1}`,
-      assetId: params.assetId,
+      assetId: w.assetId ?? params.assetId,
       srcStartMs: srcStart,
       srcEndMs: srcEnd,
-      timelineStartMs: cursor,
+      timelineStartMs: clipStart,
+      label: w.title,
     };
+
+    if (w.spokenText && w.spokenText.trim()) {
+      const clean = w.spokenText.trim();
+      const restrained =
+        clean.length > 38 ? `${clean.slice(0, 35).trimEnd()}…` : clean;
+      captionItems.push({
+        id: `cap-${i + 1}`,
+        text: restrained,
+        startMs: clipStart,
+        endMs: clipStart + duration,
+      });
+    }
+
+    if (i > 0 && w.title && w.title.trim()) {
+      const titleClean = w.title.trim();
+      const restrainedTitle =
+        titleClean.length > 40 ? `${titleClean.slice(0, 37).trimEnd()}…` : titleClean;
+      textItems.push({
+        id: `tx-${i + 1}`,
+        text: restrainedTitle,
+        startMs: clipStart,
+        endMs: Math.min(clipStart + 2500, clipStart + duration),
+        style: { position: 'bottom', fontSize: 32 },
+      });
+    }
+
     cursor += duration;
     return clip;
   });
 
   const durationMs = Math.max(cursor, 5_000);
   const hook = (params.hookText?.trim() || 'HOOK HERE').slice(0, 120);
+  const hookRestrained =
+    hook.length > 40 ? `${hook.slice(0, 37).trimEnd()}…` : hook;
+
+  // Always add hook overlay at 0-3s
+  textItems.unshift({
+    id: 'tx1',
+    text: hookRestrained,
+    startMs: 0,
+    endMs: Math.min(3_000, durationMs),
+    style: { position: 'bottom', fontSize: 36 },
+  });
+
+  // If no spokenText captions, add default hook caption
+  if (captionItems.length === 0) {
+    captionItems.push({
+      id: 's1',
+      text: hookRestrained,
+      startMs: 0,
+      endMs: Math.min(3_000, durationMs),
+    });
+  }
+
+  const audioTrackClips = (params.audioClips ?? []).map((ac, i) => ({
+    id: ac.id ?? `a${i + 1}`,
+    assetId: ac.assetId,
+    srcStartMs: ac.srcStartMs ?? 0,
+    srcEndMs: ac.srcEndMs,
+    timelineStartMs: ac.timelineStartMs ?? 0,
+    label: ac.label ?? 'Background Music',
+  }));
+
+  const tracks: EditTimelineJson['tracks'] = [
+    {
+      id: 'v1',
+      type: 'video',
+      clips,
+    },
+    {
+      id: 'a1',
+      type: 'audio',
+      clips: audioTrackClips,
+    },
+    {
+      id: 't1',
+      type: 'text',
+      items: textItems,
+    },
+    {
+      id: 'cap1',
+      type: 'captions',
+      items: captionItems,
+    },
+  ];
 
   return {
     schemaVersion: '1.0',
     fps: 30,
     durationMs,
-    tracks: [
-      {
-        id: 'v1',
-        type: 'video',
-        clips,
-      },
-      {
-        id: 't1',
-        type: 'text',
-        items: [
-          {
-            id: 'tx1',
-            text: hook,
-            startMs: 0,
-            endMs: Math.min(3_000, durationMs),
-            style: { position: 'bottom', fontSize: 48 },
-          },
-        ],
-      },
-      {
-        id: 'cap1',
-        type: 'captions',
-        items: [
-          {
-            id: 's1',
-            text: hook,
-            startMs: 0,
-            endMs: Math.min(1_800, durationMs),
-          },
-        ],
-      },
-    ],
+    tracks,
     transitions: [],
     meta: {
       generatedBy: 'ai',
-      provider: 'mock-fallback',
-      prompt: 'Phase 8 demo timeline proposal',
+      provider: 'sequencer-ai',
+      prompt: 'Sequenced clips with audio music and caption/text edit suggestions',
+      notes:
+        `Sequenced ${clips.length} clip(s). Total duration: ${Math.round(durationMs / 1000)}s.\n\n` +
+        `• Audio & Music: Background music track set for ${Math.round(durationMs / 1000)}s. Suggested: Lo-Fi/Corporate Pop @ 120 BPM ducked -14dB under voiceover.\n` +
+        `• Captions: Synchronized caption cues for all ${clips.length} clip segments.\n` +
+        `• Text: Bold retention hook at 0–3s with scene callout overlays.`,
     },
   };
 }
@@ -232,7 +310,27 @@ export function normalizeProviderTimeline(
   fallback: EditTimelineJson,
 ): EditTimelineJson {
   const direct = editTimelineJsonSchema.safeParse(raw);
-  if (direct.success) return direct.data;
+  if (direct.success) {
+    const data = direct.data;
+    const aTrack = data.tracks.find((t) => t.type === 'audio');
+    const fallbackATrack = fallback.tracks.find((t) => t.type === 'audio');
+    if (
+      aTrack &&
+      aTrack.type === 'audio' &&
+      aTrack.clips.length === 0 &&
+      fallbackATrack &&
+      fallbackATrack.type === 'audio' &&
+      fallbackATrack.clips.length > 0
+    ) {
+      return {
+        ...data,
+        tracks: data.tracks.map((t) =>
+          t.type === 'audio' ? { ...t, clips: fallbackATrack.clips } : t,
+        ),
+      };
+    }
+    return data;
+  }
 
   // Legacy stub shape from packages/ai-provider: { version:1, clips:[], notes }
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
@@ -363,11 +461,161 @@ export async function listTimelines(
 ): Promise<TimelineListResponse> {
   await assertOwnedProject(workspaceId, projectId);
 
-  const rows = await prisma.editTimeline.findMany({
+  let rows = await prisma.editTimeline.findMany({
     where: { projectId },
     orderBy: { createdAt: 'asc' },
     include: versionInclude,
   });
+
+  if (rows.length === 0) {
+    const assets = await loadProjectMediaAssets(workspaceId, projectId);
+    const videoAssets = assets.filter((a) => a.type === 'VIDEO');
+    const imageAssets = assets.filter((a) => a.type === 'IMAGE');
+    const visualAssets = [...videoAssets, ...imageAssets];
+    const audioAssets = assets.filter((a) => a.type === 'AUDIO');
+
+    if (visualAssets.length > 0) {
+      const script = await prisma.scriptDocument.findFirst({
+        where: { projectId },
+        orderBy: { updatedAt: 'desc' },
+        include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
+      });
+      const scriptContent =
+        (script?.versions[0]?.content as Record<string, unknown> | undefined) ?? {};
+      const hook =
+        typeof scriptContent.hook === 'string'
+          ? scriptContent.hook
+          : (script?.title ?? 'Main timeline');
+      const body = typeof scriptContent.body === 'string' ? scriptContent.body : '';
+      const cta = typeof scriptContent.cta === 'string' ? scriptContent.cta : '';
+      const rawScenes = Array.isArray(scriptContent.scenes)
+        ? (scriptContent.scenes as Array<Record<string, unknown>>)
+        : [];
+
+      let clipWindows: Array<{
+        startMs: number;
+        endMs: number;
+        title?: string;
+        assetId?: string;
+        spokenText?: string;
+      }> = [];
+
+      if (rawScenes.length > 0) {
+        clipWindows = rawScenes.map((s, idx) => {
+          const fulfillment =
+            (s.fulfillment as Record<string, unknown> | undefined) ?? {};
+          const attachedAssetId =
+            (typeof fulfillment.assetId === 'string' && fulfillment.assetId) ||
+            visualAssets[idx % Math.max(1, visualAssets.length)]?.id ||
+            visualAssets[0]!.id;
+          const targetDuration =
+            typeof s.targetDurationMs === 'number' && s.targetDurationMs > 0
+              ? s.targetDurationMs
+              : 5000;
+          const assetObj = assets.find((a) => a.id === attachedAssetId);
+          const durationMs = assetObj?.durationMs ?? targetDuration;
+          const sTitle =
+            typeof s.title === 'string' ? s.title : `Scene ${idx + 1}`;
+          const spoken =
+            typeof s.spokenText === 'string' ? s.spokenText : '';
+          return {
+            startMs: 0,
+            endMs: Math.max(1000, durationMs),
+            title: sTitle,
+            assetId: attachedAssetId,
+            spokenText: spoken,
+          };
+        });
+      } else {
+        clipWindows = visualAssets.map((a, idx) => ({
+          startMs: 0,
+          endMs: Math.max(1000, a.durationMs ?? 5000),
+          title: a.name || `Clip ${idx + 1}`,
+          assetId: a.id,
+          spokenText:
+            idx === 0 ? hook : idx === visualAssets.length - 1 ? cta : body,
+        }));
+      }
+
+      const totalVideoDurationMs = clipWindows.reduce(
+        (sum, cw) => sum + (cw.endMs - cw.startMs),
+        0,
+      );
+      const audioClips = audioAssets.map((a, idx) => ({
+        id: `aud-${idx + 1}`,
+        assetId: a.id,
+        srcStartMs: 0,
+        srcEndMs: Math.min(
+          Math.max(1000, a.durationMs ?? totalVideoDurationMs),
+          totalVideoDurationMs,
+        ),
+        timelineStartMs: 0,
+        label: a.name || 'Background Music',
+      }));
+
+      const proposalTimeline = mockTimelineJson({
+        assetId: visualAssets[0]!.id,
+        hookText: hook,
+        clipWindows,
+        audioClips,
+      });
+
+      const sequencedUserTimeline: EditTimelineJson = {
+        ...proposalTimeline,
+        tracks: [
+          proposalTimeline.tracks.find((t) => t.type === 'video')!,
+          { id: 'a1', type: 'audio', clips: [] },
+          { id: 't1', type: 'text', items: [] },
+          { id: 'cap1', type: 'captions', items: [] },
+        ],
+        meta: {
+          generatedBy: 'system',
+          notes: `Auto-sequenced ${clipWindows.length} clip(s). Suggestions available for audio & captions.`,
+        },
+      };
+
+      const timelineId = randomUUID();
+      const userVersionId = randomUUID();
+      const proposalVersionId = randomUUID();
+
+      await prisma.$transaction(async (tx) => {
+        await tx.editTimeline.create({
+          data: {
+            id: timelineId,
+            projectId,
+            title: 'Main timeline',
+            currentVersionId: userVersionId,
+          },
+        });
+        await tx.timelineVersion.create({
+          data: {
+            id: userVersionId,
+            editTimelineId: timelineId,
+            version: 1,
+            content: sequencedUserTimeline as Prisma.InputJsonValue,
+            source: 'USER',
+          },
+        });
+        await tx.timelineVersion.create({
+          data: {
+            id: proposalVersionId,
+            editTimelineId: timelineId,
+            version: 2,
+            content: proposalTimeline as Prisma.InputJsonValue,
+            source: 'AI_PROPOSAL',
+          },
+        });
+      });
+
+      const createdRow = await prisma.editTimeline.findFirst({
+        where: { id: timelineId },
+        include: versionInclude,
+      });
+      if (createdRow) {
+        rows = [createdRow];
+      }
+    }
+  }
 
   return { items: rows.map(toTimelineDto) };
 }
@@ -421,6 +669,47 @@ export async function putTimeline(
       data: {
         currentVersionId: versionId,
         title: input.title ?? existing.title,
+      },
+    });
+  });
+
+  return getTimeline(workspaceId, timelineId);
+}
+
+export async function createTimeline(
+  workspaceId: string,
+  projectId: string,
+  input: { title?: string; timeline: unknown },
+): Promise<EditTimelineDetailDto> {
+  await assertOwnedProject(workspaceId, projectId);
+  const parsed = editTimelineJsonSchema.safeParse(input.timeline);
+  if (!parsed.success) {
+    throw new TimelinesHttpError(
+      400,
+      'validation_error',
+      parsed.error.issues.map((i) => i.message).join('; '),
+    );
+  }
+
+  const timelineId = randomUUID();
+  const versionId = randomUUID();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.editTimeline.create({
+      data: {
+        id: timelineId,
+        projectId,
+        title: input.title ?? 'Main timeline',
+        currentVersionId: versionId,
+      },
+    });
+    await tx.timelineVersion.create({
+      data: {
+        id: versionId,
+        editTimelineId: timelineId,
+        version: 1,
+        content: parsed.data as Prisma.InputJsonValue,
+        source: 'USER',
       },
     });
   });
@@ -728,6 +1017,15 @@ export async function loadTimelineGenerateContext(
     endMs: number;
     title?: string;
     assetId?: string;
+    spokenText?: string;
+  }>;
+  audioClips?: Array<{
+    id?: string;
+    assetId: string;
+    srcStartMs?: number;
+    srcEndMs: number;
+    timelineStartMs?: number;
+    label?: string;
   }>;
   alignments: Array<{
     scriptExcerpt: string;
@@ -763,25 +1061,94 @@ export async function loadTimelineGenerateContext(
   const cta = typeof content.cta === 'string' ? content.cta : '';
   const title = typeof content.title === 'string' ? content.title : undefined;
 
-  const accepted = await prisma.clipCandidate.findMany({
-    where: {
-      projectId,
-      status: { in: ['ACCEPTED', 'RENDERED'] },
-    },
-    orderBy: [{ score: 'desc' }, { startMs: 'asc' }],
-    take: 5,
-  });
-
-  const mappings = await prisma.scriptFootageMap.findMany({
-    where: { projectId },
-    orderBy: { startMs: 'asc' },
-    take: 20,
-  });
+  const rawScenes = Array.isArray(content.scenes)
+    ? (content.scenes as Array<Record<string, unknown>>)
+    : [];
 
   const assets = await loadProjectMediaAssets(workspaceId, projectId);
+  const videoAssets = assets.filter((a) => a.type === 'VIDEO');
+  const imageAssets = assets.filter((a) => a.type === 'IMAGE');
+  const visualAssets = [...videoAssets, ...imageAssets];
+  let audioAssets = assets.filter((a) => a.type === 'AUDIO');
+
+  // If project has no audio attached, look in workspace or provision sample audio bed
+  if (audioAssets.length === 0) {
+    const workspaceAudio = await prisma.asset.findFirst({
+      where: { workspaceId, deletedAt: null, type: 'AUDIO' },
+      select: {
+        id: true,
+        type: true,
+        name: true,
+        description: true,
+        tags: true,
+        metadata: true,
+      },
+    });
+    if (workspaceAudio) {
+      await prisma.projectAsset.upsert({
+        where: { projectId_assetId: { projectId, assetId: workspaceAudio.id } },
+        create: { projectId, assetId: workspaceAudio.id },
+        update: {},
+      });
+      const meta = (workspaceAudio.metadata as Record<string, unknown>) ?? {};
+      const dur =
+        typeof meta.durationMs === 'number'
+          ? meta.durationMs
+          : typeof meta.durationSec === 'number'
+            ? Math.round(meta.durationSec * 1000)
+            : null;
+      audioAssets = [
+        {
+          id: workspaceAudio.id,
+          type: workspaceAudio.type,
+          name: workspaceAudio.name,
+          description: workspaceAudio.description,
+          tags: workspaceAudio.tags,
+          durationMs: dur,
+        },
+      ];
+    } else {
+      const sampleBedPath = path.join(storage.getRoot(), 'samples', 'dummy-bed.aac');
+      const { existsSync, copyFileSync, mkdirSync } = await import('node:fs');
+      if (existsSync(sampleBedPath)) {
+        const destRel = `workspaces/${workspaceId}/originals/sample-audio-bed/dummy-bed.aac`;
+        const destAbs = storage.absoluteFromRelative(destRel);
+        mkdirSync(path.dirname(destAbs), { recursive: true });
+        copyFileSync(sampleBedPath, destAbs);
+        const createdAsset = await prisma.asset.create({
+          data: {
+            workspaceId,
+            name: 'Upbeat Background Track',
+            type: 'AUDIO',
+            path: destRel,
+            mime: 'audio/aac',
+            size: 47784,
+            tags: ['music', 'background', 'audio-bed'],
+            description: 'Default rhythmic background music bed for project sequences',
+            metadata: { durationMs: 30000, durationSec: 30 },
+          },
+        });
+        await prisma.projectAsset.upsert({
+          where: { projectId_assetId: { projectId, assetId: createdAsset.id } },
+          create: { projectId, assetId: createdAsset.id },
+          update: {},
+        });
+        audioAssets = [
+          {
+            id: createdAsset.id,
+            type: createdAsset.type,
+            name: createdAsset.name,
+            description: createdAsset.description,
+            tags: createdAsset.tags,
+            durationMs: 30000,
+          },
+        ];
+      }
+    }
+  }
 
   let assetId =
-    accepted[0]?.sourceAssetId ??
+    visualAssets[0]?.id ??
     assets.find((a) => a.type === 'VIDEO')?.id ??
     assets.find((a) => a.type === 'IMAGE')?.id;
 
@@ -793,32 +1160,76 @@ export async function loadTimelineGenerateContext(
     );
   }
 
-  const clipWindows =
-    accepted.length > 0
-      ? accepted.map((c) => ({
-          startMs: c.startMs,
-          endMs: c.endMs,
-          title: c.title,
-          assetId: c.sourceAssetId,
-        }))
-      : mappings.length > 0
-        ? mappings.map((m) => ({
-            startMs: m.startMs,
-            endMs: m.endMs,
-            title: m.scriptRef.slice(0, 80),
-            assetId,
-          }))
-        : assets.some((a) => a.type === 'IMAGE')
-          ? assets
-              .filter((a) => a.type === 'IMAGE')
-              .slice(0, 5)
-              .map((a, i) => ({
-                startMs: 0,
-                endMs: 3000,
-                title: a.name || `Still ${i + 1}`,
-                assetId: a.id,
-              }))
-          : [{ startMs: 0, endMs: 5_000, title: 'Intro', assetId }];
+  let clipWindows: Array<{
+    startMs: number;
+    endMs: number;
+    title?: string;
+    assetId?: string;
+    spokenText?: string;
+  }> = [];
+
+  if (rawScenes.length > 0) {
+    clipWindows = rawScenes.map((s, idx) => {
+      const fulfillment =
+        (s.fulfillment as Record<string, unknown> | undefined) ?? {};
+      const attachedAssetId =
+        (typeof fulfillment.assetId === 'string' && fulfillment.assetId) ||
+        visualAssets[idx % Math.max(1, visualAssets.length)]?.id ||
+        assetId;
+      const targetDuration =
+        typeof s.targetDurationMs === 'number' && s.targetDurationMs > 0
+          ? s.targetDurationMs
+          : 5000;
+      const assetObj = assets.find((a) => a.id === attachedAssetId);
+      const durationMs = assetObj?.durationMs ?? targetDuration;
+      const sTitle =
+        typeof s.title === 'string' ? s.title : `Scene ${idx + 1}`;
+      const spoken =
+        typeof s.spokenText === 'string' ? s.spokenText : '';
+      return {
+        startMs: 0,
+        endMs: Math.max(1000, durationMs),
+        title: sTitle,
+        assetId: attachedAssetId,
+        spokenText: spoken,
+      };
+    });
+  } else if (visualAssets.length > 0) {
+    clipWindows = visualAssets.map((a, idx) => ({
+      startMs: 0,
+      endMs: Math.max(1000, a.durationMs ?? 5000),
+      title: a.name || `Clip ${idx + 1}`,
+      assetId: a.id,
+      spokenText:
+        idx === 0 ? hook : idx === visualAssets.length - 1 ? cta : body,
+    }));
+  } else {
+    clipWindows = [{ startMs: 0, endMs: 5_000, title: 'Intro', assetId, spokenText: hook }];
+  }
+
+  let runningMs = 0;
+  const alignments = clipWindows.map((cw) => {
+    const dur = cw.endMs - cw.startMs;
+    const startMs = runningMs;
+    const endMs = runningMs + dur;
+    runningMs = endMs;
+    return {
+      scriptExcerpt: cw.spokenText || cw.title || 'Scene',
+      startMs,
+      endMs,
+      confidence: 1.0,
+    };
+  });
+
+  const totalVideoDurationMs = Math.max(runningMs, 5000);
+  const audioClips = audioAssets.map((a, idx) => ({
+    id: `aud-${idx + 1}`,
+    assetId: a.id,
+    srcStartMs: 0,
+    srcEndMs: Math.min(Math.max(1000, a.durationMs ?? totalVideoDurationMs), totalVideoDurationMs),
+    timelineStartMs: 0,
+    label: a.name || 'Background Music',
+  }));
 
   return {
     hook,
@@ -827,12 +1238,8 @@ export async function loadTimelineGenerateContext(
     title,
     assetId,
     clipWindows,
-    alignments: mappings.map((m) => ({
-      scriptExcerpt: m.scriptRef,
-      startMs: m.startMs,
-      endMs: m.endMs,
-      confidence: m.confidence,
-    })),
+    audioClips,
+    alignments,
     assets,
   };
 }

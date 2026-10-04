@@ -11,6 +11,8 @@ const DEFAULT_AUDIO_MS = 5000;
 type MediaBinProps = {
   assets: Asset[];
   loading?: boolean;
+  fulfilledScenesCount?: number;
+  onSequenceScenes?: () => void;
 };
 
 function assetDurationMs(asset: Asset): number | null {
@@ -23,7 +25,12 @@ function assetDurationMs(asset: Asset): number | null {
   return null;
 }
 
-export function MediaBin({ assets, loading }: MediaBinProps) {
+export function MediaBin({
+  assets,
+  loading,
+  fulfilledScenesCount,
+  onSequenceScenes,
+}: MediaBinProps) {
   const { addVisualClip, addAudioClip, makeClipId } = useEditorStore();
   const [imageHoldMs, setImageHoldMs] = useState(DEFAULT_IMAGE_HOLD_MS);
   const [message, setMessage] = useState<string | null>(null);
@@ -80,11 +87,25 @@ export function MediaBin({ assets, loading }: MediaBinProps) {
   return (
     <aside className="flex h-full flex-col rounded-lg border border-[var(--border)] bg-[var(--surface)]">
       <div className="border-b border-[var(--border)] px-3 py-2">
-        <h2 className="text-sm font-semibold">Bin</h2>
+        <h2 className="text-sm font-semibold">
+          Bin ({assets.length} media item{assets.length === 1 ? "" : "s"})
+        </h2>
         <p className="text-xs text-[var(--muted)]">
           Add video, image, or audio to the timeline
         </p>
       </div>
+      {fulfilledScenesCount && onSequenceScenes ? (
+        <div className="border-b border-[var(--border)] bg-[var(--brand)]/5 p-2">
+          <button
+            type="button"
+            onClick={onSequenceScenes}
+            className="w-full rounded bg-[var(--brand)] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[var(--brand)]/90 transition flex items-center justify-center shadow-xs"
+            title="Auto-sequence clips from script scenes onto the video track"
+          >
+            Auto-sequence scenes ({fulfilledScenesCount})
+          </button>
+        </div>
+      ) : null}
       <div className="space-y-2 border-b border-[var(--border)] px-3 py-2">
         <label className="block space-y-1 text-xs">
           <span className="font-medium text-[var(--muted)]">

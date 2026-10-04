@@ -6,11 +6,13 @@ import {
   patchPackStatusRequestSchema,
 } from '@creatorai/shared';
 import { requireAuth } from '../../auth/jwt';
+import { storage } from '../../storage/local';
 import {
   PacksHttpError,
   deletePack,
   enqueueGeneratePacks,
   getPackDownload,
+  getPackFileToDownload,
   listPacks,
   patchPack,
   patchPackStatus,
@@ -149,6 +151,33 @@ export async function registerPacksRoutes(
           id,
         );
         return reply.status(200).send(result);
+      } catch (err) {
+        if (err instanceof PacksHttpError) {
+          return sendPacksError(reply, err);
+        }
+        throw err;
+      }
+    },
+  );
+
+  app.get(
+    `${API_PREFIX}/packs/:id/download-file`,
+    { preHandler: requireAuth },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      try {
+        const fileInfo = await getPackFileToDownload(
+          request.auth!.workspaceId,
+          id,
+        );
+        const stream = storage.openReadStream(fileInfo.path);
+        return reply
+          .header('Content-Type', fileInfo.mime)
+          .header(
+            'Content-Disposition',
+            `attachment; filename="${fileInfo.name.replace(/"/g, '')}"`,
+          )
+          .send(stream);
       } catch (err) {
         if (err instanceof PacksHttpError) {
           return sendPacksError(reply, err);

@@ -4,13 +4,18 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
   deletePack,
+  downloadAssetFile,
+  downloadPackFile,
+  downloadTextFile,
   generateProjectPacks,
   getPackDownload,
   listProjectPacks,
+  listProjectTimelines,
   updatePackCopy,
   updatePackStatus,
   type Job,
   type PlatformPackDto,
+  type TimelineDocument,
   type UpdatePackCopyPayload,
 } from "@/lib/api";
 import { JobStatusBanner } from "@/components/scripts/JobStatusBanner";
@@ -28,29 +33,12 @@ type PacksTabProps = {
   targetPlatforms?: Platform[];
 };
 
-function collectDownloadUrls(
-  download: Awaited<ReturnType<typeof getPackDownload>>,
-): string[] {
-  const urls: string[] = [];
-  if (download.zipUrl) urls.push(download.zipUrl);
-  if (Array.isArray(download.urls)) {
-    for (const u of download.urls) {
-      if (typeof u === "string" && u) urls.push(u);
-    }
-  }
-  if (Array.isArray(download.files)) {
-    for (const f of download.files) {
-      if (f?.url) urls.push(f.url);
-    }
-  }
-  return [...new Set(urls)];
-}
-
 export function PacksTab({
   projectId,
   targetPlatforms = [],
 }: PacksTabProps) {
   const [packs, setPacks] = useState<PlatformPackDto[]>([]);
+  const [timelines, setTimelines] = useState<TimelineDocument[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionPending, setActionPending] = useState(false);
@@ -62,8 +50,12 @@ export function PacksTab({
     setLoading(true);
     setError(null);
     try {
-      const result = await listProjectPacks(projectId);
-      setPacks(result.items ?? []);
+      const [packResult, timelineResult] = await Promise.all([
+        listProjectPacks(projectId),
+        listProjectTimelines(projectId).catch(() => ({ items: [] })),
+      ]);
+      setPacks(packResult.items ?? []);
+      setTimelines(timelineResult.items ?? []);
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -108,10 +100,12 @@ export function PacksTab({
     setError(null);
     setActionPending(true);
     setJobLabel("Generate packs");
+    const activeTimeline = timelines[0] ?? null;
     try {
       const result = await generateProjectPacks(projectId, {
         platforms,
         aspectRatios,
+        timelineId: activeTimeline?.id,
       });
       if (result.jobId) setJobId(result.jobId);
     } catch (err) {
@@ -165,30 +159,46 @@ export function PacksTab({
     }
   }
 
-  async function onDownload(packId: string) {
+  async function onDownloadVideo(packId: string) {
     setError(null);
     setActionPending(true);
+    const pack = packs.find((p) => p.id === packId);
     try {
-      const download = await getPackDownload(packId);
-      const urls = collectDownloadUrls(download);
-      if (urls.length === 0) {
-        setError("Download returned no URLs yet (API may still be landing).");
-        return;
-      }
-      for (const url of urls) {
-        window.open(url, "_blank", "noopener,noreferrer");
-      }
+      await downloadPackFile(
+        packId,
+        `pack-${(pack?.platform ?? "video").toLowerCase()}.mp4`,
+      );
     } catch (err) {
       setError(
         err instanceof ApiError
           ? err.message
           : err instanceof Error
             ? err.message
-            : "Download failed",
+            : "Download failed. Please ensure the pack has been generated.",
       );
     } finally {
       setActionPending(false);
     }
+  }
+
+  function onDownloadCopy(packId: string) {
+    const pack = packs.find((p) => p.id === packId);
+    if (!pack) return;
+    const copyContent = [
+      `Platform: ${pack.platform}`,
+      `Aspect Ratio: ${pack.aspectRatio}`,
+      `Status: ${pack.status}`,
+      "",
+      `Title:\n${pack.title || "—"}`,
+      "",
+      `Caption:\n${pack.caption || "—"}`,
+      "",
+      `Hashtags:\n${pack.hashtags.join(" ") || "—"}`,
+    ].join("\n");
+    downloadTextFile(
+      `pack-${pack.platform.toLowerCase()}-copy.txt`,
+      copyContent,
+    );
   }
 
   async function onDelete(packId: string) {
@@ -244,6 +254,25 @@ export function PacksTab({
         </p>
       ) : null}
 
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--border)] bg-slate-50 px-3.5 py-2.5 text-xs text-[var(--muted)]">
+        <div>
+          <span>
+            🎬 Source sequence:{" "}
+            <strong className="text-[var(--foreground)]">
+              {timelines.length > 0 ? "Saved Edit Page Timeline" : "Project Footage"}
+            </strong>
+          </span>
+          <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+            Renders what is saved on the edit page directly into platform resolutions (TikTok/Reels 9:16, YouTube 16:9, LinkedIn 1:1).
+          </p>
+        </div>
+        {timelines.length > 0 ? (
+          <span className="rounded bg-teal-50 px-2 py-0.5 font-medium text-teal-800">
+            Edit Timeline Active
+          </span>
+        ) : null}
+      </div>
+
       <PackGenerateForm
         defaultPlatforms={targetPlatforms}
         pending={busy}
@@ -281,7 +310,8 @@ export function PacksTab({
               busy={busy}
               onSaveCopy={(id, payload) => void onSaveCopy(id, payload)}
               onStatusChange={(id, status) => void onStatusChange(id, status)}
-              onDownload={(id) => void onDownload(id)}
+              onDownload={(id) => void onDownloadVideo(id)}
+              onDownloadCopy={(id) => void onDownloadCopy(id)}
               onDelete={(id) => void onDelete(id)}
             />
           ))}

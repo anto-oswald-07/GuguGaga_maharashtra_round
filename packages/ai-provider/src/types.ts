@@ -133,6 +133,8 @@ export type TimelineContext = {
    * Used by Grok (and optionally others) to suggest holds / order / mix.
    */
   assets?: TimelineAssetSummary[];
+  /** Optional audio beds / clips to propose on the audio track. */
+  audioClips?: TimelineAudioClip[];
 };
 
 export type TimelineTextStyle = {
